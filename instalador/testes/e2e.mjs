@@ -76,7 +76,12 @@ try {
   const [adm] = await sql("select m.papel::text as papel, u.email from public.membros m join auth.users u on u.id = m.user_id where u.email = 'admin@exemplo.com'");
   conferir("administrador criado com papel admin", adm && adm.papel === "admin");
   const cfg = Object.fromEntries((await sql("select chave, valor from public.config")).map((r) => [r.chave, r.valor]));
-  conferir("troca automática gravada desligada, modo limiar", cfg.auto === false && cfg.modo === "limiar", JSON.stringify({ auto: cfg.auto, modo: cfg.modo }));
+  // instalação nova: a troca começa ligada, antes do limite (90% e 95%), sem pergunta (0.2.0); em dois passos ela vem
+  // do estado local que o primeiro passo gravou
+  conferir("troca automática gravada ligada, antes do limite (90% e 95%)", cfg.auto === true && cfg.modo === "limiar" && cfg.aviso === 90 && cfg.troca === 95,
+    JSON.stringify({ auto: cfg.auto, modo: cfg.modo, aviso: cfg.aviso, troca: cfg.troca }));
+  conferir("a instalação avisa a troca numa linha, sem perguntar", /troca automática ligada, antes do limite \(avisa em 90%, troca em 95%\)/.test(inst.texto)
+    && !/Troca de conta|Como trocar/.test(inst.texto));
   conferir("login sem cadastro aberto e com duas etapas", emu.estado.authConfig.disable_signup === true && emu.estado.authConfig.mfa_totp_enroll_enabled === true);
   conferir("4 funções publicadas", emu.estado.funcoes.length === 4, String(emu.estado.funcoes.length));
   conferir("segredos das funções", ["REVEZA_SITE", "REVEZA_CRON", "VAPID_PUBLICA", "VAPID_PRIVADA"].every((s) => emu.estado.segredos.has(s)));

@@ -131,26 +131,28 @@ function reveza(ctx, args, mostrar = false, env) {
   return rodar(process.execPath, [ctx.cli, ...args], { mostrar, env: ambienteLimpo(env) });
 }
 
-async function perguntarTroca(ctx) {
-  titulo(t("Troca de conta", "Account switching"));
-  info(t("A troca automática começa DESLIGADA: você liga no painel quando quiser (ou agora).", "Automatic switching starts OFF: turn it on in the panel whenever you want (or now)."));
-  const modos = ["limite", "limiar", "rodizio"];
-  const i = await ctx.p.escolha(t("Como trocar quando estiver ligada?", "How to switch when on?"), [
-    t("só quando a conta bater no limite", "only when the account hits its limit"),
-    t("antes do limite: avisa num percentual e troca em outro", "before the limit: warn at one percentage and switch at another"),
-    t("rodízio durante o dia, entre as contas livres", "rotate during the day among free accounts"),
-  ], 2);
-  const cfg = { modo: modos[i], aviso: 90, troca: 95, auto: false };
-  if (cfg.modo === "limiar") {
-    cfg.aviso = Number(await ctx.p.perguntar(t("Avisar em (%)", "Warn at (%)"), "90"));
-    cfg.troca = Number(await ctx.p.perguntar(t("Trocar em (%)", "Switch at (%)"), "95"));
-    if (!(cfg.aviso >= 1 && cfg.troca <= 100 && cfg.aviso < cfg.troca)) {
-      nao(t("o aviso precisa ser menor que a troca: fico com 90 e 95", "warning must be below the switch: using 90 and 95"));
-      Object.assign(cfg, { aviso: 90, troca: 95 });
-    }
-  }
-  cfg.auto = await ctx.p.sim(t("Ligar a troca automática agora?", "Turn automatic switching on now?"), false);
-  ctx.troca = cfg;
+/**
+ * A troca de uma instalação nova, sem pergunta: automática LIGADA, antes do limite (avisa em 90%, troca em 95%).
+ * Muda no painel, em Troca automática. Antes eram três a cinco perguntas, e o padrão deixava a troca desligada,
+ * que é justamente o que a pessoa veio buscar (Paulo, 12/10/2026, para a 0.2.0).
+ */
+export const TROCA_PADRAO = Object.freeze({ auto: true, modo: "limiar", aviso: 90, troca: 95 });
+
+/**
+ * A troca que esta instalação grava: a padrão numa instalação nova. Atualizar, ligar a uma instalação que já existe e
+ * importar de outro gestor não gravam nada aqui: fica a configuração que já vale (a do estado local, a da nuvem ou a
+ * importada, que `trocaLocal` leva para a nuvem quando ela entra).
+ */
+export function trocaInicial({ ligar, atualizar, importar }) {
+  return ligar || atualizar || importar ? null : { ...TROCA_PADRAO };
+}
+
+/** A configuração de troca em palavras, para a linha que a instalação mostra. */
+export function descreverTroca({ auto, modo, aviso, troca }) {
+  const como = modo === "limite" ? t("só quando a conta bate no limite", "only when the account hits its limit")
+    : modo === "rodizio" ? t("rodízio entre as contas livres", "rotating among free accounts")
+      : t(`antes do limite (avisa em ${aviso}%, troca em ${troca}%)`, `before the limit (warns at ${aviso}%, switches at ${troca}%)`);
+  return `${auto ? t("troca automática ligada", "automatic switching on") : t("troca automática desligada", "automatic switching off")}, ${como}`;
 }
 
 async function nuvem(ctx) {
@@ -291,7 +293,7 @@ async function aplicarNuvem(ctx) {
   if (!ctx.troca && ctx.nuvemNova) ctx.troca = trocaLocal();
   if (ctx.troca && ctx.adminId) {
     await salvarTroca(consultar(ctx), ctx.adminId, { ...ctx.troca, fuso: Intl.DateTimeFormat().resolvedOptions().timeZone });
-    ok(t(`troca: modo ${ctx.troca.modo}, automática ${ctx.troca.auto ? "ligada" : "desligada"}`, `switching: ${ctx.troca.modo} mode, automatic ${ctx.troca.auto ? "on" : "off"}`));
+    ok(`${descreverTroca(ctx.troca)}${t(": muda no painel, em Troca automática", ": change it in the panel, under Auto switch")}`);
   }
 }
 
@@ -675,8 +677,8 @@ async function main() {
     }
     await programa(ctx);
     if (ctx.ligar) await ligar(ctx);
-    else if (!ctx.atualizar && !ctx.importar) await perguntarTroca(ctx);
     else if (ctx.importar) info(t("Troca: fica a configuração importada (ajuste no painel).", "Switching: the imported settings stay (adjust in the panel)."));
+    ctx.troca = trocaInicial(ctx);
     ctx.soEsteComputador = soEsteComputador(inst, ctx.atualizar);
     if (ctx.soEsteComputador) {
       info(t("Computador ligado a uma instalação: atualizo só o programa deste computador. A nuvem e o painel são atualizados no computador que criou a instalação.",
@@ -689,7 +691,7 @@ async function main() {
       }
     } else if (ctx.troca) {
       gravarConfigLocal(path.join(BASE, "estado.json"), { auto: ctx.troca.auto, modo: ctx.troca.modo, aviso: ctx.troca.aviso, troca: ctx.troca.troca });
-      ok(t(`troca: modo ${ctx.troca.modo}, automática ${ctx.troca.auto ? "ligada" : "desligada"} (neste computador)`, `switching: ${ctx.troca.modo} mode, automatic ${ctx.troca.auto ? "on" : "off"} (this computer)`));
+      ok(`${descreverTroca(ctx.troca)}${t(", neste computador (com --com-nuvem ela passa para o painel)", ", on this computer (with --com-nuvem it moves to the panel)")}`);
     }
     await servico(ctx);
     if (ctx.atualizar && !ctx.semServico) await conferirSubiu(ctx);
