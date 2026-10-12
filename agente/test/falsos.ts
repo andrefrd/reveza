@@ -77,10 +77,13 @@ export class ApiFalsa implements ApiContas {
   perfisPedidos = 0;
   usosPedidos: string[] = [];
   semRede = false;
+  /** Tokens que a API recusa (login que não vale mais). */
+  recusados = new Set<string>();
 
   async perfil(token: string) {
     this.perfisPedidos += 1;
     if (this.semRede) return { status: 0 };
+    if (this.recusados.has(token)) return { status: 401 };
     const l = token[0]!;
     const perfil: Perfil = {
       accountUuid: `acc-${l}`,

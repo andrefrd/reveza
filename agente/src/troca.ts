@@ -35,6 +35,9 @@ import type { Relogio } from "./util/tempo.js";
 import { isoParaEpoch } from "./util/tempo.js";
 import { Trava, Travas } from "./util/trava.js";
 
+/** Login vencido, com renovação, recusado pela API e parado há tanto tempo: o assistente não consegue usá-lo. */
+export const PRINCIPAL_MORTA_APOS_S = 15 * 60;
+
 export interface Ganchos {
   /** Pode renovar esta conta agora? (sem nuvem: sempre; com nuvem: só com a posse; modo sombra: nunca) */
   podeRenovar(id: string): boolean;
@@ -234,8 +237,16 @@ export class Trocador {
     if (!alvo) return { ok: false, erro: "conta desconhecida" };
     let atual = await this.cred.ler(PRINCIPAL);
     if (atual && !(await this.identidade(atual))) {
-      this.evento("erro", "Não consegui identificar a conta em uso (sem rede?); troca adiada.");
-      return { ok: false, erro: "não consegui identificar a conta em uso" };
+      // Sem login nenhum na principal (computador novo, ou o assistente saiu da conta) ou com um login que não vale
+      // mais, não há conta em uso a proteger: a troca segue. Antes ela era adiada para sempre, e o computador novo
+      // nunca recebia a conta que a nuvem mandou (12/10/2026).
+      const motivo = await this.principalSemConta(atual);
+      if (!motivo) {
+        this.evento("erro", "Não consegui identificar a conta em uso (sem rede?); troca adiada.");
+        return { ok: false, erro: "não consegui identificar a conta em uso" };
+      }
+      if (hashToken(atual)) this.guardarCopiaDaPrincipal(atual);
+      this.evento("info", `O assistente estava ${motivo}; a conta da troca entra no lugar.`);
     }
     const de = await this.conferirPrincipalDentro();
     if (de === destino) return { ok: true, de };
@@ -284,6 +295,39 @@ export class Trocador {
     this.salvar();
     this.relogio.agendar(() => void this.conferirTroca(destino, de, 1), CONFERIR_TROCA_MS);
     return { ok: true, de };
+  }
+
+  /**
+   * A principal não tem conta que valha a pena guardar? Devolve o motivo (para o evento) ou null quando pode ser só
+   * falta de rede. Sem login: nada a guardar. Login vencido sem renovação: morto. Login vencido com renovação que a API
+   * recusa e que ninguém renovou em 15 minutos: o assistente não está conseguindo usá-lo (é quando ele pede login).
+   */
+  async principalSemConta(atual: Blob): Promise<string | null> {
+    const tok = oauth(atual).accessToken;
+    if (!tok) return "sem login";
+    const vence = expiraEm(atual);
+    if (!vence || vence > this.agora()) return null;
+    if (!temRenovacao(atual)) return "com um login vencido e sem renovação";
+    const { status } = await this.api.perfil(tok);
+    if (status !== 401 && status !== 403) return null;
+    const h = hashToken(atual)!;
+    const desde = (this.principalRecusadaDesde[h] ??= this.agora());
+    return this.agora() - desde >= PRINCIPAL_MORTA_APOS_S ? "com um login que não abre mais" : null;
+  }
+
+  private principalRecusadaDesde: Record<string, number> = {};
+
+  /** Cópia do login que sai da principal sem ter dono no Reveza: nada se perde, mesmo login morto. */
+  private guardarCopiaDaPrincipal(atual: Blob): void {
+    try {
+      const pasta = path.join(this.c.base, "copias");
+      fs.mkdirSync(pasta, { recursive: true, mode: 0o700 });
+      const arq = path.join(pasta, `principal-${this.agora()}.json`);
+      fs.writeFileSync(arq, JSON.stringify(soLogin(atual)), { mode: 0o600 });
+      this.log.info(`login antigo da principal guardado em ${arq}`);
+    } catch (e) {
+      this.log.erro(`cópia do login antigo da principal: ${(e as Error).message}`);
+    }
   }
 
   /** Corrida com uma sessão que renovava o token da conta que saiu: se a principal voltou para ela, refaz. */

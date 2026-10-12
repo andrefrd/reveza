@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { cwdDaSessao } from "../src/agente.js";
 import { EMAIL_VALIDO } from "../src/logins.js";
 import { CONFERIR_TROCA_MS } from "../src/config.js";
+import { PRINCIPAL_MORTA_APOS_S } from "../src/troca.js";
 import { ativaEm, blob, contaEstacionada, montar, RelogioFalso, type Montado } from "./falsos.js";
 
 let m: Montado;
@@ -81,6 +82,55 @@ describe("troca", () => {
     const r = await tr().trocar(b, "teste");
     assert.equal(r.ok, false);
     assert.equal(m.cred.token("principal"), "A9");
+  });
+
+  test("computador novo: a principal sem login (só os logins MCP da máquina) recebe a conta da troca", async () => {
+    m = await montar();
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set("principal", { mcpOAuth: { servidor: { accessToken: "mcp-da-maquina" } } });
+    const r = await tr().trocar(b, "computador sem conta");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token("principal"), "B1");
+    assert.deepEqual(m.cred.agora("principal")!.mcpOAuth, { servidor: { accessToken: "mcp-da-maquina" } });
+    assert.equal(e().ativa, b);
+  });
+
+  test("login vencido e sem renovação na principal: troca e guarda uma cópia do login antigo", async () => {
+    m = await montar();
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set("principal", blob("X1", false, -60, m.relogio.agora()));
+    m.api.recusados.add("X1");
+    const r = await tr().trocar(b, "computador sem conta");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token("principal"), "B1");
+    const copias = fs.readdirSync(path.join(m.c.base, "copias"));
+    assert.equal(copias.length, 1);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(m.c.base, "copias", copias[0]!), "utf8")).claudeAiOauth.accessToken, "X1");
+  });
+
+  test("login vencido com renovação que a API recusa: espera 15 minutos parado antes de trocar", async () => {
+    m = await montar();
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set("principal", blob("X1", true, -60, m.relogio.agora()));
+    m.api.recusados.add("X1");
+    let r = await tr().trocar(b, "computador sem conta");
+    assert.equal(r.ok, false, "pode ser só o assistente ainda não ter renovado");
+    assert.equal(m.cred.token("principal"), "X1");
+    await m.relogio.avancar(PRINCIPAL_MORTA_APOS_S * 1000);
+    r = await tr().trocar(b, "computador sem conta");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token("principal"), "B1");
+  });
+
+  test("login válido mas a API fora do ar: continua adiando (pode ser a conta em uso)", async () => {
+    m = await montar();
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set("principal", blob("X1", true, -60, m.relogio.agora()));
+    m.api.semRede = true;
+    await m.relogio.avancar(PRINCIPAL_MORTA_APOS_S * 2000);
+    const r = await tr().trocar(b, "computador sem conta");
+    assert.equal(r.ok, false);
+    assert.equal(m.cred.token("principal"), "X1");
   });
 
   test("destino perto de vencer é renovado antes de ir para a principal", async () => {
