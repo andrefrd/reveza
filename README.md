@@ -94,7 +94,10 @@ npx github:dantaspaulo/reveza
 
 Ele pergunta e monta tudo: confere o computador, instala o agente e o mod, cria a sua nuvem no Supabase, publica o
 painel na Vercel (com domínio próprio, se quiser), conecta as contas, configura os alertas e faz uma prova final.
-Os tokens do Supabase e da Vercel **não ficam guardados** em lugar nenhum.
+As etapas contam de 1 até o total do seu caminho. Na hora de cada token, a página de criá-lo abre sozinha no navegador
+(com tela; o endereço também aparece no terminal), e os tokens do Supabase e da Vercel **não ficam guardados** em lugar
+nenhum. A troca automática já vem ligada, antes do limite (avisa em 90%, troca em 95%): muda no painel, em **Troca
+automática**. Quem importa de outro gestor (`--importar`) fica com a configuração de lá.
 
 | Precisa de | |
 |---|---|

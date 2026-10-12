@@ -94,7 +94,11 @@ npx github:dantaspaulo/reveza --idioma en
 
 It asks and sets everything up: checks the computer, installs the agent and the mod, creates your cloud on Supabase,
 deploys the dashboard on Vercel (with your own domain, if you want), connects the accounts, sets up alerts and runs a
-final check. The Supabase and Vercel tokens are **not stored** anywhere.
+final check. The steps count from 1 to the total of your path. When each token is needed, the page to create it opens
+in your browser by itself (when there is a screen; the address is also printed in the terminal), and the Supabase and
+Vercel tokens are **not stored** anywhere. Automatic switching starts on, before the limit (warns at 90%, switches at
+95%): change it in the dashboard, under **Auto switch**. Importing from another manager (`--importar`) keeps its
+settings.
 
 | You need | |
 |---|---|

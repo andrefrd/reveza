@@ -181,12 +181,25 @@ Modo demonstração: `?demo=1` ou instalação `--demo` liga dados de exemplo ge
 ## 10. Instalador (no padrão do Claquete)
 
 `npx github:<dono>/reveza` com `--atualizar`, `--desinstalar`, `--sem-nuvem`, `--demo`, `--doctor`, `--ajuda`.
-Passos: conferência do sistema, agente e mod, contas (login oficial de cada uma), modo de troca (troca automática
-começa desligada), nuvem (token do Supabase, cria o projeto, aplica o banco e as funções, cria o administrador com
-verificação em duas etapas, cria a identidade do computador e a chave do cofre), painel (login na Vercel, publica,
-cabeçalhos), domínio (subdomínio próprio com o passo a passo na Cloudflare, ou o domínio da Vercel), alertas (canal
-escolhido, mensagem de teste), interface (React Bits grátis baixado; o repositório não traz código do React Bits),
-prova final (`doctor` e um comando do painel chegando ao computador).
+Passos: conferência do sistema, agente e mod, ligar a uma instalação que já existe (só computador novo com o código do
+painel), nuvem (token do Supabase, cria o projeto, aplica o banco e as funções, cria o administrador com verificação em
+duas etapas, cria a identidade do computador e a chave do cofre; o token da Vercel é pedido aqui também), serviço,
+painel (publica, cabeçalhos; domínio: subdomínio próprio com o passo a passo na Cloudflare, ou o da Vercel; interface:
+React Bits grátis baixado, o repositório não traz código do React Bits), contas (login oficial de cada uma), alertas
+(canal escolhido, mensagem de teste), prova final (`doctor` e um comando do painel chegando ao computador).
+
+As etapas são numeradas de 1 a N só com as que rodam naquele caminho (`instalador/lib/etapas.mjs`): computador ligado,
+atualização e `--sem-nuvem` têm menos etapas, sem número pulado. Numa atualização com nuvem, deixar o token do Supabase
+em branco mantém a nuvem e o painel como estão, e as etapas seguintes saem com o total novo.
+
+A troca automática não é pergunta: a instalação nova grava ligada, antes do limite (avisa em 90%, troca em 95%), na
+nuvem ou, com `--sem-nuvem`, no estado local; muda no painel. Atualizar, ligar e `--importar` não gravam troca (fica a
+que já vale; o `--com-nuvem` leva para a nuvem a do estado local). O banco nasce com a troca desligada; quem a liga é o
+instalador.
+
+Na hora de pedir cada token, o instalador abre a página de criá-lo (`open`, `xdg-open` ou `explorer.exe`), só com
+tela e pergunta: nunca com `--sim` ou sem terminal, por SSH sem tela, ou com o token já no ambiente; numa atualização,
+em que o token do Supabase é opcional, essa página não abre. Falhar ao abrir não para nada: o endereço fica impresso.
 
 ## 11. Segurança do painel publicado
 
