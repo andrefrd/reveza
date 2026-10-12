@@ -360,7 +360,12 @@ describe("conserto da credencial: a troca pedida ao trocador", () => {
         diagnostico: async () => (diagnosticos++, { conferencias: [], em: "x" }),
         consertar: async () => {
           consertos++;
-          return { diagnostico: { conferencias: [{ id: "mod", situacao: "ok", consertado: { resultado: "corrigido", texto: "mod reinstalado" } }] }, resumo: "corrigido: Mod das sessões" };
+          return {
+            diagnostico: { conferencias: [{ id: "mod", situacao: "ok", consertado: { resultado: "corrigido", texto: "mod reinstalado" } }] },
+            resumo: "corrigido: Mod das sessões",
+            corrigidos: 1,
+            naoDeu: 0,
+          };
         },
       });
       await m!.agente.busca();
@@ -383,6 +388,7 @@ describe("conserto da credencial: a troca pedida ao trocador", () => {
       assert.ok(ev, "o conserto fica registrado na nuvem");
       assert.equal(ev!.tipo, "info");
       assert.equal(ev!.texto, "Conserto pedido pelo painel: corrigido: Mod das sessões.");
+      assert.deepEqual(ev!.dados, { conserto: true, comando: 3, corrigidos: 1, nao_deu: 0 }, "o painel mostra o resumo pelos números, no idioma de quem vê");
       const antes = diagnosticos;
       await m!.agente.busca();
       assert.equal(diagnosticos, antes + 1, "depois do conserto, o próximo agente_ola leva o diagnóstico novo");

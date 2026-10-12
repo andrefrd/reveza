@@ -410,7 +410,7 @@ export async function montar(
     relogio?: RelogioFalso;
     exec?: Executor;
     diagnostico?: () => Promise<Record<string, unknown>>;
-    consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string }>;
+    consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string; corrigidos?: number; naoDeu?: number }>;
   } = {},
 ): Promise<Montado> {
   const tmp = pastaTemporaria();

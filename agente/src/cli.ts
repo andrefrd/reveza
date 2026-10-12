@@ -613,7 +613,8 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
         },
         credenciais: () => agente.consertarCredencial(),
       });
-      return { diagnostico: paraPainel(r.depois), resumo: resumoConserto(r.depois) };
+      const contar = (x: "corrigido" | "nao_deu") => r.depois.filter((c) => c.consertado?.resultado === x).length;
+      return { diagnostico: paraPainel(r.depois), resumo: resumoConserto(r.depois), corrigidos: contar("corrigido"), naoDeu: contar("nao_deu") };
     },
   });
   const instalacao = lerInstalacao(amb.c);

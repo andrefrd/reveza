@@ -54,7 +54,7 @@ export interface Dependencias {
    * O conserto do Corrigir do painel (a lista fechada de conserto.ts, rodando dentro do agente). Devolve o diagnóstico
    * de depois, no formato do `diagnostico`, com o resultado de cada problema, e o resumo para o evento.
    */
-  consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string }>;
+  consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string; corrigidos?: number; naoDeu?: number }>;
   /** Para tocar o som da troca (sem ele, não toca). */
   exec?: Executor;
 }
@@ -819,7 +819,9 @@ export class Agente {
           const texto = `Conserto pedido pelo painel: ${r.resumo}.`.slice(0, 300);
           this.trocador.evento("info", texto);
           // o evento "info" não sobe sozinho (aoEvento): o conserto vai à nuvem de propósito, para ficar registrado
-          await this.d.nuvem?.evento("info", texto, { conserto: true, comando: cmd.id ?? null }).catch(() => undefined);
+          await this.d.nuvem
+            ?.evento("info", texto, { conserto: true, comando: cmd.id ?? null, corrigidos: r.corrigidos ?? 0, nao_deu: r.naoDeu ?? 0 })
+            .catch(() => undefined);
           // o próximo agente_ola leva o diagnóstico novo (só lido) para a tela Saúde
           this.diagnosticoEm = 0;
           return { status: 200, corpo: { ok: true, corrigir: true, diagnostico: r.diagnostico } };
