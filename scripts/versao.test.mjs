@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conferir, maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes } from "./versao.mjs";
+import { conferir, maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes, workflowsVermelhos } from "./versao.mjs";
 
 const CHANGELOG = `# Versões
 
@@ -49,4 +49,15 @@ test("comparação de versões", () => {
   assert.equal(maior("0.2.0", "0.1.9"), true);
   assert.equal(maior("0.1.1", "0.1.1"), false);
   assert.equal(maior("0.1.0", "0.1.1"), false);
+});
+
+test("lançar recusa quando o run mais recente de algum workflow na main está vermelho", () => {
+  const runs = [
+    { workflowName: "Instalar nos três sistemas", conclusion: "success", status: "completed" },
+    { workflowName: "Windows de verdade", conclusion: "failure", status: "completed" },
+    { workflowName: "Instalar nos três sistemas", conclusion: "failure", status: "completed" },
+  ];
+  assert.deepEqual(workflowsVermelhos(runs), ["Windows de verdade"], "o vermelho antigo de um workflow que já ficou verde não conta");
+  assert.deepEqual(workflowsVermelhos([{ workflowName: "Windows de verdade", conclusion: "", status: "in_progress" }, ...runs]), [], "rodando agora: espera o resultado");
+  assert.deepEqual(workflowsVermelhos([]), []);
 });

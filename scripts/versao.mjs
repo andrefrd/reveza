@@ -94,6 +94,30 @@ export function conferir(v = versoes()) {
   return unicas[0];
 }
 
+/**
+ * Workflows cujo run mais recente na main terminou vermelho. Pedido do Paulo (12/10/2026): "Não quero que isso seja
+ * comum, corrija sempre". Versão nova só sai com o último run de cada workflow verde (ou ainda rodando).
+ */
+export function workflowsVermelhos(runs) {
+  const visto = new Set();
+  const vermelhos = [];
+  for (const r of runs) {
+    if (visto.has(r.workflowName)) continue; // a lista vem do mais novo para o mais velho
+    visto.add(r.workflowName);
+    if (["failure", "timed_out", "startup_failure"].includes(r.conclusion)) vermelhos.push(r.workflowName);
+  }
+  return vermelhos;
+}
+
+function conferirCi() {
+  const saida = execFileSync("gh", ["run", "list", "-R", "dantaspaulo/reveza", "--branch", "main", "-L", "40", "--json", "workflowName,conclusion,status"], {
+    cwd: RAIZ,
+    encoding: "utf8",
+  });
+  const vermelhos = workflowsVermelhos(JSON.parse(saida));
+  if (vermelhos.length) throw new Error(`o último run de ${vermelhos.join(", ")} na main está vermelho: corrija e deixe verde antes de lançar`);
+}
+
 function trocar(f, de, para) {
   const t = ler(f);
   if (!t.includes(de)) throw new Error(`não achei ${de} em ${f}`);
@@ -109,6 +133,7 @@ function lancar(nova) {
   if (primeiraDoChangelog(changelog) !== nova) throw new Error(`escreva antes a entrada "## ${nova} · DD/MM/AAAA" no topo da CHANGELOG.md e commite`);
   const notas = secaoDoChangelog(changelog, nova);
   if (!notas) throw new Error("a entrada da CHANGELOG está vazia");
+  conferirCi();
   for (const f of PACOTES) trocar(f, `"version": "${atual}"`, `"version": "${nova}"`);
   for (const f of TRAVAS) {
     const t = JSON.parse(ler(f));
