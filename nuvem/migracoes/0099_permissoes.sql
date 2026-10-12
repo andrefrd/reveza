@@ -22,7 +22,7 @@ grant execute on function
   public.agente_reservar_comando(bigint), public.agente_responder_comando(bigint, integer, jsonb),
   public.agente_evento(text, text, jsonb), public.agente_ligacao_publicar(text, text), public.agente_ligacao_buscar(),
   public.agente_marcar_login(uuid, boolean), public.agente_cofre_impressao(text),
-  public.agente_vez_de_atualizar(text, text), public.agente_atualizacao_resultado(text, text, text),
+  public.agente_vez_de_atualizar(text, text), public.agente_atualizacao_resultado(text, text, text), public.agente_migracoes(),
   public.agente_ligacao_pedir(jsonb), public.agente_ligacao_receber(), public.agente_ligacoes_abertas(),
   public.agente_ligacao_entregar(uuid, jsonb, jsonb), public.agente_ligacao_recusar(uuid, text),
   public.painel_ligacao_aprovador(uuid, uuid, text),

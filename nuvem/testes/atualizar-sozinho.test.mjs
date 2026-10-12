@@ -19,7 +19,8 @@ test("a opção começa desligada, só administrador liga, e chega aos computado
   const { b, admin, pc1 } = await preparar();
   assert.deepEqual(await vez(b, pc1), { pode: false, motivo: "desligado" });
   await assert.rejects(b.rpc(pc1, "painel_config", { p_chave: "atualizar_sozinho", p_valor: true }));
-  await assert.rejects(b.rpc(admin, "painel_config", { p_chave: "atualizar_sozinho", p_valor: "sim" }), /verdadeiro ou falso/);
+  // desde a 0020 é uma escolha (desligada, madrugada, assim_que_sair), e verdadeiro ou falso seguem valendo
+  await assert.rejects(b.rpc(admin, "painel_config", { p_chave: "atualizar_sozinho", p_valor: "sim" }), /desligada, madrugada ou assim_que_sair/);
   assert.equal((await b.rpc(admin, "painel_config", { p_chave: "atualizar_sozinho", p_valor: true })).ok, true);
   const r = await b.rpc(pc1, "agente_ola", { p_versao: "1.0.0" });
   assert.equal(r.config.atualizar_sozinho, true);
