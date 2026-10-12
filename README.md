@@ -1,112 +1,155 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0E1116,100:1D3B5C&height=200&section=header&text=Reveza%20AI&fontColor=FFFFFF&fontSize=56&fontAlignY=36&desc=gestor%20de%20v%C3%A1rias%20contas%20do%20assistente%20de%20c%C3%B3digo&descAlignY=58&descSize=18" width="100%" alt="Reveza AI" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1F1E1D,100:D97757&height=210&section=header&text=Reveza%20AI&fontColor=FAF9F5&fontSize=58&fontAlignY=36&desc=v%C3%A1rias%20contas%20do%20Claude%20Code%2C%20revezando%20sozinhas&descAlignY=58&descSize=18" width="100%" alt="Reveza AI" />
 
-<a href="#instalar"><img src="https://img.shields.io/badge/npx%20github%3Adantaspaulo%2Freveza-3B82F6?style=for-the-badge&logo=npm&logoColor=white" alt="Instalar" /></a>
-<img src="https://img.shields.io/badge/licen%C3%A7a-MIT-0E1116?style=for-the-badge" alt="Licença MIT" />
-<a href="README.en.md"><img src="https://img.shields.io/badge/English-0E1116?style=for-the-badge" alt="English" /></a>
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&pause=1300&color=D97757&center=true&vCenter=true&width=760&lines=Troca+de+conta+antes+do+limite;A+sess%C3%A3o+continua+na+conta+nova;Logins+cifrados+no+seu+computador;Painel+na+sua+pr%C3%B3pria+nuvem;Computador+novo+com+um+c%C3%B3digo+s%C3%B3" alt="O que o Reveza faz" />
+
+<br/>
+
+<a href="#-instalar"><img src="https://img.shields.io/badge/npx%20github%3Adantaspaulo%2Freveza-D97757?style=for-the-badge&logo=npm&logoColor=1F1E1D" alt="Instalar" /></a>
+<a href="https://reveza.ia.br"><img src="https://img.shields.io/badge/reveza.ia.br-1F1E1D?style=for-the-badge&logo=googlechrome&logoColor=D97757" alt="Site" /></a>
+<img src="https://img.shields.io/badge/vers%C3%A3o-0.1.0-1F1E1D?style=for-the-badge" alt="Versão 0.1.0" />
+<img src="https://img.shields.io/badge/licen%C3%A7a-MIT-1F1E1D?style=for-the-badge" alt="Licença MIT" />
+<a href="README.en.md"><img src="https://img.shields.io/badge/English-1F1E1D?style=for-the-badge" alt="English" /></a>
 
 <br/><br/>
 
-Você tem mais de uma conta e cada uma tem o seu limite. O **Reveza AI** guarda o login de cada conta, acompanha o uso
-e troca de conta no computador quando a que está em uso chega perto do limite, sem parar o que as sessões estão fazendo.
-Tudo num painel que é **seu**: no seu Supabase, na sua Vercel, no seu domínio.
+**Reveza AI** troca a conta do Claude Code antes do limite, para o trabalho não parar.<br/>
+Você conecta as suas contas uma vez; ele acompanha o uso de cada uma, troca perto do fim e a sessão segue na conta nova.<br/>
+Os logins ficam cifrados no seu computador, e o painel mora na sua própria nuvem.
 
 </div>
 
-## O que ele faz
+<br/>
 
-| | |
+## 😮‍💨 O problema
+
+Quem usa o Claude Code o dia todo conhece estes três momentos:
+
+- **O limite chega na pior hora.** A janela de 5 horas acaba no meio de uma refatoração, de um deploy ou de um agente rodando de madrugada. Tudo para, e o contexto fica pela metade.
+- **Trocar de conta na mão quebra o ritmo.** Sair, entrar na outra conta, abrir a sessão de novo e explicar tudo outra vez. Várias vezes por dia.
+- **Ninguém sabe qual conta ainda tem fôlego.** Com várias contas e várias pessoas, ninguém vê qual está no fim, quanto cada uma rendeu nem quem está usando agora.
+
+## 🔁 Com o Reveza
+
+| Sem o Reveza | Com o Reveza AI |
 |---|---|
-| 🔁 **Troca de conta** | só no limite, antes do limite (avisa num percentual e troca em outro) ou em rodízio durante o dia. Começa desligada; você liga no painel. |
-| 📊 **Uso e custo** | tokens, respostas, agentes e sessões por dia, conta, modelo e computador, com o custo equivalente em dólar se você pagasse por uso. Mapa de calor, ranking, previsão de esgotar, planilha. |
-| 🗓️ **Plano da semana** | a cota semanal de cada conta dividida pelos dias, quanto já foi e alerta de ritmo. |
-| 🖥️ **Vários computadores** | macOS, Linux e Windows. Uma conta fica com um computador de cada vez; a nuvem decide quem usa qual. |
-| 🔔 **Alertas** | Telegram, ntfy, e-mail, webhook ou push no celular. O instalador ajuda a configurar e manda uma mensagem de teste. |
-| 👥 **Time** | convite por link de uso único, papéis (administrador e leitura), verificação em duas etapas obrigatória para administrador, auditoria. |
-| 🔌 **Integrações** | API com chave pessoal e escopos, webhooks assinados, exemplos para n8n, curl e script. |
-| 📱 **No celular** | o painel instala na tela inicial (PWA). |
-| 🌎 **Português e inglês** | no painel e no instalador. |
-| 🧪 **Demonstração** | `--demo` abre o painel com dados de exemplo, sem nuvem e sem mexer em conta nenhuma. |
+| A sessão para em 100% e você descobre na hora | Troca antes do limite: avisa em 90% e troca em 95% |
+| Sair, entrar na outra conta e explicar o contexto de novo | As sessões abertas seguem, já na conta nova |
+| O agente que rodava de madrugada morre no limite | A sessão sem ninguém retoma sozinha na conta seguinte |
+| Senha de conta passada por mensagem | Cada login cifrado no seu computador; a nuvem guarda sem conseguir ler |
+| Planilha para adivinhar qual conta ainda tem saldo | Painel com uso, custo e previsão de esgotar de cada conta |
+| Cada pessoa do time resolvendo no seu canto | Time com papéis, alertas e o histórico de cada troca |
 
-## Como funciona
+Funciona com as contas que você já tem. A cada troca, o computador faz um som (dá para desligar).
 
+<br/>
+
+## 🖥️ O painel
+
+<div align="center">
+<img src="docs/imagens/pt/desktop-visao.webp" width="100%" alt="Visão geral: que conta cada computador está usando, quanto já foi e o que pede atenção" />
+<br/>
+<sub><b>Visão geral</b>: a conta de cada computador, a janela de 5 horas e da semana, e o que pede atenção.</sub>
+<br/><br/>
+<img src="docs/imagens/pt/desktop-troca.webp" width="49%" alt="Troca automática: modo, limiar, ordem e agenda" />
+<img src="docs/imagens/pt/desktop-uso.webp" width="49%" alt="Uso: tokens e custo equivalente por dia, conta e modelo" />
+<br/>
+<sub><b>Troca automática</b>: só no limite, por limiar ou em rodízio, com ordem, reserva e agenda. <b>Uso</b>: tokens e custo equivalente por dia, conta, modelo e projeto.</sub>
+<br/><br/>
+<img src="docs/imagens/pt/celular-visao.webp" width="23%" alt="No celular: visão geral" />
+<img src="docs/imagens/pt/celular-troca.webp" width="23%" alt="No celular: troca" />
+<img src="docs/imagens/pt/celular-uso.webp" width="23%" alt="No celular: uso" />
+<img src="docs/imagens/pt/celular-computadores.webp" width="23%" alt="No celular: computadores" />
+<br/>
+<sub><b>No celular</b>: o painel instala na tela inicial. Imagens do modo demonstração, com contas de exemplo.</sub>
+</div>
+
+<br/>
+
+## ⚙️ Como funciona
+
+```mermaid
+flowchart LR
+  PC["💻 Seu computador<br/>agente + mod nas sessões<br/>cofre cifrado aqui"] -- "uso das contas, a cada 5 s" --> NUVEM[("☁️ Sua nuvem<br/>Supabase")]
+  NUVEM -- "qual conta usar" --> PC
+  PAINEL["📊 Seu painel<br/>Vercel"] -- "login + duas etapas" --> NUVEM
 ```
- seu computador                         sua nuvem (Supabase)                  seu painel (Vercel)
-┌──────────────────────────┐          ┌───────────────────────────┐         ┌──────────────────────┐
-│ agente (serviço)         │  busca   │ banco com segurança de    │  login  │ contas, uso, troca,  │
-│ · login de cada conta    │ ───────► │ linha, decisão de troca,  │ ◄────── │ alertas, time, saúde │
-│ · cofre CIFRADO aqui     │ a cada   │ cofre só com texto        │  + 2    │                      │
-│ · troca a conta em uso   │   5 s    │ cifrado, filas, alertas   │ etapas  │                      │
-│ mod nas sessões          │          └───────────────────────────┘         └──────────────────────┘
-└──────────────────────────┘
-```
 
-1. Cada conta entra pelo **login oficial**, no próprio computador.
-2. O login de cada conta vai para um **cofre cifrado** (AES-256-GCM). A chave do cofre existe só nos seus computadores;
-   a nuvem guarda texto cifrado e não consegue abrir.
-3. O agente relata o uso das contas. A **nuvem decide** qual computador usa qual conta (limite, limiar ou rodízio, com
-   agenda, prioridade e reserva).
-4. O computador **troca a conta em uso** e as sessões abertas seguem trabalhando. Sessão que parou no limite é retomada.
-5. Sem internet, o computador mantém a conta atual e não troca.
+1. **Conecte suas contas.** Login oficial de cada conta, uma vez, no seu computador. O Reveza não pede senha de conta.
+2. **Ele acompanha o uso.** O agente lê quanto cada conta já gastou da janela de 5 horas e da semana; a nuvem escolhe a próxima pela regra que você definir.
+3. **Troca antes do limite.** Perto do fim, o computador troca a conta e a sessão continua de onde parou. Se quiser, um alerta conta o que aconteceu.
 
-O computador **só chama a nuvem**: nenhuma porta aberta, nenhum túnel.
+O computador só chama a nuvem: nenhuma porta aberta, nenhum túnel. Sem internet, ele mantém a conta atual e não troca.
 
-## Requisitos
+<br/>
 
-- **Node 20.19 ou mais novo** ([nodejs.org](https://nodejs.org)).
-- **Claude Code** instalado: o Reveza funciona com o Claude Code.
-- Uma conta grátis no **[Supabase](https://supabase.com)** e outra na **[Vercel](https://vercel.com)** (só para o painel online; sem elas, use `--sem-nuvem`).
-- Opcional: um domínio (o instalador ensina a apontar um subdomínio pela Cloudflare).
-
-## Instalar
+## 📥 Instalar
 
 ```bash
 npx github:dantaspaulo/reveza
 ```
 
-O instalador pergunta e faz, nesta ordem:
-
-1. confere o computador (e, se outro gestor de contas já estiver rodando, oferece o **modo sombra**: lê e mostra o que faria, sem trocar nada);
-2. instala o agente, o comando `reveza` e o mod das sessões;
-3. o modo de troca (a troca automática começa desligada);
-4. a nuvem: com um token pessoal do Supabase, cria o projeto (ou usa um que você já tem), o banco, as funções e o administrador;
-5. o painel: compila na sua máquina, baixa os componentes grátis do [React Bits](https://reactbits.dev) e publica na Vercel;
-6. o domínio: o da Vercel ou um subdomínio seu, com o passo a passo da Cloudflare e a conferência do DNS;
-7. as contas: a que já está conectada entra sozinha; as outras, pelo login oficial;
-8. os alertas, com mensagem de teste;
-9. a prova final: `reveza doctor` e um comando do painel indo até o computador e voltando.
-
+Ele pergunta e monta tudo: confere o computador, instala o agente e o mod, cria a sua nuvem no Supabase, publica o
+painel na Vercel (com domínio próprio, se quiser), conecta as contas, configura os alertas e faz uma prova final.
 Os tokens do Supabase e da Vercel **não ficam guardados** em lugar nenhum.
+
+| Precisa de | |
+|---|---|
+| 🟢 **Node 20.19 ou mais novo** | no macOS, no Windows ou no Linux, inclusive numa VPS sem tela |
+| 🧡 **Claude Code** | instalado em cada computador que vai revezar contas |
+| ☁️ **Supabase e Vercel** | contas grátis bastam; sem elas, use `--sem-nuvem` |
+| 🌐 **Domínio** | opcional, com o passo a passo da Cloudflare |
+
+<details>
+<summary><b>Todas as opções do instalador</b></summary>
+
+<br/>
 
 | Opção | Para quê |
 |---|---|
+| `--ligar` | liga mais um computador a uma instalação que já existe: pede só o código de ligação do painel |
 | `--atualizar` | atualiza agente, mod, banco e painel; contas, uso e configuração ficam |
 | `--sem-nuvem` | só neste computador: agente, mod e contas, sem painel online |
-| `--ligar` | liga mais um computador a uma instalação que já existe: pede só o código de ligação do painel |
+| `--demo` | o painel com dados de exemplo, sem nuvem e sem mexer em conta nenhuma |
 | `--sombra` | ao lado de outro gestor de contas, sem trocar nada (porta 7789) |
 | `--importar <pasta>` | copia contas e uso de outro gestor; a origem não muda |
-| `--demo` | o painel com dados de exemplo, sem nuvem |
 | `--doctor` | confere a instalação: agente, serviço, nuvem, painel e cabeçalhos de segurança |
-| `--desinstalar` | tira o serviço e o mod; logins das contas, uso, chave do cofre (no chaveiro) e o computador na nuvem ficam: para tirar de vez, revogue o computador no painel |
+| `--desinstalar` | tira o serviço e o mod; logins, uso, chave do cofre e o computador na nuvem ficam (para tirar de vez, revogue o computador no painel) |
 | `--idioma en` | perguntas em inglês |
 | `--sim` | sem perguntas (lê `SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`, `REVEZA_ADMIN_EMAIL`, `REVEZA_ADMIN_SENHA`, `REVEZA_SUPABASE_REF` e `REVEZA_DOMINIO` do ambiente) |
 
-## No terminal
+</details>
+
+<br/>
+
+## ➕ Computador novo, com um código só
+
+1. No painel: **Computadores → Ligar computador novo → Gerar o código de ligação**.
+2. O computador que já usa o Reveza toca um som e abre uma janela. Digite nela o código de 4 caracteres que o painel mostra e clique em **Liberar**.
+3. No computador novo, rode `npx github:dantaspaulo/reveza --ligar` e cole o código que o painel mostrou. Pronto: ele entra sozinho, já com as contas.
+
+O código vale 10 minutos e uma vez só. A nuvem sozinha não consegue liberar a chave do cofre: quem libera digita, na
+tela do computador, o código que só o seu painel mostra.
+
+<br/>
+
+## 🧑‍💻 No dia a dia
 
 ```bash
 reveza status            # conta em uso, uso de cada conta, próxima troca
-reveza contas conectar a@exemplo.com
 reveza trocar a@exemplo.com
 reveza uso --csv         # registro de uso em planilha
-reveza ligar             # mostra 6 palavras para ligar outro computador
-reveza som testar        # som do sistema a cada troca de conta (ligado de fábrica; som desligar para tirar)
+reveza som desligar      # tira o som da troca (som ligar, som testar)
 reveza doctor            # diagnóstico
 ```
 
-Nas sessões, o comando **`/reveza`** mostra as contas e a linha de status mostra a conta em uso e a janela de 5 horas.
+Dentro das sessões, **`/reveza`** mostra as contas, e a linha de status mostra a conta em uso e a janela de 5 horas.
 
-## API e integrações
+<details>
+<summary><b>🔌 API e webhooks</b></summary>
+
+<br/>
 
 Crie uma chave em **Integrações**, no painel, com os escopos que precisar.
 
@@ -116,49 +159,82 @@ curl -H "Authorization: Bearer rvz_..." "https://<projeto>.supabase.co/functions
 curl -X POST -H "Authorization: Bearer rvz_..." -d '{"computador":"<id>","conta":"<id>"}' https://<projeto>.supabase.co/functions/v1/api/trocar
 ```
 
-Os webhooks levam o cabeçalho `X-Reveza-Assinatura: sha256=<HMAC-SHA256 do corpo com o seu segredo>`. Confira antes de confiar:
+Os webhooks levam `X-Reveza-Assinatura: sha256=<HMAC-SHA256 do corpo com o seu segredo>`. Confira antes de confiar:
 
 ```js
 const esperado = "sha256=" + crypto.createHmac("sha256", segredo).update(corpoBruto).digest("hex");
 ```
 
-## Segurança
+</details>
 
-- **Login de conta nunca em claro fora do computador.** O cofre na nuvem só tem texto cifrado, com dado associado
-  `conta|versão` (não dá para trocar o cifrado de uma conta pelo de outra).
-- **Menor privilégio.** Nenhuma chave de servidor fora do Supabase; o painel usa a chave pública e o login de quem
-  entra. Cada computador tem identidade própria, revogável sozinha. Toda tabela tem segurança de linha, e as funções são
-  liberadas uma a uma.
-- **Login do painel**: sem cadastro aberto, só por convite; senha forte; verificação em duas etapas para
-  administrador (quem ativou precisa do código em toda sessão, e a instalação pode exigir de todos); sessão curta com
-  renovação.
-- **Painel publicado**: CSP restrita, HSTS, `frame-ancestors 'none'`, Permissions-Policy e um domínio só.
-- **No computador**: o agente só fala com a nuvem (nenhuma porta aberta para fora) e a ponte local com o mod exige a
-  prova de uma chave que só o dono do computador lê (a chave em si nunca viaja).
-- **Computador novo, em um passo**: no painel, Computadores → Ligar computador novo → Gerar o código de ligação. O
-  computador que já tem a chave do cofre abre uma janela pedindo o código de 4 caracteres que o painel mostra; você
-  digita e clica em Liberar. O painel junta o acesso do computador novo e a frase de 6 palavras num código só
-  (`rvzl_...`, vale 10 minutos); no computador novo, `npx github:dantaspaulo/reveza --ligar`, cola o código e pronto.
-  A nuvem sozinha não consegue liberar: quem libera digita, na tela do computador, o código que só o painel dela mostra. Sem tela (servidor), a frase sai pelo terminal (`reveza ligar`), ou o computador libera sem perguntar se você
-  quiser (`reveza ligar --painel ligar`).
-- **Perdeu todos os computadores?** O cofre não se recupera (é o preço de a nuvem não conseguir ler). As contas se
-  conectam de novo pelo login oficial.
+<br/>
 
-> Cada pessoa responde pelo uso das próprias contas e pelos termos do serviço de IA que usa.
+## 🔐 Segurança
 
-## Para quem desenvolve
+- **A nuvem guarda, mas não lê.** Cada login é cifrado no computador (AES-256-GCM). A chave do cofre mora só no chaveiro do sistema; o Supabase recebe texto cifrado e a Vercel nem isso.
+- **Menor privilégio.** Nenhuma chave de servidor fora do Supabase. Toda tabela tem segurança de linha, toda mudança passa por uma função que confere o papel e grava a auditoria. Cada computador tem identidade própria, revogável sozinha.
+- **Login do painel** só por convite, senha forte, duas etapas para quem administra (e a opção de exigir de todos).
+- **Painel publicado** com CSP restrita, HSTS e nenhum segredo no navegador.
+- **Auditado** com a [skill de auditoria de segurança da Cloudflare](https://github.com/cloudflare/security-audit-skill): os achados foram corrigidos, e a trava do repositório recusa segredo e dado pessoal em todo commit.
+
+A arquitetura inteira está em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+
+<br/>
+
+## 🤝 Contribuir
+
+Achou um bug ou tem uma ideia? [Abra uma issue](https://github.com/dantaspaulo/reveza/issues). Quer mexer no código?
+Pull requests são bem-vindos, inclusive traduções. Se o Reveza te poupou de uma parada no limite, deixe uma ⭐.
 
 ```bash
-cd agente && npm install && npm test        # agente: troca, cofre, posse, nuvem falsa e contra Postgres local
-cd nuvem && npm install && npm test         # banco (PGlite com as migrações) e Edge Functions
-npm test                                    # instalador
-cd painel && npm install && npm run react-bits && npm run dev   # painel (http://localhost:5173/?demo=1)
+git config core.hooksPath .githooks         # a trava: recusa segredo, dado pessoal e componente do React Bits
+cd agente && npm ci && npm test             # agente: troca, cofre, posse, nuvem falsa
+cd nuvem && npm ci && npm test              # banco (PGlite com as migrações) e funções
+npm ci && npm test                          # instalador e travas
+cd painel && npm ci && npm run react-bits && npm run dev   # painel em http://localhost:5173/?demo=1
+npm run auditoria                           # npm audit em todas as travas
 ```
 
-A arquitetura está em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Ligue a trava do repositório num clone novo:
-`git config core.hooksPath .githooks` (ela recusa segredo, dado pessoal e componente do React Bits no commit; a licença
-do React Bits não deixa redistribuir, por isso o instalador baixa na máquina de quem usa).
+<br/>
 
-## Licença
+## 💰 Custos e licenças
 
-MIT.
+- **Supabase e Vercel:** os planos grátis bastam para começar. As contas do Claude continuam suas, do jeito que já são.
+- **React Bits:** os componentes grátis do painel são MIT + Commons Clause e não vêm no repositório; o instalador baixa na sua máquina e confere cada um.
+- **Reveza AI:** MIT. Use, adapte e compartilhe.
+
+> Cada pessoa responde pelo uso das próprias contas e pelos termos do serviço de IA que usa. O Reveza AI é um projeto
+> independente, sem vínculo com a Anthropic. Claude e Claude Code são marcas da Anthropic.
+
+<br/>
+
+<!-- quem-fez -->
+<div align="center">
+
+## 👋 Quem fez
+
+<a href="https://github.com/dantaspaulo">
+<picture>
+  <source media="(max-width: 700px)" srcset="https://raw.githubusercontent.com/dantaspaulo/dantaspaulo/main/assets/papeis-celular.svg" />
+  <img src="https://raw.githubusercontent.com/dantaspaulo/dantaspaulo/main/assets/papeis.svg" width="100%" alt="Paulo Sérgio Dantas: FDE na Delta Academy e na QWize, fundador do ChatADV, do PostADV e da PSD Software" />
+</picture>
+</a>
+
+**Paulo Sérgio Dantas** constrói negócios com IA.<br/>
+<sub>O Reveza nasceu para as minhas próprias contas do Claude Code. Também abri o <a href="https://github.com/dantaspaulo/claquete">Claquete.ai</a>, o estúdio de vídeo que o Claude opera.</sub>
+
+<br/>
+
+<a href="https://github.com/dantaspaulo"><img src="https://img.shields.io/badge/github.com%2Fdantaspaulo-D97757?style=for-the-badge&logo=github&logoColor=1F1E1D" alt="GitHub" /></a>
+<a href="https://paulosdantas.adv.br"><img src="https://img.shields.io/badge/paulosdantas.adv.br-1F1E1D?style=for-the-badge&logo=googlechrome&logoColor=D97757" alt="Site" /></a>
+<a href="https://www.linkedin.com/in/paulosdantas/"><img src="https://img.shields.io/badge/LinkedIn-1F1E1D?style=for-the-badge&logo=linkedin&logoColor=D97757" alt="LinkedIn" /></a>
+<a href="mailto:contato@paulosdantas.adv.br"><img src="https://img.shields.io/badge/E--mail-1F1E1D?style=for-the-badge&logo=gmail&logoColor=D97757" alt="E-mail" /></a>
+
+<br/><br/>
+
+<sub>Usa o Reveza no seu time? Me conta.</sub>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:D97757,100:1F1E1D&height=110&section=footer&animation=twinkling" width="100%" alt="" />
+
+</div>
+<!-- /quem-fez -->

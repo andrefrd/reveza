@@ -32,13 +32,19 @@ const ENV_EXEMPLO = /(^|\/)\.env\.(exemplo|example)$/;
 const REACT_BITS = /(^|\/)react-bits\//i;
 const ISENTOS = /^scripts\/trava(\.test)?\.mjs$/; // a própria trava descreve os padrões
 
+// O README pode ter o bloco "Quem fez" (como o do Claquete), com o site e os perfis públicos de quem mantém o projeto:
+// só esse trecho, entre os marcadores, fica fora da regra de dado pessoal. Segredo continua valendo nele.
+const QUEM_FEZ = /<!-- quem-fez -->[\s\S]*?<!-- \/quem-fez -->/g;
+const README = /^README(\.[a-z]{2})?\.md$/;
+
 export function problemas(caminho, conteudo) {
   const achados = [];
   if (ARQUIVO_PROIBIDO.test(caminho) && !ENV_EXEMPLO.test(caminho)) achados.push("arquivo de segredo");
   if (REACT_BITS.test(caminho)) achados.push("componente do React Bits (é baixado na instalação, não versionado)");
   if (ISENTOS.test(caminho) || conteudo === null) return achados;
   for (const [padrao, nome] of SEGREDOS) if (padrao.test(conteudo)) achados.push(nome);
-  for (const padrao of PESSOAIS) if (padrao.test(conteudo) || padrao.test(caminho)) achados.push(`dado pessoal (${padrao.source})`);
+  const semQuemFez = README.test(caminho) ? conteudo.replace(QUEM_FEZ, "") : conteudo;
+  for (const padrao of PESSOAIS) if (padrao.test(semQuemFez) || padrao.test(caminho)) achados.push(`dado pessoal (${padrao.source})`);
   return achados;
 }
 

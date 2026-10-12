@@ -1,115 +1,157 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0E1116,100:1D3B5C&height=200&section=header&text=Reveza%20AI&fontColor=FFFFFF&fontSize=56&fontAlignY=36&desc=account%20manager%20for%20your%20coding%20assistant&descAlignY=58&descSize=18" width="100%" alt="Reveza AI" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1F1E1D,100:D97757&height=210&section=header&text=Reveza%20AI&fontColor=FAF9F5&fontSize=58&fontAlignY=36&desc=several%20Claude%20Code%20accounts%2C%20taking%20turns%20on%20their%20own&descAlignY=58&descSize=18" width="100%" alt="Reveza AI" />
 
-<a href="#install"><img src="https://img.shields.io/badge/npx%20github%3Adantaspaulo%2Freveza-3B82F6?style=for-the-badge&logo=npm&logoColor=white" alt="Install" /></a>
-<img src="https://img.shields.io/badge/license-MIT-0E1116?style=for-the-badge" alt="MIT license" />
-<a href="README.md"><img src="https://img.shields.io/badge/Portugu%C3%AAs-0E1116?style=for-the-badge" alt="Português" /></a>
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&pause=1300&color=D97757&center=true&vCenter=true&width=760&lines=Switches+accounts+before+the+limit;The+session+goes+on+on+the+new+account;Logins+encrypted+on+your+computer;Dashboard+in+your+own+cloud;A+new+computer+joins+with+one+code" alt="What Reveza does" />
+
+<br/>
+
+<a href="#-install"><img src="https://img.shields.io/badge/npx%20github%3Adantaspaulo%2Freveza-D97757?style=for-the-badge&logo=npm&logoColor=1F1E1D" alt="Install" /></a>
+<a href="https://reveza.ia.br/en"><img src="https://img.shields.io/badge/reveza.ia.br-1F1E1D?style=for-the-badge&logo=googlechrome&logoColor=D97757" alt="Website" /></a>
+<img src="https://img.shields.io/badge/version-0.1.0-1F1E1D?style=for-the-badge" alt="Version 0.1.0" />
+<img src="https://img.shields.io/badge/license-MIT-1F1E1D?style=for-the-badge" alt="MIT license" />
+<a href="README.md"><img src="https://img.shields.io/badge/Portugu%C3%AAs-1F1E1D?style=for-the-badge" alt="Português" /></a>
 
 <br/><br/>
 
-You have more than one account and each has its own limit. **Reveza AI** keeps each account's login, tracks usage and
-switches the account on your computer when the one in use gets close to its limit, without stopping what your sessions
-are doing. Everything in a panel that is **yours**: on your Supabase, your Vercel, your domain.
+**Reveza AI** switches your Claude Code account before the limit, so the work does not stop.<br/>
+You connect your accounts once; it follows each one's usage, switches near the end and the session goes on on the new account.<br/>
+Logins stay encrypted on your computer, and the dashboard lives in your own cloud.
 
 </div>
 
-## What it does
+<br/>
 
-| | |
+## 😮‍💨 The problem
+
+If you use Claude Code all day, you know these three moments:
+
+- **The limit hits at the worst time.** The 5-hour window runs out in the middle of a refactor, a deploy or an agent running overnight. Everything stops, and the context is left half done.
+- **Switching accounts by hand breaks the flow.** Sign out, sign in to the other account, open the session again and explain everything once more. Several times a day.
+- **Nobody knows which account has room left.** With several accounts and several people, nobody sees which one is running out, what each delivered or who is using it right now.
+
+## 🔁 With Reveza
+
+| Without Reveza | With Reveza AI |
 |---|---|
-| 🔁 **Account switching** | only at the limit, before the limit (warn at one percentage, switch at another) or rotating during the day. Starts off; you turn it on in the panel. |
-| 📊 **Usage and cost** | tokens, replies, agents and sessions per day, account, model and computer, with the equivalent pay-as-you-go cost in dollars. Heat map, ranking, depletion forecast, spreadsheet export. |
-| 🗓️ **Weekly plan** | each account's weekly quota split by day, how much is gone and pace alerts. |
-| 🖥️ **Several computers** | macOS, Linux and Windows. One account is on one computer at a time; the cloud decides who uses which. |
-| 🔔 **Alerts** | Telegram, ntfy, e-mail, webhook or phone push. The installer helps set it up and sends a test message. |
-| 👥 **Team** | single-use invite links, roles (administrator and read-only), mandatory two-step verification for administrators, audit log. |
-| 🔌 **Integrations** | API with personal keys and scopes, signed webhooks, examples for n8n, curl and scripts. |
-| 📱 **On the phone** | the panel installs on the home screen (PWA). |
-| 🌎 **Portuguese and English** | in the panel and the installer. |
-| 🧪 **Demo** | `--demo` opens the panel with sample data, no cloud and no account touched. |
+| The session stops at 100% and you only find out then | Switches before the limit: warns at 90% and switches at 95% |
+| Sign out, sign in to the other account and explain the context again | Open sessions keep going, already on the new account |
+| The agent running overnight dies at the limit | The unattended session resumes on the next account by itself |
+| Account passwords shared over chat | Each login encrypted on your computer; the cloud stores it without being able to read it |
+| A spreadsheet to guess which account still has room | A dashboard with usage, cost and a forecast of when each account runs out |
+| Everyone on the team sorting it out alone | A team with roles, alerts and the history of every switch |
 
-## How it works
+Works with the accounts you already have. On every switch the computer plays a sound (you can turn it off).
 
+<br/>
+
+## 🖥️ The dashboard
+
+<div align="center">
+<img src="docs/imagens/en/desktop-visao.webp" width="100%" alt="Overview: which account each computer is using, how much is gone and what needs attention" />
+<br/>
+<sub><b>Overview</b>: each computer's account, the 5-hour and weekly windows, and what needs attention.</sub>
+<br/><br/>
+<img src="docs/imagens/en/desktop-troca.webp" width="49%" alt="Automatic switching: mode, threshold, order and schedule" />
+<img src="docs/imagens/en/desktop-uso.webp" width="49%" alt="Usage: tokens and equivalent cost by day, account and model" />
+<br/>
+<sub><b>Automatic switching</b>: only at the limit, by threshold or rotating, with order, reserve and schedule. <b>Usage</b>: tokens and equivalent cost by day, account, model and project.</sub>
+<br/><br/>
+<img src="docs/imagens/en/celular-visao.webp" width="23%" alt="On the phone: overview" />
+<img src="docs/imagens/en/celular-troca.webp" width="23%" alt="On the phone: switching" />
+<img src="docs/imagens/en/celular-uso.webp" width="23%" alt="On the phone: usage" />
+<img src="docs/imagens/en/celular-computadores.webp" width="23%" alt="On the phone: computers" />
+<br/>
+<sub><b>On the phone</b>: the dashboard installs on the home screen. Screenshots from demo mode, with example accounts.</sub>
+</div>
+
+<br/>
+
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+  PC["💻 Your computer<br/>agent + session mod<br/>encrypted vault here"] -- "account usage, every 5 s" --> CLOUD[("☁️ Your cloud<br/>Supabase")]
+  CLOUD -- "which account to use" --> PC
+  DASH["📊 Your dashboard<br/>Vercel"] -- "sign-in + two-factor" --> CLOUD
 ```
- your computer                          your cloud (Supabase)                 your panel (Vercel)
-┌──────────────────────────┐          ┌───────────────────────────┐         ┌──────────────────────┐
-│ agent (service)          │  polls   │ database with row-level   │  login  │ accounts, usage,     │
-│ · each account's login   │ ───────► │ security, switch decision,│ ◄────── │ switching, alerts,   │
-│ · ENCRYPTED vault here   │ every    │ vault holding ciphertext  │  + 2    │ team, health         │
-│ · switches the account   │   5 s    │ only, queues, alerts      │  steps  │                      │
-│ mod in sessions          │          └───────────────────────────┘         └──────────────────────┘
-└──────────────────────────┘
-```
 
-1. Each account signs in through the **official login**, on the computer itself.
-2. Each login goes into an **encrypted vault** (AES-256-GCM). The vault key exists only on your computers; the cloud
-   stores ciphertext and cannot open it.
-3. The agent reports account usage. The **cloud decides** which computer uses which account (limit, threshold or
-   rotation, with schedule, priority and reserve).
-4. The computer **switches the account in use** and open sessions keep working. A session that stopped at the limit is
-   resumed.
-5. Without internet, the computer keeps the current account and does not switch.
+1. **Connect your accounts.** The official sign-in for each account, once, on your computer. Reveza never asks for an account password.
+2. **It follows the usage.** The agent reads how much of the 5-hour window and of the week each account has used; the cloud picks the next one by the rule you set.
+3. **Switches before the limit.** Near the end, the computer switches the account and the session continues where it stopped. If you want, an alert tells you what happened.
 
-The computer **only calls the cloud**: no open port, no tunnel.
+The computer only calls the cloud: no open port, no tunnel. Without internet, it keeps the current account and does not switch.
 
-## Requirements
+<br/>
 
-- **Node 20.19 or newer** ([nodejs.org](https://nodejs.org)).
-- **Claude Code** installed: Reveza works with Claude Code.
-- A free **[Supabase](https://supabase.com)** account and a **[Vercel](https://vercel.com)** account (only for the online panel; without them, use `--sem-nuvem`).
-- Optional: a domain (the installer shows how to point a subdomain through Cloudflare).
-
-## Install
+## 📥 Install
 
 ```bash
 npx github:dantaspaulo/reveza --idioma en
 ```
 
-The installer asks and does, in this order:
+It asks and sets everything up: checks the computer, installs the agent and the mod, creates your cloud on Supabase,
+deploys the dashboard on Vercel (with your own domain, if you want), connects the accounts, sets up alerts and runs a
+final check. The Supabase and Vercel tokens are **not stored** anywhere.
 
-1. checks the computer (and, if another account manager is already running, offers **shadow mode**: reads and shows what it would do, without switching anything);
-2. installs the agent, the `reveza` command and the session mod;
-3. the switching mode (automatic switching starts off);
-4. the cloud: with a Supabase personal token, creates the project (or uses one you have), the database, functions and administrator;
-5. the panel: builds on your machine, downloads the free [React Bits](https://reactbits.dev) components and publishes to Vercel;
-6. the domain: Vercel's or a subdomain of yours, with Cloudflare steps and a DNS check;
-7. accounts: the one already signed in is adopted; the others through the official login;
-8. alerts, with a test message;
-9. the final check: `reveza doctor` and a panel command travelling to the computer and back.
+| You need | |
+|---|---|
+| 🟢 **Node 20.19 or newer** | on macOS, Windows or Linux, including a headless VPS |
+| 🧡 **Claude Code** | installed on each computer that will rotate accounts |
+| ☁️ **Supabase and Vercel** | free accounts are enough; without them, use `--sem-nuvem` |
+| 🌐 **A domain** | optional, with a step-by-step guide on Cloudflare |
 
-The Supabase and Vercel tokens are **not stored** anywhere.
+<details>
+<summary><b>Every installer option</b></summary>
+
+<br/>
 
 | Option | What for |
 |---|---|
-| `--atualizar` | updates agent, mod, database and panel; accounts, usage and settings stay |
-| `--sem-nuvem` | this computer only: agent, mod and accounts, no online panel |
-| `--ligar` | joins one more computer to an existing installation: asks only for the panel's link code |
+| `--ligar` | joins one more computer to an existing installation: asks only for the dashboard's link code |
+| `--atualizar` | updates agent, mod, database and dashboard; accounts, usage and settings stay |
+| `--sem-nuvem` | this computer only: agent, mod and accounts, no online dashboard |
+| `--demo` | the dashboard with example data, no cloud, no account touched |
 | `--sombra` | next to another account manager, switching nothing (port 7789) |
 | `--importar <folder>` | copies accounts and usage from another manager; the source does not change |
-| `--demo` | the panel with sample data, no cloud |
-| `--doctor` | checks the installation: agent, service, cloud, panel and security headers |
-| `--desinstalar` | removes the service and the mod; account logins, usage, the vault key (in the keychain) and the computer in the cloud stay: to remove it for good, revoke the computer in the panel |
+| `--doctor` | checks the installation: agent, service, cloud, dashboard and security headers |
+| `--desinstalar` | removes the service and the mod; logins, usage, vault key and the computer in the cloud stay (to remove it for good, revoke the computer in the dashboard) |
 | `--idioma en` | questions in English |
 | `--sim` | no questions (reads `SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`, `REVEZA_ADMIN_EMAIL`, `REVEZA_ADMIN_SENHA`, `REVEZA_SUPABASE_REF` and `REVEZA_DOMINIO` from the environment) |
 
-## In the terminal
+</details>
+
+<br/>
+
+## ➕ A new computer, with one code
+
+1. In the dashboard: **Computers → Link new computer → Generate the link code**.
+2. The computer that already uses Reveza plays a sound and opens a window. Type in it the 4-character code the dashboard shows and click **Release**.
+3. On the new computer, run `npx github:dantaspaulo/reveza --ligar` and paste the code the dashboard showed. Done: it joins on its own, accounts included.
+
+The code is valid for 10 minutes, once. The cloud alone cannot release the vault key: whoever releases types, on the
+computer's screen, the code that only your dashboard shows.
+
+<br/>
+
+## 🧑‍💻 Day to day
 
 ```bash
 reveza status            # account in use, usage per account, next switch
-reveza contas conectar a@example.com
 reveza trocar a@example.com
 reveza uso --csv         # usage log as a spreadsheet
-reveza ligar             # shows 6 words to join another computer
-reveza som testar        # system sound on every account switch (on by default; som desligar turns it off)
+reveza som desligar      # turns off the switch sound (som ligar, som testar)
 reveza doctor            # diagnostics
 ```
 
-In sessions, the **`/reveza`** command shows the accounts and the status line shows the account in use and the 5-hour window.
+Inside sessions, **`/reveza`** shows the accounts, and the status line shows the account in use and the 5-hour window.
 
-## API and integrations
+<details>
+<summary><b>🔌 API and webhooks</b></summary>
 
-Create a key under **Integrations** in the panel, with the scopes you need.
+<br/>
+
+Create a key under **Integrations** in the dashboard, with the scopes you need.
 
 ```bash
 curl -H "Authorization: Bearer rvz_..." https://<project>.supabase.co/functions/v1/api/estado
@@ -123,43 +165,76 @@ Webhooks carry `X-Reveza-Assinatura: sha256=<HMAC-SHA256 of the body with your s
 const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
 ```
 
-## Security
+</details>
 
-- **Account logins are never in clear text outside the computer.** The cloud vault holds only ciphertext, bound to
-  `account|version` (one account's ciphertext cannot be swapped for another's).
-- **Least privilege.** No server key outside Supabase; the panel uses the public key and the signed-in user's login.
-  Each computer has its own identity, revocable on its own. Every table has row-level security and functions are granted
-  one by one.
-- **Panel login**: no open sign-up, invite only; strong password; two-step verification for administrators (whoever
-  turned it on needs the code in every session, and the installation can require it from everyone); short sessions with
-  refresh.
-- **Published panel**: strict CSP, HSTS, `frame-ancestors 'none'`, Permissions-Policy and a single domain.
-- **On the computer**: the agent only talks to the cloud (no port open to the outside) and the local bridge with the
-  mod requires proof of a key only the computer's owner can read (the key itself never travels).
-- **New computer, in one step**: in the panel, Computers → Link new computer → Generate the link code. The computer
-  that already holds the vault key opens a window asking for the 4-character code shown in the panel; you type it and
-  click Release. The panel joins the new computer's access and the 6-word phrase into a single code (`rvzl_...`, valid for
-  10 minutes); on the new computer, `npx github:dantaspaulo/reveza --ligar`, paste the code and that's it. The cloud
-  alone cannot release it: whoever releases types, on the computer's screen, the code that only their own panel shows. Without a screen (a server), the phrase comes from the terminal (`reveza ligar`), or the
-  computer releases without asking if you want (`reveza ligar --painel ligar`).
-- **Lost every computer?** The vault cannot be recovered (the price of a cloud that cannot read it). Accounts sign in
-  again through the official login.
+<br/>
 
-> Each person is responsible for the use of their own accounts and for the terms of the AI service they use.
+## 🔐 Security
 
-## For developers
+- **The cloud stores, but cannot read.** Each login is encrypted on the computer (AES-256-GCM). The vault key lives only in the system keychain; Supabase receives ciphertext and Vercel not even that.
+- **Least privilege.** No server key outside Supabase. Every table has row-level security, every change goes through a function that checks the role and writes the audit log. Each computer has its own identity, revocable on its own.
+- **Dashboard sign-in** by invitation only, strong password, two-factor for admins (and the option to require it from everyone).
+- **Published dashboard** with a strict CSP, HSTS and no secret in the browser.
+- **Audited** with [Cloudflare's security audit skill](https://github.com/cloudflare/security-audit-skill): the confirmed findings were fixed, and the repository guard refuses secrets and personal data on every commit.
+
+The whole architecture is in [docs/ARQUITETURA.md](docs/ARQUITETURA.md) (Portuguese).
+
+<br/>
+
+## 🤝 Contribute
+
+Found a bug or have an idea? [Open an issue](https://github.com/dantaspaulo/reveza/issues). Want to change the code?
+Pull requests are welcome, translations included. If Reveza saved you from a stop at the limit, leave a ⭐.
 
 ```bash
-cd agente && npm install && npm test        # agent: switching, vault, ownership, fake cloud and local Postgres
-cd nuvem && npm install && npm test         # database (PGlite with the migrations) and Edge Functions
-npm test                                    # installer
-cd painel && npm install && npm run react-bits && npm run dev   # panel (http://localhost:5173/?demo=1)
+git config core.hooksPath .githooks         # the guard: refuses secrets, personal data and React Bits components
+cd agente && npm ci && npm test             # agent: switching, vault, ownership, fake cloud
+cd nuvem && npm ci && npm test              # database (PGlite with the migrations) and functions
+npm ci && npm test                          # installer and guards
+cd painel && npm ci && npm run react-bits && npm run dev   # dashboard at http://localhost:5173/?demo=1
+npm run auditoria                           # npm audit on every lockfile
 ```
 
-The architecture is in [docs/ARQUITETURA.md](docs/ARQUITETURA.md) (Portuguese). Turn on the repository guard in a new
-clone: `git config core.hooksPath .githooks` (it refuses secrets, personal data and React Bits components in commits;
-the React Bits license does not allow redistribution, so the installer downloads them on the user's machine).
+<br/>
 
-## License
+## 💰 Costs and licenses
 
-MIT.
+- **Supabase and Vercel:** the free plans are enough to start. Your Claude accounts stay yours, as they are.
+- **React Bits:** the dashboard's free components are MIT + Commons Clause and are not in the repository; the installer downloads them on your machine and checks each one.
+- **Reveza AI:** MIT. Use it, adapt it and share it.
+
+> Each person is responsible for the use of their own accounts and for the terms of the AI service they use. Reveza AI
+> is an independent project, not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.
+
+<br/>
+
+<!-- quem-fez -->
+<div align="center">
+
+## 👋 Who made it
+
+<a href="https://github.com/dantaspaulo">
+<picture>
+  <source media="(max-width: 700px)" srcset="https://raw.githubusercontent.com/dantaspaulo/dantaspaulo/main/assets/papeis-celular.svg" />
+  <img src="https://raw.githubusercontent.com/dantaspaulo/dantaspaulo/main/assets/papeis.svg" width="100%" alt="Paulo Sérgio Dantas: FDE at Delta Academy and QWize, founder of ChatADV, PostADV and PSD Software" />
+</picture>
+</a>
+
+**Paulo Sérgio Dantas** builds businesses with AI.<br/>
+<sub>Reveza was born for my own Claude Code accounts. I also opened <a href="https://github.com/dantaspaulo/claquete">Claquete.ai</a>, the video studio Claude operates.</sub>
+
+<br/>
+
+<a href="https://github.com/dantaspaulo"><img src="https://img.shields.io/badge/github.com%2Fdantaspaulo-D97757?style=for-the-badge&logo=github&logoColor=1F1E1D" alt="GitHub" /></a>
+<a href="https://paulosdantas.adv.br"><img src="https://img.shields.io/badge/paulosdantas.adv.br-1F1E1D?style=for-the-badge&logo=googlechrome&logoColor=D97757" alt="Website" /></a>
+<a href="https://www.linkedin.com/in/paulosdantas/"><img src="https://img.shields.io/badge/LinkedIn-1F1E1D?style=for-the-badge&logo=linkedin&logoColor=D97757" alt="LinkedIn" /></a>
+<a href="mailto:contato@paulosdantas.adv.br"><img src="https://img.shields.io/badge/E--mail-1F1E1D?style=for-the-badge&logo=gmail&logoColor=D97757" alt="E-mail" /></a>
+
+<br/><br/>
+
+<sub>Using Reveza with your team? Tell me.</sub>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:D97757,100:1F1E1D&height=110&section=footer&animation=twinkling" width="100%" alt="" />
+
+</div>
+<!-- /quem-fez -->

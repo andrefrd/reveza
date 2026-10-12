@@ -58,3 +58,12 @@ test("história: segredo apagado num commit seguinte ainda é achado, e mensagem
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("o bloco Quem fez do README pode ter o site de quem mantém; fora dele, e em outro arquivo, não", () => {
+  const bloco = "<!-- quem-fez -->\n[site](https://paulosdantas.adv.br)\n<!-- /quem-fez -->";
+  assert.equal(problemas("README.md", `# Reveza\n${bloco}\n`).length, 0);
+  assert.equal(problemas("README.en.md", bloco).length, 0);
+  assert.ok(problemas("README.md", `${bloco}\ncontato: alguem@chatadv.com.br`).length, "fora do bloco");
+  assert.ok(problemas("docs/x.md", bloco).length, "só no README");
+  assert.ok(problemas("README.md", `<!-- quem-fez -->${falso("sbp_", 40)}<!-- /quem-fez -->`).length, "segredo vale no bloco");
+});
