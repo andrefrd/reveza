@@ -7,6 +7,17 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.5 · 12/10/2026
+
+Atualizar um computador ligado não pede mais token. Quem tem a 0.1.4 atualiza com
+`npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.5.tar.gz --atualizar`.
+
+- **Computador novo, atualização sem perguntas:** no computador que entrou pelo código do painel, o `--atualizar`
+  perguntava o token do Supabase e seguia como se fosse uma instalação nova. Agora ele atualiza só o programa daquele
+  computador; a nuvem e o painel continuam com o computador que criou a instalação.
+- No computador que criou a instalação, a pergunta do token avisa que deixar em branco atualiza só ele.
+- O teste de ponta a ponta atualiza o segundo computador com os tokens no ambiente e confere que nada vai à nuvem.
+
 ## 0.1.4 · 12/10/2026
 
 Windows de verdade e ligação de computador novo mais segura. Quem tem a 0.1.3 atualiza com
