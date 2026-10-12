@@ -1,0 +1,55 @@
+# Teste de ponta a ponta da instalação (o mesmo do `npm run e2e`, que no Mac roda num contêiner): instalador de verdade +
+# emulador da nuvem + agente de verdade, com o repositório dentro de um node_modules, como o npx deixa. Roda numa máquina
+# descartável do GitHub, então não pesa no Mac de quem desenvolve (o Mac mini reiniciou por falta de memória com o e2e em
+# Docker rodando junto de outros trabalhos, 12/10/2026).
+#
+# Ensaio de uma mudança ainda não publicada, sem branch: `git diff origin/main | gzip | base64 > ensaio.txt` e
+# `gh workflow run e2e.yml -F ensaio=@ensaio.txt`. Só quem escreve no repositório dispara; nada é publicado.
+name: Ponta a ponta
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ensaio:
+        description: "mudança a ensaiar (git diff | gzip | base64); vazio = a main como está"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        jeito: ["", "--em-dois-passos"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Ensaio (só no disparo manual com mudança)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.ensaio != '' }}
+        env:
+          ENSAIO: ${{ inputs.ensaio }}
+        run: printf '%s' "$ENSAIO" | base64 -d | gunzip | git apply -v --whitespace=nowarn
+
+      - name: Repositório dentro de um node_modules (como o npx deixa)
+        run: |
+          D="$RUNNER_TEMP/npx/_npx/e2e/node_modules/reveza"
+          mkdir -p "$D"
+          git ls-files -z | xargs -0 -I{} cp --parents {} "$D"
+          git ls-files -z --others --exclude-standard | xargs -0 -r -I{} cp --parents {} "$D"
+          echo "E2E_DIR=$D" >> "$GITHUB_ENV"
+
+      - name: Instalador, nuvem emulada e agente
+        working-directory: ${{ env.E2E_DIR }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --loglevel=error
+          node instalador/testes/e2e.mjs ${{ matrix.jeito }}
