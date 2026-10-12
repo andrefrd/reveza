@@ -1,0 +1,140 @@
+// Peças pequenas que mostram uma conta: o ponto de cor, o nome, o selo de estado e a barra de uso.
+
+import {
+  AlertTriangleIcon,
+  CircleCheckIcon,
+  CirclePauseIcon,
+  CirclePlayIcon,
+  KeyRoundIcon,
+  LifeBuoyIcon,
+  OctagonMinusIcon,
+} from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import type { EstadoConta } from "@/dados/derivados"
+import type { Conta } from "@/dados/tipos"
+import { useT } from "@/i18n"
+import { corConta } from "@/lib/cores"
+import { fmtPct } from "@/lib/formato"
+import { cn } from "@/lib/utils"
+
+export function PontoConta({ cor, className }: { cor: number; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("inline-block size-2.5 shrink-0 rounded-full ring-2 ring-background", className)}
+      style={{ background: corConta(cor) }}
+    />
+  )
+}
+
+export function NomeConta({
+  conta,
+  className,
+  mostrarOrg = false,
+}: {
+  conta: Pick<Conta, "email" | "cor" | "organizacao">
+  className?: string
+  mostrarOrg?: boolean
+}) {
+  return (
+    <span className={cn("inline-flex max-w-full min-w-0 items-center gap-2", className)}>
+      <PontoConta cor={conta.cor} />
+      <span className="min-w-0">
+        <span className="block truncate">{conta.email}</span>
+        {mostrarOrg && conta.organizacao ? (
+          <span className="block truncate text-xs text-muted-foreground">{conta.organizacao}</span>
+        ) : null}
+      </span>
+    </span>
+  )
+}
+
+const ESTILO: Record<EstadoConta, string> = {
+  precisa_login: "border-erro-borda bg-erro-fundo text-erro",
+  esgotada: "border-erro-borda bg-erro-fundo text-erro",
+  aviso: "border-atencao-borda bg-atencao-fundo text-atencao",
+  pausada: "border-border bg-muted text-muted-foreground",
+  em_uso: "border-ok/30 bg-ok-fundo text-ok",
+  reserva: "border-border bg-transparent text-muted-foreground",
+  livre: "border-border bg-transparent text-foreground",
+}
+
+const ICONE: Record<EstadoConta, typeof KeyRoundIcon> = {
+  precisa_login: KeyRoundIcon,
+  esgotada: OctagonMinusIcon,
+  aviso: AlertTriangleIcon,
+  pausada: CirclePauseIcon,
+  em_uso: CirclePlayIcon,
+  reserva: LifeBuoyIcon,
+  livre: CircleCheckIcon,
+}
+
+export function SeloEstado({ estado, className }: { estado: EstadoConta; className?: string }) {
+  const { t } = useT()
+  const Icone = ICONE[estado]
+  return (
+    <Badge variant="outline" className={cn("gap-1", ESTILO[estado], className)}>
+      <Icone />
+      {t(`estadoConta.${estado}`)}
+    </Badge>
+  )
+}
+
+/**
+ * Barra de uso de uma janela: a cor é a da conta (identidade); esgotada vira vermelho clarinho. As marcas finas são o
+ * aviso e a troca. O número fica ao lado, em texto, nunca só na cor.
+ */
+export function BarraUso({
+  pct,
+  cor,
+  aviso,
+  troca,
+  rotulo,
+  detalhe,
+  compacta = false,
+}: {
+  pct: number | null
+  cor: number
+  aviso?: number
+  troca?: number
+  rotulo?: string
+  detalhe?: string
+  compacta?: boolean
+}) {
+  const { idioma } = useT()
+  const v = pct === null ? 0 : Math.max(0, Math.min(100, pct))
+  const esgotada = pct !== null && pct >= 100
+  return (
+    <div className="min-w-0">
+      {rotulo !== undefined || detalhe !== undefined ? (
+        <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
+          <span className="truncate text-muted-foreground">{rotulo}</span>
+          <span className="shrink-0 tabular-nums">
+            <span className="font-medium text-foreground">{fmtPct(pct, idioma, 1)}</span>
+            {detalhe ? <span className="text-muted-foreground"> · {detalhe}</span> : null}
+          </span>
+        </div>
+      ) : null}
+      <div
+        className={cn("relative w-full overflow-hidden rounded-full bg-muted", compacta ? "h-1.5" : "h-2")}
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct ?? undefined}
+        aria-label={rotulo}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          style={{ width: `${v}%`, background: esgotada ? "var(--erro-barra)" : corConta(cor) }}
+        />
+        {aviso ? (
+          <span aria-hidden className="absolute inset-y-0 w-px bg-foreground/35" style={{ left: `${aviso}%` }} />
+        ) : null}
+        {troca ? (
+          <span aria-hidden className="absolute inset-y-0 w-px bg-foreground/60" style={{ left: `${troca}%` }} />
+        ) : null}
+      </div>
+    </div>
+  )
+}

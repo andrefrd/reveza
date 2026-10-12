@@ -1,0 +1,28 @@
+{
+  "name": "reveza-agente",
+  "version": "0.1.0",
+  "description": "Agente do Reveza AI: troca de conta, uso, cofre cifrado e ponte com a nuvem, em cada computador",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "reveza": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node scripts/testar.mjs",
+    "mutacao": "node scripts/mutacao.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.78.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "typescript": "^5.6.0"
+  }
+}

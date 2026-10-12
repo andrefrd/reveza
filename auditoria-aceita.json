@@ -1,0 +1,10 @@
+[
+  {
+    "ghsa": "GHSA-vfj7-8cjw-p6xm",
+    "pacote": "braces",
+    "onde": "painel: shadcn → fast-glob → micromatch → braces",
+    "motivo": "Sem versão corrigida publicada (braces <= 3.0.3, a mais nova; aviso de 18/09/2026). O braces só roda dentro da linha de comando do shadcn (npx shadcn add), que o painel não chama na instalação, na compilação nem no navegador; e os padrões que ela expande vêm do próprio projeto, não de quem usa. O painel usa do pacote shadcn só o shadcn/tailwind.css.",
+    "aceito_em": "2026-10-11",
+    "revisar_em": "2026-11-11"
+  }
+]

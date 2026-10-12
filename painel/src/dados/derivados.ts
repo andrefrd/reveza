@@ -1,0 +1,126 @@
+// Leituras derivadas do instantâneo, usadas por várias telas.
+
+import type { Computador, ConfigTroca, Conta, Instantaneo, Janela, TipoJanela } from "./tipos"
+
+export function janela(c: Conta, tipo: TipoJanela): Janela | undefined {
+  return c.janelas.find((j) => j.tipo === tipo)
+}
+
+/** % de uma janela, com reset já vencido contando como zero. */
+export function pctJanela(c: Conta, tipo: TipoJanela, agora: Date): number | null {
+  const j = janela(c, tipo)
+  if (!j || j.pct === null) return null
+  if (j.resetEm && new Date(j.resetEm).getTime() <= agora.getTime()) return 0
+  return j.pct
+}
+
+export function p5(c: Conta, agora: Date) {
+  return pctJanela(c, "five_hour", agora)
+}
+
+export function p7(c: Conta, agora: Date) {
+  return pctJanela(c, "seven_day", agora)
+}
+
+/** A maior entre as janelas (5 horas, semana e semana por família de modelo). */
+export function cheia(c: Conta, agora: Date): number | null {
+  const valores = c.janelas.map((j) => pctJanela(c, j.tipo, agora)).filter((v): v is number => v !== null)
+  return valores.length ? Math.max(...valores) : null
+}
+
+export type EstadoConta = "precisa_login" | "pausada" | "esgotada" | "em_uso" | "aviso" | "reserva" | "livre"
+
+export function estadoConta(c: Conta, config: ConfigTroca, agora: Date): EstadoConta {
+  if (c.precisaLogin) return "precisa_login"
+  if (c.pausada) return "pausada"
+  const v = cheia(c, agora)
+  if (v !== null && v >= 100) return "esgotada"
+  if (c.posse?.motivo === "uso") return v !== null && v >= config.aviso ? "aviso" : "em_uso"
+  if (v !== null && v >= config.troca) return "aviso"
+  if (c.reserva) return "reserva"
+  return "livre"
+}
+
+export type EstadoComputador = "online" | "atrasado" | "parado" | "revogado"
+
+/** Busca a cada 5 s: até 30 s é normal, até 2 min está atrasado, mais que isso parou. */
+export function estadoComputador(pc: Computador, agora: Date): EstadoComputador {
+  if (pc.revogado) return "revogado"
+  if (!pc.vistoEm) return "parado"
+  const seg = (agora.getTime() - new Date(pc.vistoEm).getTime()) / 1000
+  if (seg <= 30) return "online"
+  if (seg <= 120) return "atrasado"
+  return "parado"
+}
+
+/** Próximo reset de uma janela (para "renova em"). */
+export function resetDe(c: Conta, tipo: TipoJanela): Date | null {
+  const j = janela(c, tipo)
+  return j?.resetEm ? new Date(j.resetEm) : null
+}
+
+export function nomePlano(c: Pick<Conta, "plano" | "nivel">): string | null {
+  if (!c.plano) return null
+  const plano = c.plano.charAt(0).toUpperCase() + c.plano.slice(1)
+  return c.nivel ? `${plano} ${c.nivel}` : plano
+}
+
+export function contaPorId(estado: Instantaneo, id: string | null | undefined): Conta | undefined {
+  return id ? estado.contas.find((c) => c.id === id) : undefined
+}
+
+export function computadorPorId(estado: Instantaneo, id: string | null | undefined): Computador | undefined {
+  return id ? estado.computadores.find((c) => c.id === id) : undefined
+}
+
+/** A versão mais nova entre os computadores (comparação por partes numéricas). */
+export function versaoMaisNova(versoes: string[]): string | null {
+  const ordenadas = [...versoes].sort(compararVersao)
+  return ordenadas.pop() ?? null
+}
+
+export function compararVersao(a: string, b: string): number {
+  const pa = a.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
+  const pb = b.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (d) return d
+  }
+  return 0
+}
+
+export type TipoFaixa =
+  "precisa_login" | "sem_livre" | "computador_parado" | "login_vence" | "auto_desligada" | "versao_antiga"
+
+export interface FaixaAlerta {
+  tipo: TipoFaixa
+  nivel: "erro" | "atencao" | "info"
+  contaId?: string
+  computadorId?: string
+}
+
+/** As faixas de alerta da visão geral, da mais grave para a mais leve. */
+export function faixasDeAlerta(e: Instantaneo, agora: Date): FaixaAlerta[] {
+  const faixas: FaixaAlerta[] = []
+  const ativos = e.computadores.filter((c) => !c.revogado)
+  for (const pc of ativos) {
+    if (pc.atribuicao && pc.atribuicao.contaId === null)
+      faixas.push({ tipo: "sem_livre", nivel: "erro", computadorId: pc.id })
+  }
+  for (const c of e.contas) {
+    if (c.precisaLogin) faixas.push({ tipo: "precisa_login", nivel: "erro", contaId: c.id })
+  }
+  for (const pc of ativos) {
+    if (estadoComputador(pc, agora) === "parado")
+      faixas.push({ tipo: "computador_parado", nivel: "atencao", computadorId: pc.id })
+  }
+  // A validade guardada é a do token de acesso (algumas horas), que o computador renova sozinho com o token de
+  // renovação: a conta segue conectada. Login perdido de verdade aparece como "precisa entrar de novo" (acima).
+  const nova = versaoMaisNova(ativos.map((c) => c.versao))
+  for (const pc of ativos) {
+    if (nova && compararVersao(pc.versao, nova) < 0)
+      faixas.push({ tipo: "versao_antiga", nivel: "info", computadorId: pc.id })
+  }
+  if (!e.config.auto) faixas.push({ tipo: "auto_desligada", nivel: "info" })
+  return faixas
+}

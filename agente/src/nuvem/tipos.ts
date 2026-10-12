@@ -1,0 +1,128 @@
+// O que o agente pede à nuvem: as funções `agente_*` do banco (nuvem/migracoes/0002_agente.sql). Só de dentro para
+// fora. Binário (cofre, ligação) vai e volta em base64.
+
+import type { Sistema } from "../config.js";
+
+export interface CofreNuvem {
+  cifrado: Buffer;
+  nonce: Buffer;
+  versao: number;
+  expira_em: string | null;
+}
+
+export interface Atribuicao {
+  conta_id: string | null;
+  email: string | null;
+  motivo: string;
+  versao: number;
+}
+
+export interface ComandoNuvem {
+  id: number;
+  acao: string;
+  corpo: Record<string, unknown>;
+  /** A nuvem não manda: quem expira o comando velho é ela (2 min). */
+  criado_em?: string;
+}
+
+export interface RespostaOla {
+  computador_id: string | null;
+  atribuicao: Atribuicao | null;
+  config: Record<string, unknown>;
+  comandos: ComandoNuvem[];
+  ligacao_pendente: boolean;
+}
+
+export type MotivoPosse = "uso" | "leitura" | "renovacao" | "login";
+
+export interface JanelaNuvem {
+  conta_id: string;
+  tipo: string;
+  pct: number | null;
+  reset_em: string | null;
+  fonte: "sessao" | "api";
+}
+
+export interface PontoNuvem {
+  conta_id: string;
+  em: string;
+  p5: number | null;
+  p7: number | null;
+}
+
+export interface LinhaTokens {
+  hora: string;
+  conta_id: string | null;
+  projeto: string;
+  modelo: string;
+  respostas: number;
+  entrada: number;
+  saida: number;
+  cache_escrita: number;
+  cache_leitura: number;
+  usd: number;
+}
+
+export interface SessaoNuvem {
+  id: string;
+  projeto: string;
+  inicio: string | null;
+  fim: string | null;
+  respostas: number;
+  tokens: number;
+  usd: number;
+  agentes: number;
+  contas: string[];
+  modelos: string[];
+}
+
+/** Tipos de evento que a nuvem aceita do agente. */
+export const TIPOS_EVENTO_NUVEM = new Set(["troca", "aviso", "limite", "retomada", "conexao", "erro", "info"]);
+
+/** Erro de rede ou do servidor: o agente mantém a conta atual e tenta de novo na próxima busca. */
+export class ErroNuvem extends Error {
+  constructor(
+    mensagem: string,
+    readonly semRede: boolean,
+    readonly codigo?: string,
+  ) {
+    super(mensagem);
+  }
+}
+
+export interface Nuvem {
+  registrar(nome: string, sistema: Sistema, versao: string): Promise<{ computador_id: string }>;
+  ola(versao: string, diagnostico: Record<string, unknown> | null, contaLocal: string | null): Promise<RespostaOla>;
+  pegarPosse(contaId: string, motivo: MotivoPosse, segundos: number): Promise<{ ok: boolean; erro: string | null; cofre: CofreNuvem | null }>;
+  devolverCofre(
+    contaId: string,
+    cifrado: Buffer,
+    nonce: Buffer,
+    versaoAnterior: number,
+    expiraEm: string | null,
+  ): Promise<{ ok: boolean; versao: number | null; erro: string | null }>;
+  soltarPosse(contaId: string): Promise<{ ok: boolean }>;
+  registrarConta(
+    email: string,
+    organizacao: string | null,
+    plano: string | null,
+    nivel: string | null,
+    cifrado: Buffer,
+    nonce: Buffer,
+    expiraEm: string | null,
+  ): Promise<{ ok: boolean; conta_id: string | null; versao: number | null; erro: string | null }>;
+  relatarUso(janelas: JanelaNuvem[], historico: PontoNuvem[]): Promise<{ ok: boolean }>;
+  relatarTokens(linhas: LinhaTokens[], sessoes: SessaoNuvem[]): Promise<{ ok: boolean }>;
+  limite(contaId: string, sessao: string | null): Promise<{ ok: boolean; trocou: boolean; versao: number | null }>;
+  reservarComando(id: number): Promise<{ ok: boolean; comando: ComandoNuvem | null }>;
+  responderComando(id: number, http: number, resposta: Record<string, unknown>): Promise<{ ok: boolean }>;
+  evento(tipo: string, texto: string, dados: Record<string, unknown>): Promise<{ ok: boolean }>;
+  /** Avisa a nuvem que a conta perdeu (ou recuperou) o login neste computador; só vale para conta na mão. */
+  marcarLogin(contaId: string, precisa: boolean): Promise<{ ok: boolean }>;
+  ligacaoPublicar(embrulho: Buffer, sal: Buffer): Promise<{ ok: boolean; expira_em: string | null }>;
+  ligacaoBuscar(): Promise<{ embrulho: Buffer; sal: Buffer } | null>;
+  /** Grava a impressão da chave do cofre se a instalação ainda não tem (null só lê); devolve a da instalação. */
+  cofreImpressao(impressao: string | null): Promise<string | null>;
+  /** Hora do servidor (epoch s), para o `doctor` conferir o relógio. */
+  horaDoServidor(): Promise<number | null>;
+}

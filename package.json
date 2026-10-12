@@ -1,0 +1,22 @@
+{
+  "name": "reveza",
+  "version": "0.1.0",
+  "description": "Reveza AI: gestor de várias contas do assistente de código, com painel na nuvem da própria pessoa, troca automática e registro de uso.",
+  "type": "module",
+  "bin": {
+    "reveza": "instalador/instalar.mjs"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "test": "node --test instalador/testes/*.test.mjs scripts/*.test.mjs",
+    "e2e": "sh scripts/e2e-docker.sh",
+    "auditoria": "node scripts/auditoria.mjs"
+  },
+  "license": "MIT",
+  "repository": "github:dantaspaulo/reveza",
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

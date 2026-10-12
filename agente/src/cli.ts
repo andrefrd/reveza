@@ -1,0 +1,652 @@
+#!/usr/bin/env node
+// `reveza`: a linha de comando do agente. `reveza rodar` é o agente em si (o serviço chama este comando).
+
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import * as readline from "node:readline";
+import { fileURLToPath } from "node:url";
+import { Agente } from "./agente.js";
+import { ApiAnthropic, ROTULOS, type ApiContas } from "./anthropic.js";
+import { ClaudeCli, type Cli } from "./claudecli.js";
+import { caminhos, PORTA_PADRAO, PORTA_SOMBRA, sistemaAtual, VERSAO, type Caminhos, type Sistema } from "./config.js";
+import { credenciaisDoSistema } from "./credenciais/index.js";
+import type { Credenciais } from "./credenciais/tipos.js";
+import { guardaDoSistema, type Guarda } from "./cofre/guarda.js";
+import { doctor, textoDoctor } from "./doctor.js";
+import { carregarEstado, type EstadoLocal } from "./estado.js";
+import { importar } from "./importar.js";
+import { iniciarCofre, lerChave, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
+import { NuvemRpc } from "./nuvem/rpc.js";
+import { guardarIdentidade, lerIdentidade, rpcSupabase } from "./nuvem/supabase.js";
+import type { Nuvem } from "./nuvem/tipos.js";
+import { chaveDaPonte, pedirPonte } from "./ponte.js";
+import { Contador } from "./registro/contador.js";
+import * as servico from "./servico.js";
+import { executorReal, type Executor } from "./util/executor.js";
+import { gravarJson, lerJson } from "./util/arquivos.js";
+import { logEmArquivo } from "./util/log.js";
+import { relogioReal, type Relogio } from "./util/tempo.js";
+import type { Idioma } from "./cofre/frase.js";
+
+export interface Ambiente {
+  c: Caminhos;
+  sistema: Sistema;
+  exec: Executor;
+  relogio: Relogio;
+  saida: (t: string) => void;
+  erro: (t: string) => void;
+  perguntar: (pergunta: string) => Promise<string>;
+  env: NodeJS.ProcessEnv;
+  script: string;
+  /** Os testes trocam qualquer peça por um falso. */
+  fabricas?: {
+    cred?: () => Credenciais;
+    guarda?: () => Promise<Guarda>;
+    api?: () => ApiContas;
+    cli?: () => Cli;
+    nuvem?: () => Promise<Nuvem | null>;
+  };
+}
+
+export function ambienteReal(): Ambiente {
+  return {
+    c: caminhos(),
+    sistema: sistemaAtual(),
+    exec: executorReal,
+    relogio: relogioReal,
+    saida: (t) => process.stdout.write(t + "\n"),
+    erro: (t) => process.stderr.write(t + "\n"),
+    perguntar: (pergunta) =>
+      new Promise((resolve) => {
+        const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+        rl.question(pergunta, (r) => {
+          rl.close();
+          resolve(r);
+        });
+      }),
+    env: process.env,
+    script: fileURLToPath(import.meta.url),
+  };
+}
+
+interface Args {
+  pos: string[];
+  flags: Record<string, string | true>;
+}
+
+export function lerArgs(argv: string[]): Args {
+  const pos: string[] = [];
+  const flags: Record<string, string | true> = {};
+  const comValor = new Set(["porta", "de", "dias", "frase", "idioma", "url", "chave-publica", "email", "painel"]);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a.startsWith("--")) {
+      const [k, v] = a.slice(2).split("=", 2) as [string, string | undefined];
+      if (v !== undefined) flags[k] = v;
+      else if (comValor.has(k) && i + 1 < argv.length) flags[k] = argv[++i]!;
+      else flags[k] = true;
+    } else pos.push(a);
+  }
+  return { pos, flags };
+}
+
+const AJUDA = `reveza ${VERSAO}: o agente do Reveza AI neste computador
+
+Uso: reveza <comando> [opções]
+
+  status [--json]                 o que está em uso, o estado de cada conta e os últimos eventos
+  contas [--json]                 as contas deste computador
+  contas conectar <email>         login oficial de uma conta nova (abre o navegador)
+  contas adotar                   adota a conta que já está em uso
+  trocar <email> [--local]        troca a conta em uso (com nuvem, quem decide é o painel)
+  som [ligar|desligar|testar]     som do sistema quando este computador troca de conta (ligado de fábrica)
+  uso [--dias N] [--csv|--json]   tokens e custo equivalente por dia, conta, modelo e projeto
+  doctor [--json]                 confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões
+  ligar [--frase "..."]           liga este computador ao cofre (ou mostra a frase para ligar outro)
+  ligar --painel ligar|desligar  libera (ou não) a frase pelo painel sem perguntar; sem isso, uma janela pede o clique
+  servico instalar|remover|status [--sombra]
+  importar --de <pasta>           copia contas, credenciais e histórico de outro gestor (nada é apagado)
+  cofre iniciar                   cria a chave do cofre no primeiro computador
+  nuvem entrar --url U --chave-publica K --email E    guarda a identidade deste computador (senha pelo stdin)
+  rodar [--sombra] [--porta N] [--sem-nuvem]          o agente em si (o serviço chama este)
+
+  --sombra   lê e decide, mas não grava credencial, não pega posse e não responde comando; registra o que faria`;
+
+interface InfoPonte {
+  porta: number;
+  pid: number;
+  sombra: boolean;
+}
+
+function arquivoPonte(c: Caminhos): string {
+  return path.join(c.base, "ponte.json");
+}
+
+function portaDe(amb: Ambiente, a: Args): number {
+  const f = a.flags.porta;
+  if (typeof f === "string" && /^\d+$/.test(f)) return Number(f);
+  if (amb.env.REVEZA_PORTA && /^\d+$/.test(amb.env.REVEZA_PORTA)) return Number(amb.env.REVEZA_PORTA);
+  const info = lerJson<InfoPonte>(arquivoPonte(amb.c));
+  if (info?.porta) return info.porta;
+  return a.flags.sombra ? PORTA_SOMBRA : PORTA_PADRAO;
+}
+
+async function pecas(amb: Ambiente) {
+  const cred = amb.fabricas?.cred?.() ?? credenciaisDoSistema(amb.sistema, amb.exec, amb.c);
+  const guarda = (await amb.fabricas?.guarda?.()) ?? (await guardaDoSistema(amb.sistema, amb.exec, amb.c.segredos));
+  const cli = amb.fabricas?.cli?.() ?? new ClaudeCli(amb.exec);
+  const api = amb.fabricas?.api?.() ?? new ApiAnthropic((await cli.versao().catch(() => null)) ?? undefined);
+  return { cred, guarda, cli, api };
+}
+
+async function nuvemDe(amb: Ambiente, guarda: Guarda, manter: boolean): Promise<Nuvem | null> {
+  if (amb.fabricas?.nuvem) return amb.fabricas.nuvem();
+  const id = await lerIdentidade(guarda);
+  return id ? new NuvemRpc(await rpcSupabase(id, manter)) : null;
+}
+
+function pct(v: number | null | undefined): string {
+  return v === null || v === undefined ? "?" : `${Math.round(v)}%`;
+}
+
+function hora(epoch: number): string {
+  const d = new Date(epoch * 1000);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+const ROTULO_ESTADO: Record<string, string> = {
+  ativa: "em uso",
+  proxima: "próxima",
+  livre: "livre",
+  esgotada: "esgotada",
+  pausada: "pausada",
+  precisa_login: "precisa entrar de novo",
+  sem_leitura: "sem leitura",
+};
+
+type ContaPublica = {
+  email: string;
+  org: string | null;
+  estado: string;
+  erro: string | null;
+  janelas: { tipo: keyof typeof ROTULOS; pct: number | null; resetEm: number | null }[];
+};
+
+const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+/** A janela como a pessoa entende: o reset que já passou mostra 0%, e o que está a mais de um dia leva o dia. */
+export function textoJanela(x: { tipo: string; pct: number | null; resetEm: number | null }, agora: number): string {
+  const rotulo = ROTULOS[x.tipo as keyof typeof ROTULOS] ?? x.tipo;
+  if (x.resetEm && x.resetEm <= agora) return `${rotulo} 0% (renovou ${hora(x.resetEm)})`;
+  const quando = x.resetEm ? (x.resetEm - agora > 20 * 3600 ? `${DIAS[new Date(x.resetEm * 1000).getDay()]} ${hora(x.resetEm)}` : hora(x.resetEm)) : null;
+  return `${rotulo} ${pct(x.pct)}${quando ? ` (renova ${quando})` : ""}`;
+}
+
+export function linhaConta(c: ContaPublica, agora: number = Math.floor(Date.now() / 1000)): string {
+  const j = c.janelas
+    .filter((x) => x.pct !== null)
+    .map((x) => textoJanela(x, agora))
+    .join(", ");
+  return `${c.estado === "ativa" ? "*" : "-"} ${c.email}${c.org ? ` (${c.org})` : ""}: ${ROTULO_ESTADO[c.estado] ?? c.estado}. ${j || "sem leitura ainda"}${c.erro ? ` [${c.erro}]` : ""}`;
+}
+
+function estadoOffline(amb: Ambiente): Record<string, unknown> {
+  const e: EstadoLocal = carregarEstado(amb.c.estado);
+  return {
+    parado: true,
+    auto: e.config.auto,
+    modo: e.config.modo,
+    limiares: { aviso: e.config.aviso, troca: e.config.troca },
+    ativa: e.ativa,
+    contas: Object.values(e.contas).map((c) => ({ ...c, estado: c.id === e.ativa ? "ativa" : c.precisaLogin ? "precisa_login" : c.pausada ? "pausada" : "livre" })),
+    eventos: e.eventos.slice(0, 10),
+  };
+}
+
+async function cmdStatus(amb: Ambiente, a: Args, soContas: boolean): Promise<number> {
+  const porta = portaDe(amb, a);
+  const r = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
+  const est = (r?.status === 200 ? r.corpo : estadoOffline(amb)) as Record<string, unknown>;
+  if (a.flags.json) {
+    amb.saida(JSON.stringify(soContas ? est.contas : est, null, 1));
+    return 0;
+  }
+  const contas = (est.contas ?? []) as ContaPublica[];
+  if (!soContas) {
+    const nuvem = est.nuvem as { ligada?: boolean; online?: boolean | null } | undefined;
+    const lim = est.limiares as { aviso: number; troca: number };
+    amb.saida(
+      `Agente: ${est.parado ? "parado (mostrando o último estado salvo)" : `rodando na porta ${porta}${est.sombra ? ", modo sombra" : ""}`}` +
+        (nuvem?.ligada ? ` · nuvem ${nuvem.online === false ? "fora do ar" : nuvem.online ? "online" : "conectando"}` : est.parado ? "" : " · sem nuvem"),
+    );
+    amb.saida(
+      `Troca automática ${est.auto ? "ligada" : "desligada"} · modo ${est.modo === "limite" ? "só no limite" : est.modo === "rodizio" ? "rodízio" : `limiar (aviso ${lim?.aviso}%, troca ${lim?.troca}%)`}`,
+    );
+  }
+  if (!contas.length) amb.saida("Nenhuma conta conectada. Use: reveza contas conectar <email>");
+  for (const c of contas) amb.saida(linhaConta(c));
+  if (!soContas) {
+    const eventos = ((est.eventos ?? []) as { em: number; texto: string }[]).slice(0, 5);
+    if (eventos.length) {
+      amb.saida("\nÚltimos eventos:");
+      for (const e of eventos) amb.saida(`  ${new Date(e.em * 1000).toLocaleString("pt-BR")}  ${e.texto}`);
+    }
+  }
+  return 0;
+}
+
+/** reveza som [ligar|desligar|testar]: o som do sistema quando este computador troca de conta. */
+async function cmdSom(amb: Ambiente, a: Args): Promise<number> {
+  const acao = a.pos[1] ?? "";
+  if (acao && !["ligar", "desligar", "testar"].includes(acao)) {
+    amb.erro("uso: reveza som [ligar|desligar|testar]");
+    return 2;
+  }
+  const corpo = acao === "testar" ? { testar: true } : acao ? { ligado: acao === "ligar" } : {};
+  const r = await pedirPonte(portaDe(amb, a), "POST", "/api/som", corpo, chaveDaPonte(amb.c.ponteChave, false));
+  if (!r) {
+    amb.erro("o agente não está rodando");
+    return 1;
+  }
+  const c = r.corpo as { ligado?: boolean; tocou?: boolean | null };
+  amb.saida(`som na troca de conta: ${c.ligado ? "ligado" : "desligado"}${c.tocou === false ? " (este sistema não tem tocador de som)" : ""}`);
+  return 0;
+}
+
+async function cmdTrocar(amb: Ambiente, a: Args): Promise<number> {
+  const email = a.pos[1];
+  if (!email) {
+    amb.erro("uso: reveza trocar <email> [--local]");
+    return 2;
+  }
+  const r = await pedirPonte(portaDe(amb, a), "POST", "/api/trocar", { email, local: a.flags.local === true }, chaveDaPonte(amb.c.ponteChave, false));
+  if (!r) {
+    amb.erro("o agente não está rodando (reveza servico instalar, ou reveza rodar)");
+    return 1;
+  }
+  const corpo = r.corpo as { ok: boolean; erro?: string };
+  if (corpo.ok) amb.saida(`Agora em ${email}.`);
+  else amb.erro(`Não troquei: ${corpo.erro}`);
+  return corpo.ok ? 0 : 1;
+}
+
+async function cmdConectar(amb: Ambiente, a: Args): Promise<number> {
+  const porta = portaDe(amb, a);
+  const email = a.pos[2] ?? null;
+  const r = await pedirPonte(porta, "POST", "/api/contas/conectar", { email }, chaveDaPonte(amb.c.ponteChave, false));
+  if (!r) {
+    amb.erro("o agente não está rodando (reveza servico instalar, ou reveza rodar)");
+    return 1;
+  }
+  const corpo = r.corpo as { ok: boolean; id?: string; erro?: string };
+  if (!corpo.ok) {
+    amb.erro(corpo.erro ?? "não consegui iniciar o login");
+    return 1;
+  }
+  amb.saida("Login iniciado: termine no navegador que abriu.");
+  let mostrouUrl = false;
+  for (let i = 0; i < 600; i++) {
+    await amb.relogio.dormir(1000);
+    const e = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
+    const con = ((e?.corpo as Record<string, unknown>)?.conexoes as { id: string; estado: string; url: string | null; mensagem: string }[] | undefined)?.find(
+      (x) => x.id === corpo.id,
+    );
+    if (!con) continue;
+    if (con.url && !mostrouUrl) {
+      mostrouUrl = true;
+      amb.saida(`Se o navegador não abriu: ${con.url}`);
+    }
+    if (con.estado !== "aguardando") {
+      (con.estado === "ok" ? amb.saida : amb.erro)(con.mensagem);
+      return con.estado === "ok" ? 0 : 1;
+    }
+  }
+  amb.erro("O login não terminou em 10 minutos.");
+  return 1;
+}
+
+function dia(epoch: number): string {
+  const d = new Date(epoch * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function cmdUso(amb: Ambiente, a: Args): Promise<number> {
+  const dias = Math.max(1, Math.min(3650, Number(a.flags.dias) || 30));
+  const estado = carregarEstado(amb.c.estado);
+  const email = (id: string) => (id ? (estado.contas[id]?.email ?? id) : "(sem conta)");
+  const contador = new Contador(amb.c.registro, amb.c.projetos, () => null);
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const desde = Math.floor(hoje.getTime() / 1000) - (dias - 1) * 86400;
+  const linhas = contador.linhas(desde);
+  if (a.flags.csv) {
+    amb.saida("hora,conta,modelo,projeto,respostas,entrada,saida,cache_escrita,cache_leitura,usd");
+    const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    for (const h of linhas) {
+      amb.saida(
+        [new Date(h.hora * 1000).toISOString(), q(email(h.conta)), q(h.modelo), q(h.projeto), h.msgs, h.ent, h.sai, h.c5 + h.c1h, h.cl, h.usd.toFixed(4)].join(","),
+      );
+    }
+    return 0;
+  }
+  const agrupar = (chave: (h: (typeof linhas)[number]) => string) => {
+    const m = new Map<string, { usd: number; tokens: number; respostas: number }>();
+    for (const h of linhas) {
+      const k = chave(h);
+      const v = m.get(k) ?? { usd: 0, tokens: 0, respostas: 0 };
+      v.usd += h.usd;
+      v.tokens += h.ent + h.sai + h.c5 + h.c1h + h.cl;
+      v.respostas += h.msgs;
+      m.set(k, v);
+    }
+    return [...m.entries()].sort((x, y) => y[1].usd - x[1].usd);
+  };
+  const porDia = agrupar((h) => dia(h.hora)).sort((x, y) => x[0].localeCompare(y[0]));
+  const resultado = {
+    dias,
+    totais: contador.totais(desde, Math.floor(Date.now() / 1000) + 1),
+    agentes: contador.agentesEntre(desde, Math.floor(Date.now() / 1000) + 1),
+    sessoes: contador.sessoesEntre(desde, Math.floor(Date.now() / 1000) + 1),
+    porDia,
+    porConta: agrupar((h) => email(h.conta)),
+    porModelo: agrupar((h) => h.modelo),
+    porProjeto: agrupar((h) => h.projeto || "(sem projeto)"),
+  };
+  if (a.flags.json) {
+    amb.saida(JSON.stringify(resultado, null, 1));
+    return 0;
+  }
+  const mil = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} bi` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${(n / 1e3).toFixed(1)} mil` : String(n));
+  const usd = (n: number) => `US$ ${n.toFixed(2)}`;
+  amb.saida(
+    `Últimos ${dias} dia(s): ${usd(resultado.totais.usd)} equivalentes pela tabela da API, ${mil(resultado.totais.tokens)} tokens, ` +
+      `${resultado.totais.respostas} respostas, ${resultado.sessoes} sessões, ${resultado.agentes} agentes.`,
+  );
+  amb.saida("Estimativa: na assinatura não se paga por token.\n");
+  const tabela = (titulo: string, itens: typeof porDia, n = 10) => {
+    if (!itens.length) return;
+    amb.saida(titulo);
+    for (const [k, v] of itens.slice(0, n)) amb.saida(`  ${k.padEnd(34).slice(0, 34)} ${usd(v.usd).padStart(13)} ${mil(v.tokens).padStart(10)} tokens ${String(v.respostas).padStart(7)} resp.`);
+    amb.saida("");
+  };
+  tabela("Por dia", porDia, dias);
+  tabela("Por conta", resultado.porConta);
+  tabela("Por modelo", resultado.porModelo);
+  tabela("Por projeto", resultado.porProjeto);
+  return 0;
+}
+
+async function cmdDoctor(amb: Ambiente, a: Args): Promise<number> {
+  const p = await pecas(amb);
+  const porta = portaDe(amb, a);
+  const r = await doctor({
+    c: amb.c,
+    cred: p.cred,
+    guarda: p.guarda,
+    cli: p.cli,
+    api: p.api,
+    statusServico: () => servico.status(opcoesServico(amb, a)),
+    ponte: async () => {
+      const x = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
+      return x?.status === 200 ? (x.corpo as Record<string, unknown>) : null;
+    },
+    nuvemConfigurada: async () => {
+      const id = await lerIdentidade(p.guarda);
+      return id ? { url: id.url } : null;
+    },
+    horaNuvem: async () => {
+      const n = await nuvemDe(amb, p.guarda, false);
+      return n ? n.horaDoServidor() : null;
+    },
+    agora: () => amb.relogio.agora(),
+  });
+  amb.saida(a.flags.json ? JSON.stringify(r, null, 1) : textoDoctor(r));
+  return r.some((c) => c.situacao === "falha") ? 1 : 0;
+}
+
+async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
+  if (a.flags.painel === "ligar" || a.flags.painel === "desligar") {
+    const arq = amb.c.ligarPeloPainel;
+    if (a.flags.painel === "ligar") {
+      fs.mkdirSync(path.dirname(arq), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(arq, "liberado pelo dono deste computador\n", { mode: 0o600 });
+      amb.saida("Este computador passa a liberar a frase a pedido do painel. Quem autoriza é a nuvem: um administrador do painel, ou quem controla o projeto no Supabase.");
+    } else {
+      fs.rmSync(arq, { force: true });
+      amb.saida("Este computador volta a liberar a frase só pelo terminal (reveza ligar).");
+    }
+    return 0;
+  }
+  const p = await pecas(amb);
+  const nuvem = await nuvemDe(amb, p.guarda, false);
+  if (!nuvem) {
+    amb.erro("este computador ainda não tem a nuvem configurada (reveza nuvem entrar ...)");
+    return 1;
+  }
+  // As funções da ligação exigem o computador registrado (o registro é idempotente).
+  await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
+  const temChave = !!(await lerChave(p.guarda));
+  if (temChave && typeof a.flags.frase !== "string" && !amb.env.REVEZA_FRASE) {
+    const idioma: Idioma = a.flags.idioma === "en" ? "en" : "pt-BR";
+    const r = await publicarLigacao(p.guarda, nuvem, idioma);
+    amb.saida("Digite estas 6 palavras no computador novo (reveza ligar), em até 10 minutos:\n");
+    amb.saida(`    ${r.frase}\n`);
+    amb.saida("A frase não vai à nuvem: só quem está vendo esta tela consegue ligar o computador.");
+    return 0;
+  }
+  const frase =
+    typeof a.flags.frase === "string" ? a.flags.frase : amb.env.REVEZA_FRASE || (await amb.perguntar("As 6 palavras mostradas no outro computador: "));
+  await receberLigacao(p.guarda, nuvem, frase);
+  amb.saida("Pronto: este computador recebeu a chave do cofre.");
+  return 0;
+}
+
+function opcoesServico(amb: Ambiente, a: Args): servico.OpcoesServico {
+  return {
+    sistema: amb.sistema,
+    home: amb.c.home,
+    exec: amb.exec,
+    node: process.execPath,
+    script: amb.script,
+    logs: amb.c.logs,
+    sombra: a.flags.sombra === true,
+    porta: typeof a.flags.porta === "string" ? Number(a.flags.porta) : undefined,
+  };
+}
+
+async function cmdServico(amb: Ambiente, a: Args): Promise<number> {
+  const acao = a.pos[1];
+  const o = opcoesServico(amb, a);
+  if (acao === "instalar") amb.saida(await servico.instalar(o));
+  else if (acao === "remover") amb.saida(await servico.remover(o));
+  else if (acao === "status") {
+    const s = await servico.status(o);
+    amb.saida(s.instalado ? `instalado, ${s.detalhe}` : "não instalado");
+    return s.rodando ? 0 : 1;
+  } else {
+    amb.erro("uso: reveza servico instalar|remover|status");
+    return 2;
+  }
+  return 0;
+}
+
+async function cmdImportar(amb: Ambiente, a: Args): Promise<number> {
+  const de = typeof a.flags.de === "string" ? a.flags.de.replace(/^~(?=$|\/)/, amb.c.home) : null;
+  if (!de) {
+    amb.erro("uso: reveza importar --de <pasta do gestor anterior>");
+    return 2;
+  }
+  if (await pedirPonte(portaDe(amb, a), "GET", "/api/ativa", undefined, chaveDaPonte(amb.c.ponteChave, false))) {
+    amb.erro("pare o agente antes de importar (reveza servico remover, ou feche o reveza rodar)");
+    return 1;
+  }
+  const p = await pecas(amb);
+  const rel = await importar({ de, c: amb.c, cred: p.cred, exec: amb.exec, agora: amb.relogio.agora(), conferirServico: amb.sistema === "macos" });
+  for (const c of rel.contas) amb.saida(`- ${c.email}: credencial ${c.credencial}, ${c.pasta} arquivo(s) da pasta copiados`);
+  amb.saida(`Conta em uso no gestor anterior: ${rel.ativa ?? "nenhuma"}`);
+  amb.saida(
+    rel.uso.importado
+      ? `Registro de uso: ${rel.uso.linhas} linhas por hora, ${rel.uso.sessoes} sessões e ${rel.uso.vistos} respostas já contadas.`
+      : `Registro de uso não importado: ${rel.uso.motivo}.`,
+  );
+  for (const av of rel.avisos) amb.erro(`aviso: ${av}`);
+  amb.saida("Nada foi apagado nem movido na origem.");
+  return 0;
+}
+
+async function cmdNuvem(amb: Ambiente, a: Args): Promise<number> {
+  if (a.pos[1] !== "entrar") {
+    amb.erro("uso: reveza nuvem entrar --url <https://...supabase.co> --chave-publica <chave anon> --email <e-mail do computador>");
+    return 2;
+  }
+  const { url, email } = a.flags;
+  const chavePublica = a.flags["chave-publica"];
+  if (typeof url !== "string" || typeof email !== "string" || typeof chavePublica !== "string") {
+    amb.erro("faltam --url, --chave-publica e --email");
+    return 2;
+  }
+  const senha = (amb.env.REVEZA_SENHA ?? (await amb.perguntar("Senha do computador: "))).trim();
+  // a senha não segue para os programas que este comando abre (assistente, chaveiro)
+  delete amb.env.REVEZA_SENHA;
+  if (amb.env !== process.env) delete process.env.REVEZA_SENHA;
+  const p = await pecas(amb);
+  await guardarIdentidade(p.guarda, { url, chavePublica, email, senha });
+  amb.saida(`Identidade guardada em ${p.guarda.tipo}.`);
+  return 0;
+}
+
+async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
+  const sombra = a.flags.sombra === true;
+  const porta = typeof a.flags.porta === "string" ? Number(a.flags.porta) : sombra ? PORTA_SOMBRA : PORTA_PADRAO;
+  const p = await pecas(amb);
+  const nuvem = a.flags["sem-nuvem"] ? null : await nuvemDe(amb, p.guarda, true).catch((e) => {
+    amb.erro(`nuvem indisponível agora (${(e as Error).message}); sigo sem ela`);
+    return null;
+  });
+  const log = logEmArquivo(amb.c.log, !!amb.env.REVEZA_ECO);
+  const agente = new Agente({
+    c: amb.c,
+    sistema: amb.sistema,
+    cred: p.cred,
+    api: p.api,
+    cli: p.cli,
+    relogio: amb.relogio,
+    log,
+    guarda: p.guarda,
+    nuvem,
+    sombra,
+    porta,
+    exec: amb.exec,
+    diagnostico: async (): Promise<Record<string, unknown>> => {
+      const r = await doctor({
+        c: amb.c,
+        cred: agente.cred,
+        guarda: p.guarda,
+        cli: p.cli,
+        api: p.api,
+        statusServico: () => servico.status(opcoesServico(amb, a)),
+        ponte: async () => agente.publico(),
+        nuvemConfigurada: async () => ((await lerIdentidade(p.guarda)) ? { url: (await lerIdentidade(p.guarda))!.url } : null),
+        horaNuvem: async () => (nuvem ? nuvem.horaDoServidor() : null),
+        agora: () => amb.relogio.agora(),
+      });
+      // o formato que o painel lê: hora em ISO, versão e o tempo da última conversa com a nuvem
+      return { conferencias: r, em: new Date(amb.relogio.agora() * 1000).toISOString(), versao: VERSAO, atrasoBuscaMs: agente.ultimaBuscaMs };
+    },
+  });
+  await agente.iniciar();
+  gravarJson(arquivoPonte(amb.c), { porta, pid: process.pid, sombra });
+  amb.saida(`agente rodando${sombra ? " em modo sombra" : ""} na porta ${porta}; log em ${amb.c.log}`);
+  const manter = setInterval(() => undefined, 1 << 30);
+  await new Promise<void>((resolve) => {
+    const sair = () => {
+      void agente.desligar().finally(() => {
+        clearInterval(manter);
+        resolve();
+      });
+    };
+    process.once("SIGTERM", sair);
+    process.once("SIGINT", sair);
+  });
+  return 0;
+}
+
+export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()): Promise<number> {
+  const a = lerArgs(argv);
+  const cmd = a.pos[0];
+  try {
+    switch (cmd) {
+      case "status":
+        return await cmdStatus(amb, a, false);
+      case "contas":
+        if (a.pos[1] === "conectar") return await cmdConectar(amb, a);
+        if (a.pos[1] === "adotar") {
+          const r = await pedirPonte(portaDe(amb, a), "POST", "/api/contas/adotar", {}, chaveDaPonte(amb.c.ponteChave, false));
+          amb.saida(r ? JSON.stringify(r.corpo) : "o agente não está rodando");
+          return r ? 0 : 1;
+        }
+        return await cmdStatus(amb, a, true);
+      case "trocar":
+        return await cmdTrocar(amb, a);
+      case "som":
+        return await cmdSom(amb, a);
+      case "uso":
+        return await cmdUso(amb, a);
+      case "doctor":
+        return await cmdDoctor(amb, a);
+      case "ligar":
+        return await cmdLigar(amb, a);
+      case "servico":
+        return await cmdServico(amb, a);
+      case "importar":
+        return await cmdImportar(amb, a);
+      case "cofre":
+        if (a.pos[1] === "iniciar") {
+          const p = await pecas(amb);
+          // instalação que já tem chave: uma segunda dividiria o cofre (o computador novo recebe a dela com `reveza ligar`)
+          const nuvem = await nuvemDe(amb, p.guarda, false).catch(() => null);
+          if (nuvem && !(await lerChave(p.guarda))) {
+            await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO).catch(() => undefined);
+            if (await nuvem.cofreImpressao(null).catch(() => null)) {
+              amb.erro("esta instalação já tem a chave do cofre: receba-a com `reveza ligar` (a frase sai de um computador que já usa o Reveza)");
+              return 1;
+            }
+          }
+          const criou = await iniciarCofre(p.guarda);
+          const k = await lerChave(p.guarda);
+          if (criou && nuvem && k) await nuvem.cofreImpressao(impressaoDaChave(k)).catch(() => undefined);
+          amb.saida(criou ? "Chave do cofre criada neste computador." : "Este computador já tem a chave do cofre.");
+          return 0;
+        }
+        amb.erro("uso: reveza cofre iniciar");
+        return 2;
+      case "nuvem":
+        return await cmdNuvem(amb, a);
+      case "rodar":
+        return await cmdRodar(amb, a);
+      case "versao":
+      case "--versao":
+      case "--version":
+        amb.saida(VERSAO);
+        return 0;
+      case undefined:
+      case "ajuda":
+      case "--ajuda":
+      case "--help":
+        amb.saida(AJUDA);
+        return 0;
+      default:
+        amb.erro(`comando desconhecido: ${cmd}\n\n${AJUDA}`);
+        return 2;
+    }
+  } catch (e) {
+    amb.erro(`erro: ${(e as Error).message}`);
+    return 1;
+  }
+}
+
+const principal = fs.realpathSync(process.argv[1] ?? "") === fileURLToPath(import.meta.url);
+if (principal) {
+  executarCli(process.argv.slice(2)).then((codigo) => process.exit(codigo));
+}

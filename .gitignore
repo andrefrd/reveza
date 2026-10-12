@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.exemplo
+.vercel/
+*.log
+.DS_Store
+painel/src/components/react-bits/
+capturas/

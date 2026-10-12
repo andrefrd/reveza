@@ -1,0 +1,126 @@
+import { secao } from "../secao"
+
+export default secao({
+  pt: {
+    auth: {
+      lema: "Suas contas se revezam sozinhas. Você só trabalha.",
+      email: "E-mail",
+      emailExemplo: "voce@exemplo.com",
+      senha: "Senha",
+      novaSenha: "Senha nova",
+      repetirSenha: "Repita a senha nova",
+      senhaAtual: "Senha atual",
+      dicaSenha: "Pelo menos 12 caracteres, com letras e números.",
+      entrar: {
+        titulo: "Entrar no painel",
+        descricao: "Use o e-mail e a senha do seu convite.",
+        botao: "Entrar",
+        esqueci: "Esqueci a senha",
+        soConvite: "A entrada é só por convite. Peça um a quem administra a instalação.",
+      },
+      codigo: {
+        titulo: "Verificação em duas etapas",
+        descricao: "Digite o código de 6 dígitos do seu aplicativo autenticador.",
+        botao: "Confirmar",
+        rotulo: "Código de 6 dígitos",
+        outraConta: "Entrar com outra conta",
+      },
+      esqueci: {
+        titulo: "Esqueci a senha",
+        descricao: "Mandamos um link para criar uma senha nova.",
+        botao: "Mandar o link",
+        enviado: "Se o e-mail estiver no painel, o link chega em alguns minutos. Ele vale por pouco tempo.",
+        voltar: "Voltar para a entrada",
+      },
+      nova: {
+        titulo: "Criar uma senha nova",
+        descricao: "Depois disso, você entra com a senha nova.",
+        botao: "Salvar a senha",
+        pronto: "Senha trocada.",
+      },
+      convite: {
+        titulo: "Aceitar o convite",
+        descricao: "Crie a sua senha para entrar no painel.",
+        botao: "Criar a conta e entrar",
+        semToken: "Este endereço não traz um convite. Abra o link do e-mail de novo.",
+        depois: "Se você for administrador, o próximo passo é ligar a verificação em duas etapas.",
+      },
+      ativar: {
+        titulo: "Ligue a verificação em duas etapas",
+        descricao:
+          "Administradores mudam contas, computadores e chaves: por isso o painel pede um código do celular além da senha.",
+        descricaoOpcional:
+          "Recomendado: administradores mudam contas, computadores e chaves, e o código do celular protege além da senha. Dá para ligar depois em Minha conta.",
+        pular: "Pular por agora",
+        passo1: "Abra um aplicativo autenticador no celular e leia o QR.",
+        passo2: "Sem câmera? Digite esta chave no aplicativo:",
+        passo3: "Digite o código de 6 dígitos que o aplicativo mostrar.",
+        botao: "Ligar e continuar",
+        qr: "QR para o aplicativo autenticador",
+        pronto: "Verificação em duas etapas ligada.",
+      },
+      idioma: "Idioma",
+    },
+  },
+  en: {
+    auth: {
+      lema: "Your accounts take turns on their own. You just work.",
+      email: "Email",
+      emailExemplo: "you@example.com",
+      senha: "Password",
+      novaSenha: "New password",
+      repetirSenha: "Repeat the new password",
+      senhaAtual: "Current password",
+      dicaSenha: "At least 12 characters, with letters and numbers.",
+      entrar: {
+        titulo: "Sign in to the panel",
+        descricao: "Use the email and password from your invite.",
+        botao: "Sign in",
+        esqueci: "Forgot password",
+        soConvite: "Access is invite-only. Ask whoever runs the installation for one.",
+      },
+      codigo: {
+        titulo: "Two-step verification",
+        descricao: "Enter the 6-digit code from your authenticator app.",
+        botao: "Confirm",
+        rotulo: "6-digit code",
+        outraConta: "Sign in with another account",
+      },
+      esqueci: {
+        titulo: "Forgot password",
+        descricao: "We'll send a link to create a new password.",
+        botao: "Send the link",
+        enviado: "If the email is in the panel, the link arrives in a few minutes. It's only valid for a short time.",
+        voltar: "Back to sign in",
+      },
+      nova: {
+        titulo: "Create a new password",
+        descricao: "After this, you sign in with the new password.",
+        botao: "Save password",
+        pronto: "Password changed.",
+      },
+      convite: {
+        titulo: "Accept the invite",
+        descricao: "Create your password to enter the panel.",
+        botao: "Create account and sign in",
+        semToken: "This address doesn't carry an invite. Open the link from the email again.",
+        depois: "If you're an admin, the next step is turning on two-step verification.",
+      },
+      ativar: {
+        titulo: "Turn on two-step verification",
+        descricao:
+          "Admins change accounts, computers and keys, so the panel asks for a code from your phone besides the password.",
+        descricaoOpcional:
+          "Recommended: admins change accounts, computers and keys, and the phone code protects beyond the password. You can turn it on later in My account.",
+        pular: "Skip for now",
+        passo1: "Open an authenticator app on your phone and scan the QR.",
+        passo2: "No camera? Type this key in the app:",
+        passo3: "Enter the 6-digit code the app shows.",
+        botao: "Turn on and continue",
+        qr: "QR for the authenticator app",
+        pronto: "Two-step verification is on.",
+      },
+      idioma: "Language",
+    },
+  },
+})

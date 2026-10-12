@@ -1,0 +1,5 @@
+#!/bin/sh
+# Trava do repositório público: segredo, dado pessoal e React Bits não entram (scripts/trava.mjs).
+node scripts/trava.mjs || exit 1
+# Trava do painel: componente do React Bits pego também pelo nome do arquivo (painel/scripts/trava-react-bits.mjs).
+exec node painel/scripts/trava-react-bits.mjs
