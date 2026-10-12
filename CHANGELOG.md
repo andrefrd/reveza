@@ -7,6 +7,34 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.4 · 12/10/2026
+
+Windows de verdade e ligação de computador novo mais segura. Quem tem a 0.1.3 atualiza com
+`npx github:dantaspaulo/reveza#v0.1.4 --atualizar` (no Windows sem o Git,
+`npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.4.tar.gz --atualizar`). Atualize também o painel (o
+`--atualizar` com os tokens do Supabase e da Vercel): para ligar computador novo, painel e computador precisam estar os
+dois na 0.1.4.
+
+- **Segurança: um pedido de ligação por vez, e código de 6 caracteres.** Se dois pedidos de ligar computador novo chegam
+  juntos, o computador recusa os dois (com som e aviso) e pede para gerar de novo no painel. O código que se digita na
+  janela passou de 4 para 6 caracteres. Isso fecha o caso, achado na revisão de segurança, em que alguém com acesso
+  direto ao banco da nuvem forjava um segundo pedido com o mesmo código do verdadeiro e levava a chave do cofre.
+- **O computador novo recebe a conta mesmo com o Claude Code sem login.** Antes, a troca ficava adiada para sempre com
+  "não consegui identificar a conta em uso".
+- **Windows, provado num Windows de verdade a cada envio** (o GitHub instala, derruba, atualiza e desinstala o Reveza
+  numa máquina Windows, com acento e espaço no caminho):
+  - o serviço instala sem administrador (antes, num terminal comum, dava "Acesso negado" e o agente não subia);
+  - o agente roda sem janela (antes abria um terminal na tela, e fechar a janela derrubava o agente);
+  - não para depois de 3 dias, roda na bateria e não para ao tirar da tomada;
+  - volta sozinho em até um minuto se cair, e o `--atualizar` troca o agente que está rodando (antes a versão antiga
+    seguia rodando);
+  - a janela de confirmação de computador novo aparece (antes ficava escondida, e o pedido era recusado em 90 s);
+  - o agente acha o Claude Code instalado pelo npm (o pacote de hoje traz um `.exe`), para conectar, renovar e retomar;
+  - o comando `reveza` funciona com acento no caminho (`C:\Users\João`), e o instalador oferece pôr o `reveza` no Path
+    do usuário.
+- **Linux: o `--atualizar` reinicia o agente** (antes a versão antiga seguia rodando até o computador reiniciar).
+- Painel: a caixa de ligar computador novo mostra o comando e o código inteiros (antes cortava à direita).
+
 ## 0.1.3 · 11/10/2026
 
 Computador novo em qualquer sistema. Quem tem a 0.1.2 atualiza com `npx github:dantaspaulo/reveza#v0.1.3 --atualizar`.
