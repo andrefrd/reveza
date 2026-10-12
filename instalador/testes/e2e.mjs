@@ -83,7 +83,15 @@ try {
   conferir("a instalação avisa a troca numa linha, sem perguntar", /troca automática ligada, antes do limite \(avisa em 90%, troca em 95%\)/.test(inst.texto)
     && !/Troca de conta|Como trocar/.test(inst.texto));
   conferir("login sem cadastro aberto e com duas etapas", emu.estado.authConfig.disable_signup === true && emu.estado.authConfig.mfa_totp_enroll_enabled === true);
-  conferir("4 funções publicadas", emu.estado.funcoes.length === 4, String(emu.estado.funcoes.length));
+  conferir("5 funções publicadas (com a atualizar-nuvem)", emu.estado.funcoes.length === 5, String(emu.estado.funcoes.length));
+  // 0.3.0: a nuvem guarda a versão dela, o que está no ar e os dados do painel (qualquer computador consegue publicar)
+  const versao = JSON.parse(readFileSync(path.join(RAIZ, "package.json"), "utf8")).version;
+  conferir("a nuvem sabe a versão dela e o que está no ar", cfg.nuvem_versao === versao && cfg.publicado?.funcoes === versao && cfg.publicado?.painel === versao,
+    JSON.stringify({ nuvem: cfg.nuvem_versao, publicado: cfg.publicado }));
+  conferir("os dados do painel na nuvem, sem token", cfg.painel_publicacao?.projeto === "reveza" && cfg.painel_publicacao?.url === "https://reveza.vercel.app"
+    && !/vercel_emulador|sbp_/.test(JSON.stringify(cfg.painel_publicacao)), JSON.stringify(cfg.painel_publicacao));
+  conferir("atualização completa fica desligada sem pergunta (padrão não)", !cfg.atualizacao_completa
+    && (await sql("select count(*)::int as n from public.credenciais_atualizacao"))[0].n === 0 && /Atualização completa desligada/.test(inst.texto));
   conferir("segredos das funções", ["REVEZA_SITE", "REVEZA_CRON", "VAPID_PUBLICA", "VAPID_PRIVADA"].every((s) => emu.estado.segredos.has(s)));
   const dep = emu.estado.implantacoes.at(-1);
   const dist = path.join(home, ".reveza", "painel-build", "dist", "assets");

@@ -22,6 +22,9 @@
 //   ... --pasta <dir> | --sem-servico | --sem-react-bits | --versao | --ajuda
 //
 // Requisitos: Node 20+ e o Claude Code instalado (o Reveza funciona com o Claude Code). Instalar não apaga nada.
+//
+// Uso interno (o agente chama, com a atualização completa ligada): --publicar-nuvem --ref <projeto> [--partes funcoes,painel]
+// publica as funções da nuvem e o painel desta versão, com os tokens pela entrada padrão (nunca em argumento ou ambiente).
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,7 +32,7 @@ import { fileURLToPath } from "node:url";
 import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioPedido, dominioValido, passosDns } from "./lib/dominio.mjs";
-import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
+import { computadorDoEmail, esperarComando, lerPublicacao, pedirComando, registrarPublicacao, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { etapasDoCaminho, manterNuvemPrevisto, numeroDaEtapa } from "./lib/etapas.mjs";
 import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
@@ -49,8 +52,8 @@ const REPO = "dantaspaulo/reveza";
 
 // ── argumentos ────────────────────────────────────────────────────────────────
 const FLAGS = ["--atualizar", "--sem-nuvem", "--com-nuvem", "--sair-da-sombra", "--ligar", "--sombra", "--importar", "--demo", "--doctor", "--desinstalar", "--idioma",
-  "--sim", "--pasta", "--sem-servico", "--sem-react-bits", "--versao", "--ajuda", "--help", "-h", "--dominio"];
-const COM_VALOR = ["--importar", "--idioma", "--pasta", "--dominio"];
+  "--sim", "--pasta", "--sem-servico", "--sem-react-bits", "--versao", "--ajuda", "--help", "-h", "--dominio", "--publicar-nuvem", "--ref", "--partes"];
+const COM_VALOR = ["--importar", "--idioma", "--pasta", "--dominio", "--ref", "--partes"];
 export function lerArgs(argv) {
   const a = { flags: new Set(), valores: {} };
   for (let i = 0; i < argv.length; i++) {
@@ -453,6 +456,130 @@ async function painel(ctx) {
   }
 }
 
+/** A atualização completa já está ligada nesta instalação? (na dúvida, não: a oferta aparece) */
+async function atualizacaoCompletaLigada(consulta) {
+  try {
+    const l = await consulta("select (valor ->> 'ligada')::boolean as ligada from public.config where chave = 'atualizacao_completa'");
+    return Array.isArray(l) && l[0]?.ligada === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Os dados do painel que vão para a nuvem (qualquer computador da instalação consegue publicar com eles). */
+function publicacaoDe(ctx) {
+  return { projeto: ctx.projetoVercel, equipe: ctx.equipe ?? null, dominio: ctx.dominio || null, url: ctx.site, urlVercel: ctx.urlVercel ?? null, vapid: ctx.vapidPublica ?? null };
+}
+
+/** O texto da atualização completa: o que é, o que custa em segurança e como reduzir o alcance dos tokens. */
+export function textoAtualizacaoCompleta() {
+  return [
+    t("Atualização completa (opcional). A nuvem já se atualiza sozinha, sem token nenhum. Para as funções da nuvem e o painel também irem sozinhos,",
+      "Full update (optional). The cloud already updates itself, with no token at all. For the cloud functions and the panel to go by themselves too,"),
+    t("os tokens do Supabase e da Vercel ficam na nuvem CIFRADOS com a chave do cofre: a nuvem guarda um texto que não lê, e só um computador seu abre.",
+      "the Supabase and Vercel tokens are kept in the cloud ENCRYPTED with the vault key: the cloud stores text it cannot read, and only one of your computers opens it."),
+    t("Atenção: quem tiver um computador desta instalação passa a ter esses tokens. Prefira tokens de alcance curto e com validade:",
+      "Mind this: whoever has a computer of this installation gets these tokens. Prefer short-reach tokens with an expiry date:"),
+    t("  Vercel: escopo só no time do painel e com validade (Account → Tokens);", "  Vercel: scoped to the panel's team only, with an expiry (Account → Tokens);"),
+    t("  Supabase: com validade, se a página oferecer, e de uma conta que só tenha a organização do Reveza (o token alcança tudo o que a conta alcança).",
+      "  Supabase: with an expiry if the page offers one, from an account that only has the Reveza organization (the token reaches everything the account reaches)."),
+    t("Liga ou desliga depois: reveza atualizacao-completa ligar | desligar | status (ou Desligar, no painel).",
+      "Turn it on or off later: reveza atualizacao-completa ligar | desligar | status (or Turn off, in the panel)."),
+  ];
+}
+
+/**
+ * A oferta no fim da instalação: guardar os tokens cifrados para a atualização completa. Padrão NÃO (e sem pergunta,
+ * --sim ou sem terminal, fica desligada). Os tokens vão ao agente pela entrada padrão, nunca em argumento ou ambiente.
+ */
+export async function oferecerAtualizacaoCompleta({ p, tokens, rodarCli, mostrar = (l) => info(l) }) {
+  if (!tokens?.supabase || !tokens?.vercel) return false;
+  for (const l of textoAtualizacaoCompleta()) mostrar(l);
+  if (!(await p.sim(t("Guardar os tokens cifrados para a atualização completa?", "Keep the encrypted tokens for the full update?"), false))) {
+    mostrar(t("Atualização completa desligada: as funções e o painel novos pedem o passo manual (o painel mostra quando).",
+      "Full update off: new functions and panel need the manual step (the panel shows when)."));
+    return false;
+  }
+  const r = rodarCli(["atualizacao-completa", "ligar", "--stdin"], JSON.stringify({ supabase: tokens.supabase, vercel: tokens.vercel }));
+  if (r.ok) ok(t("atualização completa ligada (tokens cifrados com a chave do cofre)", "full update on (tokens encrypted with the vault key)"));
+  else nao(t(`não liguei a atualização completa: ${(r.erro || r.saida).trim().slice(-200)}`, `could not turn on the full update: ${(r.erro || r.saida).trim().slice(-200)}`));
+  return r.ok;
+}
+
+/** Lê toda a entrada padrão (os tokens da publicação, que o agente manda por ela). */
+function lerEntrada() {
+  return new Promise((resolve, reject) => {
+    let d = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (x) => { d += x; if (d.length > 64 * 1024) reject(new Error("entrada grande demais")); });
+    process.stdin.on("end", () => resolve(d));
+    process.stdin.on("error", reject);
+  });
+}
+
+/** As partes de --partes (funcoes, painel): só essas duas, e pelo menos uma. */
+export function lerPartes(v) {
+  const lista = String(v ?? "funcoes,painel").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!lista.length || lista.some((x) => x !== "funcoes" && x !== "painel")) throw new Error("--partes: funcoes, painel ou os dois");
+  return { funcoes: lista.includes("funcoes"), painel: lista.includes("painel") };
+}
+
+/**
+ * Publicar as funções da nuvem e o painel desta versão (o agente chama, no computador que pegou a vez, com a atualização
+ * completa ligada). O mesmo caminho do instalador: provisionar (as migrações já entraram pela própria nuvem; o plano sai
+ * vazio) e o painel compilado nesta máquina e publicado na Vercel da pessoa. A nuvem vem antes: só publica a versão em
+ * que ela já está. Os dados do painel vêm da configuração da nuvem (painel_publicacao).
+ */
+async function publicarNuvem(ctx, a) {
+  titulo(t(`Publicar as funções da nuvem e o painel da ${VERSAO}`, `Publish the cloud functions and the panel of ${VERSAO}`));
+  if (process.stdin.isTTY) throw new Error(t("uso interno: os tokens chegam pela entrada padrão", "internal use: the tokens come through standard input"));
+  const ref = a.valores["--ref"];
+  if (!/^[a-z0-9]{20}$/.test(ref || "")) throw new Error(t("projeto do Supabase inválido (--ref)", "invalid Supabase project (--ref)"));
+  const partes = lerPartes(a.valores["--partes"]);
+  let tokens;
+  try {
+    tokens = JSON.parse(await lerEntrada());
+  } catch {
+    throw new Error(t("os tokens não chegaram pela entrada padrão", "the tokens did not arrive through standard input"));
+  }
+  if (typeof tokens?.supabase !== "string" || !tokens.supabase || typeof tokens?.vercel !== "string" || !tokens.vercel) {
+    throw new Error(t("faltam os tokens do Supabase e da Vercel", "the Supabase and Vercel tokens are missing"));
+  }
+  ctx.gerencia = new Gerencia(tokens.supabase);
+  ctx.ref = ref;
+  const c = await lerPublicacao(consultar(ctx));
+  if (c.versao !== VERSAO) {
+    throw new Error(t(`a nuvem está na ${c.versao ?? "versão desconhecida"} e esta publicação é da ${VERSAO}: a nuvem se atualiza antes`,
+      `the cloud is on ${c.versao ?? "an unknown version"} and this publication is ${VERSAO}: the cloud updates first`));
+  }
+  if (!c.painel?.url || !c.painel?.projeto) {
+    throw new Error(t("a nuvem não tem os dados do painel: rode uma vez o instalador com --atualizar no computador que criou a instalação",
+      "the cloud lacks the panel data: run the installer with --atualizar once on the computer that created the installation"));
+  }
+  ctx.url = `https://${ref}.supabase.co`;
+  ctx.siteProvisorio = c.painel.url;
+  ctx.vapidPublica = c.painel.vapid;
+  if (partes.funcoes) {
+    const r = await provisionar({ gerencia: ctx.gerencia, ref, site: c.painel.url, admin: null, computador: false, log: info });
+    ctx.anon = r.anon;
+    ok(t("funções da nuvem publicadas", "cloud functions published"));
+  } else {
+    ctx.anon = (await ctx.gerencia.chaves(ref)).anon;
+    if (!ctx.anon) throw new Error(t("não consegui ler a chave pública do projeto", "could not read the project's public key"));
+  }
+  if (partes.painel) {
+    ctx.vercel = new Vercel(tokens.vercel, { equipe: c.painel.equipe });
+    ctx.projetoVercel = c.painel.projeto;
+    ctx.equipe = c.painel.equipe;
+    ctx.dominio = c.painel.dominio;
+    ctx.inst = { painel: { url: c.painel.url, urlVercel: c.painel.urlVercel, projeto: c.painel.projeto, equipe: c.painel.equipe, dominio: c.painel.dominio } };
+    await painel(ctx);
+  }
+  await registrarPublicacao(consultar(ctx), { versao: VERSAO, funcoes: partes.funcoes, painel: partes.painel, publicacao: partes.painel ? publicacaoDe(ctx) : null });
+  ok(t(`publicado: ${[partes.funcoes && "funções", partes.painel && "painel"].filter(Boolean).join(" e ")} da ${VERSAO}`,
+    `published: ${[partes.funcoes && "functions", partes.painel && "panel"].filter(Boolean).join(" and ")} of ${VERSAO}`));
+}
+
 async function contas(ctx) {
   titulo(t("Contas", "Accounts"));
   const atual = emailDoClaude();
@@ -694,6 +821,7 @@ async function main() {
     dominioPedido: pedidoDeDominio,
   };
   try {
+    if (tem("--publicar-nuvem")) return await publicarNuvem({ ...ctx, semPerguntas: true }, a);
     if (tem("--demo")) return await demo(ctx);
     if (tem("--doctor")) return await doctor(ctx);
     if (tem("--desinstalar")) return await desinstalar(ctx);
@@ -734,8 +862,9 @@ async function main() {
     } else if (ctx.importar) info(t("Troca: fica a configuração importada (ajuste no painel).", "Switching: the imported settings stay (adjust in the panel)."));
     ctx.troca = trocaInicial(ctx);
     if (ctx.soEsteComputador) {
-      info(t("Computador ligado a uma instalação: atualizo só o programa deste computador. A nuvem e o painel são atualizados no computador que criou a instalação.",
-        "Computer joined to an installation: only this computer's program is updated. The cloud and the panel are updated on the computer that created the installation."));
+      info(t("Computador ligado a uma instalação: atualizo só o programa deste computador. A nuvem se atualiza pelo painel (Atualizar a nuvem); funções e painel, pela atualização completa ou no computador que criou a instalação.",
+        "Computer joined to an installation: only this computer's program is updated. The cloud updates from the panel (Update the cloud); functions and panel, through the full update or on the computer that created the installation."));
+      if (ctx.dominioPedido !== undefined) nao(t("--dominio vale no computador que criou a instalação (ele tem os dados do projeto e pede os tokens)", "--dominio applies on the computer that created the installation (it has the project data and asks for the tokens)"));
     } else if (!ctx.semNuvem && !ctx.ligar) {
       ctx.manterNuvem = false;
       etapa("nuvem");
@@ -756,6 +885,13 @@ async function main() {
     if (ctx.gerencia && ctx.vercel) {
       etapa("painel");
       await painel(ctx);
+      // o que está no ar e os dados do painel: qualquer computador da instalação passa a conseguir publicar
+      try {
+        await registrarPublicacao(consultar(ctx), { versao: VERSAO, publicacao: publicacaoDe(ctx) });
+      } catch (e) {
+        nao(t(`não registrei na nuvem o que está no ar (${e.message}): o painel pode pedir o passo manual na próxima versão`,
+          `could not record in the cloud what is online (${e.message}): the panel may ask for the manual step on the next version`));
+      }
     }
     // computador ligado: as contas vêm da nuvem (o cofre), nada para conectar aqui
     if (!ctx.atualizar && !ctx.ligar) {
@@ -765,6 +901,17 @@ async function main() {
     if (ctx.nuvemNova && ctx.gerencia) {
       etapa("alertas");
       await alertas(ctx);
+    }
+    // a oferta da atualização completa (padrão não), com os tokens que esta instalação acabou de usar
+    const completa = ctx.gerencia && ctx.vercel ? await atualizacaoCompletaLigada(consultar(ctx)) : false;
+    if (completa) info(t("Atualização completa ligada: as funções e o painel novos vão sozinhos (reveza atualizacao-completa status).",
+      "Full update on: new functions and panel go by themselves (reveza atualizacao-completa status)."));
+    else if (ctx.gerencia && ctx.vercel) {
+      await oferecerAtualizacaoCompleta({
+        p: ctx.p,
+        tokens: { supabase: ctx.gerencia.token, vercel: ctx.vercel.token },
+        rodarCli: (args, entrada) => rodar(process.execPath, [ctx.cli, ...args], { env: ambienteLimpo(), entrada }),
+      });
     }
     ctx.p.fechar();
     etapa("prova");

@@ -19,12 +19,13 @@ export function ambienteLimpo(extra = {}) {
 }
 
 /** Roda um programa sem shell (argumentos não passam por interpretação). No Windows, .cmd precisa do shell. */
-export function rodar(cmd, args = [], { cwd, mostrar = false, env } = {}) {
+export function rodar(cmd, args = [], { cwd, mostrar = false, env, entrada } = {}) {
   const precisaShell = WIN && !/\.exe$/i.test(cmd);
   const aspas = (a) => (/[\s"&|<>^]/.test(a) ? `"${String(a).replaceAll('"', '\\"')}"` : a);
-  const r = precisaShell
-    ? spawnSync([cmd, ...args].map(aspas).join(" "), { cwd, shell: true, stdio: mostrar ? "inherit" : "pipe", env: env ?? ambienteLimpo(), encoding: "utf8" })
-    : spawnSync(cmd, args, { cwd, stdio: mostrar ? "inherit" : "pipe", env: env ?? ambienteLimpo(), encoding: "utf8" });
+  // `entrada`: o que vai pela entrada padrão (segredo nunca vai em argumento nem no ambiente do filho)
+  const stdio = entrada !== undefined ? ["pipe", mostrar ? "inherit" : "pipe", mostrar ? "inherit" : "pipe"] : mostrar ? "inherit" : "pipe";
+  const op = { cwd, stdio, env: env ?? ambienteLimpo(), encoding: "utf8", ...(entrada !== undefined ? { input: entrada } : {}) };
+  const r = precisaShell ? spawnSync([cmd, ...args].map(aspas).join(" "), { ...op, shell: true }) : spawnSync(cmd, args, op);
   return { ok: r.status === 0, saida: `${r.stdout ?? ""}`, erro: `${r.stderr ?? ""}${r.error ? r.error.message : ""}` };
 }
 

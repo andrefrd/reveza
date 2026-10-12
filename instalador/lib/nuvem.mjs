@@ -1,4 +1,5 @@
-// O que o instalador faz no banco depois de provisionar: configuração da troca, canal de alerta e o comando de prova.
+// O que o instalador faz no banco depois de provisionar: configuração da troca, canal de alerta, o comando de prova e o
+// registro do que está no ar (versões e dados do painel na Vercel, para qualquer computador conseguir publicar).
 // `consultar(sql)` é a Management API do Supabase (ou, nos testes, um Postgres local com as mesmas migrações).
 import { comoAdmin, jsonb, texto, textos, uuid, valor } from "./sql.mjs";
 
@@ -61,4 +62,54 @@ export async function esperarComando(consultar, id, { tentativas = 15, esperar =
     await esperar(2000);
   }
   return null;
+}
+
+const VERSAO = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+
+/**
+ * Os dados do painel na Vercel que só o computador que criou a instalação sabia (projeto, equipe, domínio, endereços e
+ * a chave pública do push): vão para a configuração da nuvem (`painel_publicacao`), para qualquer computador da
+ * instalação publicar o painel. Nada disso é segredo; o token da Vercel não vai.
+ */
+export function dadosDaPublicacao({ projeto, equipe = null, dominio = null, url, urlVercel = null, vapid = null }) {
+  const https = (u) => typeof u === "string" && /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(u);
+  if (!/^[a-z0-9][a-z0-9-]{0,98}$/.test(String(projeto || ""))) throw new Error("projeto da Vercel inválido");
+  if (equipe !== null && !/^[A-Za-z0-9_-]{1,100}$/.test(String(equipe))) throw new Error("equipe da Vercel inválida");
+  if (dominio !== null && !/^[a-z0-9.-]{4,253}$/.test(String(dominio))) throw new Error("domínio inválido");
+  if (!https(url) || (urlVercel !== null && !https(urlVercel))) throw new Error("endereço do painel inválido");
+  if (vapid !== null && !/^[A-Za-z0-9_-]{20,200}$/.test(String(vapid))) throw new Error("chave pública do push inválida");
+  return { projeto, equipe, dominio, url, url_vercel: urlVercel, vapid };
+}
+
+/**
+ * O que ficou no ar depois de publicar (o instalador no computador que criou a instalação, ou o computador que publica
+ * sozinho): a versão da nuvem (a deste instalador, se for maior: as migrações dele entraram), a versão das funções e do
+ * painel e os dados do painel. Valores como parâmetro, nunca no texto do SQL.
+ */
+export async function registrarPublicacao(consultar, { versao, funcoes = true, painel = true, publicacao = null }) {
+  if (!VERSAO.test(String(versao))) throw new Error("versão inválida");
+  await consultar(`insert into public.config (chave, valor, mudado_em) values ('nuvem_versao', to_jsonb($1::text), now())
+    on conflict (chave) do update set valor = excluded.valor, mudado_em = now()
+    where public.rvz_versao_num(public.config.valor #>> '{}') is null
+       or public.rvz_versao_num($1::text) >= public.rvz_versao_num(public.config.valor #>> '{}')`, [versao]);
+  const publicado = { ...(funcoes ? { funcoes: versao } : {}), ...(painel ? { painel: versao } : {}), em: new Date().toISOString() };
+  await consultar(`insert into public.config (chave, valor, mudado_em) values ('publicado', $1::jsonb, now())
+    on conflict (chave) do update set valor = (case when jsonb_typeof(public.config.valor) = 'object' then public.config.valor else '{}'::jsonb end) || excluded.valor,
+                                      mudado_em = now()`, [JSON.stringify(publicado)]);
+  if (publicacao) {
+    await consultar(`insert into public.config (chave, valor, mudado_em) values ('painel_publicacao', $1::jsonb, now())
+      on conflict (chave) do update set valor = excluded.valor, mudado_em = now()`, [JSON.stringify(dadosDaPublicacao(publicacao))]);
+  }
+}
+
+/** A configuração da nuvem que a publicação precisa (a versão da nuvem e os dados do painel). */
+export async function lerPublicacao(consultar) {
+  const linhas = await consultar("select chave, valor from public.config where chave in ('nuvem_versao', 'painel_publicacao', 'publicado')");
+  const m = new Map((Array.isArray(linhas) ? linhas : []).map((l) => [l.chave, typeof l.valor === "string" && /^[[{"]/.test(l.valor) ? JSON.parse(l.valor) : l.valor]));
+  const p = m.get("painel_publicacao");
+  return {
+    versao: typeof m.get("nuvem_versao") === "string" ? m.get("nuvem_versao") : null,
+    publicado: m.get("publicado") ?? null,
+    painel: p && typeof p === "object" ? { projeto: p.projeto, equipe: p.equipe ?? null, dominio: p.dominio ?? null, url: p.url, urlVercel: p.url_vercel ?? null, vapid: p.vapid ?? null } : null,
+  };
 }
