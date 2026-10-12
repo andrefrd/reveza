@@ -119,7 +119,8 @@ function lancar(nova) {
   const depois = versoes();
   if (conferir(depois) !== nova || depois["CHANGELOG.md"] !== nova) throw new Error("a troca de versão não fechou");
   const arquivos = [...PACOTES, ...TRAVAS, CONFIG, ...BADGES.map(([f]) => f)];
-  const titulo = notas.split("\n")[0].replace(/[.:]$/, "").slice(0, 80);
+  // título da release: a primeira frase da entrada (o resto vai nas notas)
+  const titulo = notas.split("\n")[0].split(/\.\s/)[0].replace(/[.:]$/, "").slice(0, 80);
   git("commit", "-q", "-m", `chore: versão ${nova}\n\n${titulo}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, "--", ...arquivos);
   execFileSync(process.execPath, ["scripts/trava.mjs", "--historia"], { cwd: RAIZ, stdio: "inherit" });
   git("push", "-q", "origin", "main");
