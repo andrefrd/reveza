@@ -2,7 +2,7 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:1F1E1D,100:D97757&height=210&section=header&text=Reveza%20AI&fontColor=FAF9F5&fontSize=58&fontAlignY=36&desc=several%20Claude%20Code%20accounts%2C%20taking%20turns%20on%20their%20own&descAlignY=58&descSize=18" width="100%" alt="Reveza AI" />
 
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&pause=1300&color=D97757&center=true&vCenter=true&width=760&lines=Switches+accounts+before+the+limit;The+session+goes+on+on+the+new+account;Logins+encrypted+on+your+computer;Dashboard+in+your+own+cloud;A+new+computer+joins+with+one+code" alt="What Reveza does" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&pause=1300&color=D97757&center=true&vCenter=true&width=760&lines=Switches+accounts+before+the+limit;The+session+goes+on+on+the+new+account;Logins+encrypted+on+your+computer;Dashboard+in+your+own+cloud;A+new+computer+joins+with+no+secret+on+screen" alt="What Reveza does" />
 
 <br/>
 
