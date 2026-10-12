@@ -585,7 +585,8 @@ function ComandoPorSistema({ extra }: { extra: string }) {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{t(`computadores.ligacao.sistemas.${sistema}.abrir`)}</p>
-      <Codigo texto={comandoInstalador(extra)} />
+      {/* o comando com o endereço do pacote da versão é longo: quebra a linha em vez de passar da caixa */}
+      <Codigo texto={comandoInstalador(extra)} className="[&_pre]:break-all [&_pre]:whitespace-pre-wrap" />
       <p className="text-xs text-muted-foreground">{t("computadores.ligacao.sistemas.requisitos")}</p>
     </div>
   )
