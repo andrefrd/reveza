@@ -10,7 +10,7 @@ function desviar(url) {
   if (p) return `${base}/proj/${p[1]}`;
   if (url.startsWith("https://api.vercel.com/")) return `${base}/vercel/${url.slice("https://api.vercel.com/".length)}`;
   if (url.startsWith("https://cloudflare-dns.com/")) return `${base}/dns/${url.slice("https://cloudflare-dns.com/".length)}`;
-  if (/^https:\/\/(api\.telegram\.org|ntfy\.sh|api\.resend\.com)\//.test(url)) return `${base}/bloqueado`;
+  if (/^https:\/\/(api\.telegram\.org|api\.resend\.com)\//.test(url)) return `${base}/bloqueado`;
   return null;
 }
 

@@ -26,7 +26,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
-import { acharChatTelegram, segredoWebhook, testar, topicoNtfy } from "./lib/alertas.mjs";
+import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "./lib/dominio.mjs";
 import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
@@ -435,12 +435,13 @@ async function contas(ctx) {
 async function alertas(ctx) {
   titulo(t("7/8 Alertas", "7/8 Alerts"));
   if (!ctx.adminId || ctx.semPerguntas) return info(t("Canais de alerta: no painel, em Alertas.", "Alert channels: in the panel, under Alerts."));
-  const canais = ["telegram", "ntfy", "email", "webhook"];
+  // o ntfy saiu dos canais (12/10/2026); a notificação no celular se liga no próprio painel, em Alertas
+  const canais = ["telegram", "email", "webhook"];
   const i = await ctx.p.escolha(t("Onde avisar (conta sem folga, login vencendo, computador parado)", "Where to alert (no free account, login expiring, computer stopped)"), [
-    "Telegram", t("ntfy (app grátis no celular, sem cadastro)", "ntfy (free phone app, no sign-up)"), t("e-mail (Resend)", "e-mail (Resend)"),
-    t("webhook (n8n, Make, script)", "webhook (n8n, Make, script)"), t("agora não (dá para fazer no painel)", "not now (can be done in the panel)"),
-  ], 2);
-  if (i === 4) return;
+    "Telegram", t("e-mail (Resend)", "e-mail (Resend)"), t("webhook (n8n, Make, script)", "webhook (n8n, Make, script)"),
+    t("agora não (dá para fazer no painel, inclusive a notificação no celular)", "not now (can be done in the panel, including phone notifications)"),
+  ], 4);
+  if (i === 3) return;
   const canal = canais[i];
   let destino = {};
   let segredo = "";
@@ -457,11 +458,6 @@ async function alertas(ctx) {
       return nao(t("conversa não confirmada: configure depois no painel", "chat not confirmed: set it up later in the panel"));
     }
     destino = { chat_id: chats[c].id };
-  } else if (canal === "ntfy") {
-    segredo = topicoNtfy();
-    destino = { servidor: "https://ntfy.sh" };
-    info(t(`No app ntfy, assine o tópico: ${segredo}  (o nome é o segredo; não compartilhe)`, `In the ntfy app, subscribe to the topic: ${segredo}  (the name is the secret; don't share it)`));
-    await ctx.p.perguntar(t("Enter quando tiver assinado", "Enter when subscribed"), "");
   } else if (canal === "email") {
     segredo = ctx.resendChave || (await ctx.p.segredo(t("Chave da API do Resend (resend.com/api-keys):", "Resend API key (resend.com/api-keys):")));
     destino = { de: await ctx.p.perguntar(t("Remetente (domínio verificado no Resend)", "Sender (domain verified in Resend)"), ctx.smtp?.remetente || ""), para: await ctx.p.perguntar(t("Para", "To"), ctx.admin?.email || "") };

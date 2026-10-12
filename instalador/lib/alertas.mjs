@@ -2,7 +2,7 @@
 // O envio de verdade é da Edge Function `alertas`; aqui é o mesmo formato, para o teste provar o canal.
 import { randomBytes, createHmac } from "node:crypto";
 
-export const CANAIS = ["telegram", "ntfy", "email", "webhook"];
+export const CANAIS = ["telegram", "email", "webhook"];
 
 /** Telegram: depois de a pessoa mandar qualquer mensagem ao bot, o chat dela aparece em getUpdates. */
 export async function acharChatTelegram(token, { fetch: f = globalThis.fetch } = {}) {
@@ -18,7 +18,6 @@ export async function acharChatTelegram(token, { fetch: f = globalThis.fetch } =
   return chats;
 }
 
-export const topicoNtfy = () => `reveza-${randomBytes(12).toString("hex")}`;
 
 /** Manda a mensagem de teste pelo canal. Devolve { ok, erro }. */
 export async function testar(canal, destino, segredo, { fetch: f = globalThis.fetch, titulo = "Reveza AI · teste", texto = "Se chegou, o canal está certo." } = {}) {
@@ -28,10 +27,6 @@ export async function testar(canal, destino, segredo, { fetch: f = globalThis.fe
       r = await f(`https://api.telegram.org/bot${segredo}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: destino.chat_id, text: `${titulo}\n${texto}` }),
       });
-    } else if (canal === "ntfy") {
-      const servidor = String(destino.servidor || "https://ntfy.sh").replace(/\/+$/, "");
-      if (!/^https:\/\//.test(servidor)) return { ok: false, erro: "o servidor do ntfy precisa ser https" };
-      r = await f(`${servidor}/${encodeURIComponent(segredo)}`, { method: "POST", headers: { Title: titulo }, body: texto });
     } else if (canal === "email") {
       r = await f("https://api.resend.com/emails", {
         method: "POST", headers: { Authorization: `Bearer ${segredo}`, "Content-Type": "application/json" },

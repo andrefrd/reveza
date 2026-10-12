@@ -8,7 +8,7 @@ import path from "node:path";
 import { Vercel, listar } from "../lib/vercel.mjs";
 import { criarProjeto, conferirToken, organizacoes, projetos, regiaoSugerida } from "../lib/supabase.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "../lib/dominio.mjs";
-import { acharChatTelegram, testar, topicoNtfy } from "../lib/alertas.mjs";
+import { acharChatTelegram, testar } from "../lib/alertas.mjs";
 import { copiarEstado, criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath, voltarAtualizacao } from "../lib/programa.mjs";
 import { emailValido, senhaForte, t } from "../lib/texto.mjs";
 import { lerArgs, soEsteComputador } from "../instalar.mjs";
@@ -162,12 +162,8 @@ test("alertas: telegram acha a conversa, teste de cada canal e assinatura do web
   await assert.rejects(acharChatTelegram("errado", { fetch: tg.f }), /formato estranho/);
   assert.deepEqual(await testar("telegram", { chat_id: "42" }, token, { fetch: tg.f }), { ok: true });
 
-  const n = rede([["ntfy.sh", {}]]);
-  const topico = topicoNtfy();
-  assert.match(topico, /^reveza-[0-9a-f]{24}$/);
-  assert.deepEqual(await testar("ntfy", {}, topico, { fetch: n.f }), { ok: true });
-  assert.equal(n.chamadas[0].url, `https://ntfy.sh/${topico}`);
-  assert.equal((await testar("ntfy", { servidor: "http://inseguro" }, topico, { fetch: n.f })).ok, false);
+  // o ntfy saiu dos canais: o teste de envio recusa
+  assert.deepEqual(await testar("ntfy", {}, "reveza-qualquer", { fetch: tg.f }), { ok: false, erro: "canal desconhecido" });
 
   const w = rede([["hook.exemplo.com", {}]]);
   assert.deepEqual(await testar("webhook", { url: "https://hook.exemplo.com/x" }, "segredo123", { fetch: w.f }), { ok: true });
