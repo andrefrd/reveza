@@ -2,7 +2,8 @@
 // - Navegação: rede primeiro; sem rede, a casca (index.html) guardada. Os dados nunca são guardados aqui: a leitura da
 //   nuvem (outro domínio) passa direto, e o painel mostra "sem conexão" quando ela falha.
 // - Arquivos do build (/assets/*, com nome por conteúdo): cache primeiro.
-// - Push: mostra a notificação que a nuvem mandar ({titulo, corpo, url}); o clique abre só caminhos do próprio painel.
+// - Push: mostra a notificação que a nuvem mandar ({titulo, corpo, url}, cifrada para este aparelho); o clique abre só
+//   caminhos do próprio painel.
 
 const VERSAO = "reveza-v2"
 const CASCA = ["/", "/index.html", "/manifest.webmanifest", "/icones/icone.svg", "/icones/icone-192.png"]
@@ -74,10 +75,12 @@ self.addEventListener("push", (evento) => {
     }
   }
   const dados = ler()
-  const titulo = typeof dados.titulo === "string" ? dados.titulo : "Reveza AI"
+  const titulo = typeof dados.titulo === "string" && dados.titulo ? dados.titulo : "Reveza AI"
+  // aviso sem texto (inscrição antiga, sem as chaves): ao menos diz para abrir o painel
+  const corpo = typeof dados.corpo === "string" && dados.corpo ? dados.corpo : "Algo pede atenção no painel."
   evento.waitUntil(
     self.registration.showNotification(titulo, {
-      body: typeof dados.corpo === "string" ? dados.corpo : "",
+      body: corpo,
       icon: "/icones/icone-192.png",
       badge: "/icones/icone-192.png",
       tag: typeof dados.tag === "string" ? dados.tag : undefined,

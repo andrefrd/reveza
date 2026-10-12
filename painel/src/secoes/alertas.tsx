@@ -1,8 +1,18 @@
 // Alertas: canais (Telegram, e-mail, webhook, notificação no celular), os eventos de cada um e o botão de teste.
 
 import * as React from "react"
-import { BellIcon, MailIcon, PlusIcon, SendIcon, SmartphoneIcon, Trash2Icon, WebhookIcon } from "lucide-react"
+import {
+  BellIcon,
+  CheckIcon,
+  MailIcon,
+  PlusIcon,
+  SendIcon,
+  SmartphoneIcon,
+  Trash2Icon,
+  WebhookIcon,
+} from "lucide-react"
 
+import { CartaoAvisoNavegador } from "@/components/painel/aviso-trocas"
 import { Confirmar } from "@/components/painel/confirmar"
 import { AvisoPermissao, Pagina, PedidoDuasEtapas, useFalta2fa } from "@/components/painel/pagina"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -40,7 +50,7 @@ import type { Alerta, CanalAlerta, EventoAlerta } from "@/dados/tipos"
 import { useDialogo } from "@/hooks/use-dialogo"
 import { useT } from "@/i18n"
 import { toast } from "sonner"
-import { inscreverPush } from "@/pwa/registrar"
+import { inscreverPush, inscricaoAtual, pedirPermissao, suportePush, type Suporte } from "@/pwa/notificacoes"
 
 export const ICONE_CANAL: Record<CanalAlerta, typeof BellIcon> = {
   telegram: SendIcon,
@@ -124,6 +134,7 @@ export default function Alertas() {
           ))}
         </div>
       )}
+      <CartaoAvisoNavegador />
       <Card>
         <CardHeader>
           <CardTitle>{t("alertas.dialogo.eventos")}</CardTitle>
@@ -165,7 +176,7 @@ function CartaoAlerta({ alerta }: { alerta: Alerta }) {
   const conhecido = Object.hasOwn(ICONE_CANAL, alerta.canal)
   const pode = podeMudar && conhecido
   const Icone = conhecido ? ICONE_CANAL[alerta.canal] : BellIcon
-  const destino = alerta.destino || nomeCanal(alerta.canal)
+  const destino = alerta.destino || (alerta.canal === "push" ? t("alertas.push.destino") : nomeCanal(alerta.canal))
   return (
     <Card className={alerta.ativo ? undefined : "opacity-70"}>
       <CardHeader>
@@ -185,12 +196,15 @@ function CartaoAlerta({ alerta }: { alerta: Alerta }) {
           />
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-1.5">
-        {alerta.eventos.map((e) => (
-          <Badge key={e} variant="secondary">
-            {t(`alertas.eventos.${e}`)}
-          </Badge>
-        ))}
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {alerta.eventos.map((e) => (
+            <Badge key={e} variant="secondary">
+              {t(`alertas.eventos.${e}`)}
+            </Badge>
+          ))}
+        </div>
+        {alerta.canal === "push" ? <AparelhoPush /> : null}
       </CardContent>
       <CardFooter className="mt-auto justify-between gap-2">
         {fonte.recursos.testarAlerta ? (
@@ -243,7 +257,10 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
   const { t, tx } = useT()
   const { fonte } = useDados()
   const { recarregar } = useDados()
-  const [canal, setCanal] = React.useState<CanalAlerta>("telegram")
+  // a notificação no celular é o caminho mais curto (nenhum campo): vem marcada quando este navegador consegue
+  const [canal, setCanal] = React.useState<CanalAlerta>(() =>
+    fonte.recursos.push && suportePush() === "ok" ? "push" : "telegram"
+  )
   const [campos, setCampos] = React.useState<Record<string, string>>({})
   const [eventos, setEventos] = React.useState<EventoAlerta[]>(["sem_livre", "precisa_login", "computador_parado"])
   const [enviando, setEnviando] = React.useState(false)
@@ -255,6 +272,8 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
   }
 
   const pushSemChave = canal === "push" && !fonte.recursos.push
+  const suporte = suportePush()
+  const pushSemSuporte = canal === "push" && suporte !== "ok"
 
   const criar = async () => {
     setEnviando(true)
@@ -270,11 +289,7 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
     // O banco confere o destino de cada canal; a mensagem dele aparece aqui no formulário.
     setErro(null)
     try {
-      if (canal === "push") {
-        const chave = await fonte.chavePushPublica()
-        if (!chave) throw new ErroPainel("indisponivel")
-        await fonte.inscreverPush(await inscreverPush(chave))
-      }
+      if (canal === "push") await receberNesteAparelho(fonte, suporte)
       await fonte.criarAlerta({ canal, eventos, destino, segredo })
       toast.success(t("alertas.dialogo.criado"))
       void recarregar()
@@ -348,10 +363,20 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
             })}
             {erro ? <FieldError>{erro}</FieldError> : null}
             {canal === "push" ? (
-              <Alert>
+              <Alert
+                className={
+                  pushSemChave || pushSemSuporte
+                    ? "border-atencao-borda bg-atencao-fundo text-atencao *:data-[slot=alert-description]:text-atencao/90"
+                    : undefined
+                }
+              >
                 <SmartphoneIcon />
                 <AlertDescription>
-                  {pushSemChave ? t("alertas.campos.pushIndisponivel") : t("alertas.campos.pushDica")}
+                  {pushSemChave
+                    ? t("alertas.campos.pushIndisponivel")
+                    : pushSemSuporte
+                      ? tx(suporte === "ios_instalar" ? "erros.notif_ios_instalar" : "erros.notif_sem_suporte")
+                      : t("alertas.campos.pushDica")}
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -380,7 +405,11 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
           <Button variant="outline" onClick={aoFechar}>
             {t("comum.cancelar")}
           </Button>
-          <Button type="submit" form="form-alerta" disabled={enviando || !eventos.length || pushSemChave}>
+          <Button
+            type="submit"
+            form="form-alerta"
+            disabled={enviando || !eventos.length || pushSemChave || pushSemSuporte}
+          >
             {enviando ? <Spinner /> : null}
             {t("alertas.dialogo.criar")}
           </Button>
@@ -394,4 +423,72 @@ function DicaCampo({ chave }: { chave: string }) {
   const { tx } = useT()
   const texto = tx(chave)
   return texto === chave ? null : <FieldDescription>{texto}</FieldDescription>
+}
+
+/**
+ * Liga a notificação da nuvem neste aparelho: a permissão primeiro (ainda dentro do clique: Safari e Firefox só
+ * perguntam assim), depois a inscrição no serviço de push do navegador, que a nuvem guarda em push_inscricoes.
+ */
+async function receberNesteAparelho(fonte: ReturnType<typeof useDados>["fonte"], suporte: Suporte = suportePush()) {
+  await pedirPermissao(suporte)
+  const chave = await fonte.chavePushPublica()
+  if (!chave) throw new ErroPainel("indisponivel")
+  await fonte.inscreverPush(await inscreverPush(chave))
+}
+
+/** No cartão do alerta de celular: se este aparelho recebe e, se não, o botão para receber. */
+function AparelhoPush() {
+  const { t, tx } = useT()
+  const { fonte } = useDados()
+  const suporte = suportePush()
+  const [recebe, setRecebe] = React.useState<boolean | null>(null)
+  const [enviando, setEnviando] = React.useState(false)
+  React.useEffect(() => {
+    let vivo = true
+    void inscricaoAtual().then((i) => vivo && setRecebe(Boolean(i)))
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  if (suporte !== "ok")
+    return (
+      <p className="text-xs text-muted-foreground">
+        {tx(suporte === "ios_instalar" ? "erros.notif_ios_instalar" : "erros.notif_sem_suporte")}
+      </p>
+    )
+  if (recebe)
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <CheckIcon className="size-3.5 text-ok" aria-hidden />
+        {t("alertas.push.recebe")}
+      </p>
+    )
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span>{fonte.recursos.push ? t("alertas.push.naoRecebe") : t("alertas.campos.pushIndisponivel")}</span>
+      {fonte.recursos.push ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={enviando || recebe === null}
+          onClick={async () => {
+            setEnviando(true)
+            try {
+              await receberNesteAparelho(fonte, suporte)
+              setRecebe(true)
+              toast.success(t("alertas.push.passouAReceber"))
+            } catch (e) {
+              toast.error(mensagemErro(e, t, tx))
+            } finally {
+              setEnviando(false)
+            }
+          }}
+        >
+          {enviando ? <Spinner /> : <SmartphoneIcon />}
+          {t("alertas.push.receber")}
+        </Button>
+      ) : null}
+    </div>
+  )
 }

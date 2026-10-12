@@ -146,6 +146,17 @@ async function tudo(
   return linhas
 }
 
+/** O corpo JSON da resposta de uma Edge Function que respondeu com erro (o supabase-js guarda em error.context). */
+async function lerCorpoDoErro(error: unknown): Promise<Record<string, unknown> | null> {
+  const contexto = (error as { context?: unknown } | null)?.context
+  if (!(contexto instanceof Response)) return null
+  try {
+    return (await contexto.clone().json()) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 /** Chama uma função painel_*. Elas devolvem {ok, erro?}: ok falso vira erro com o código traduzível. */
 async function rpc<T extends Linha = Linha>(nome: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await supabase().rpc(nome, args)
@@ -692,8 +703,11 @@ export class FonteSupabase implements Fonte {
       body: { acao: "testar", alerta_id: id },
     })
     if (error || !data?.ok) {
-      const msg = String(data?.erro ?? error?.message ?? "")
-      throw new ErroPainel(/duas etapas/.test(msg) ? "precisa_aal2" : "teste_falhou", msg)
+      // a função responde 502 com o motivo no corpo; o supabase-js põe a resposta em error.context
+      const corpo = await lerCorpoDoErro(error)
+      const msg = String(data?.erro ?? corpo?.erro ?? error?.message ?? "")
+      const codigo = /duas etapas/.test(msg) ? "precisa_aal2" : /nenhum aparelho/.test(msg) ? "push_sem_aparelho" : "teste_falhou"
+      throw new ErroPainel(codigo, msg)
     }
   }
 

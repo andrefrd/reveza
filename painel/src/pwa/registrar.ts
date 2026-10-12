@@ -46,26 +46,4 @@ export function jaInstalado(): boolean {
   return window.matchMedia("(display-mode: standalone)").matches
 }
 
-/** Inscreve este aparelho no push, com a chave pública de push da instalação. */
-export async function inscreverPush(chavePublica: string): Promise<PushSubscriptionJSON> {
-  const registro = await navigator.serviceWorker.ready
-  const permissao = await Notification.requestPermission()
-  if (permissao !== "granted") throw new Error("push_negado")
-  const chave = Uint8Array.from(atob(chavePublica.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))
-  const inscricao = await registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chave })
-  return inscricao.toJSON()
-}
-
-/** Notificação de teste local, mostrada pelo service worker (sem passar pela nuvem). */
-export async function notificacaoDeTeste(titulo: string, corpo: string) {
-  const permissao = await Notification.requestPermission()
-  if (permissao !== "granted") throw new Error("push_negado")
-  const registro = await navigator.serviceWorker.getRegistration()
-  if (registro)
-    await registro.showNotification(titulo, {
-      body: corpo,
-      icon: "/icones/icone-192.png",
-      badge: "/icones/icone-192.png",
-    })
-  else new Notification(titulo, { body: corpo })
-}
+// A inscrição de push e a notificação de teste moram em ./notificacoes.

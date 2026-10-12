@@ -238,6 +238,19 @@ export default secao({
       totp_falhou: "Não deu para ativar agora. Tente de novo.",
       agenda_invalida: "Agenda inválida: cada faixa precisa de pelo menos um dia e de início antes do fim (HH:MM).",
       exigir_sem_as_suas: "Ative as suas duas etapas antes de exigir de todo administrador.",
+      notif_ios_instalar:
+        "No iPhone e no iPad, a notificação só funciona com o painel instalado: no Safari, toque em Compartilhar, depois em Adicionar à Tela de Início, abra o Reveza pelo ícone e ative de lá.",
+      notif_sem_suporte:
+        "Este navegador não mostra notificações do painel. Use um Chrome, Edge, Firefox ou Safari atualizado.",
+      notif_bloqueada:
+        "As notificações estão bloqueadas para este site. Libere nas configurações do navegador (no cadeado ao lado do endereço: Notificações, Permitir) e tente de novo.",
+      notif_sem_resposta: "O pedido de permissão fechou sem resposta. Tente de novo e escolha Permitir.",
+      notif_sem_service_worker:
+        "O painel não conseguiu preparar o recebimento neste navegador. Recarregue a página e tente de novo (em janela anônima não funciona).",
+      notif_inscricao_falhou:
+        "O serviço de notificação do navegador recusou a inscrição. Tente de novo; no Brave, ligue Usar os serviços do Google para mensagens push nas configurações.",
+      push_sem_aparelho:
+        "Nenhum aparelho recebe esta notificação ainda. Toque em Receber neste aparelho no cartão do alerta e teste de novo.",
     },
   },
   en: {
@@ -478,6 +491,19 @@ export default secao({
       totp_falhou: "Couldn't turn it on right now. Try again.",
       agenda_invalida: "Invalid schedule: each range needs at least one day and a start before the end (HH:MM).",
       exigir_sem_as_suas: "Turn on your own two-step verification before requiring it from every admin.",
+      notif_ios_instalar:
+        "On iPhone and iPad, notifications only work with the panel installed: in Safari, tap Share, then Add to Home Screen, open Reveza from the icon and turn it on there.",
+      notif_sem_suporte:
+        "This browser doesn't show the panel's notifications. Use an up-to-date Chrome, Edge, Firefox or Safari.",
+      notif_bloqueada:
+        "Notifications are blocked for this site. Allow them in the browser settings (in the lock next to the address: Notifications, Allow) and try again.",
+      notif_sem_resposta: "The permission prompt closed without an answer. Try again and choose Allow.",
+      notif_sem_service_worker:
+        "The panel couldn't set up delivery in this browser. Reload the page and try again (it doesn't work in a private window).",
+      notif_inscricao_falhou:
+        "The browser's notification service refused the subscription. Try again; on Brave, turn on Use Google services for push messaging in the settings.",
+      push_sem_aparelho:
+        "No device receives this notification yet. Tap Receive on this device on the alert card and test again.",
     },
   },
 })

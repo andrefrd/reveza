@@ -4,6 +4,7 @@ import { CloudOffIcon, FlaskConicalIcon, LogOutIcon, RefreshCwIcon, RotateCwIcon
 import { AuthDemo, type Autenticacao } from "@/auth/auth"
 import { SessaoProvider, useSessao } from "@/auth/sessao"
 import { AppSidebar } from "@/components/app-sidebar"
+import { VigiaTrocas } from "@/components/painel/aviso-trocas"
 import { BotaoCopiar } from "@/components/painel/copiar"
 import { Logo } from "@/components/painel/logo"
 import { SiteHeader } from "@/components/site-header"
@@ -170,6 +171,8 @@ function Painel() {
         {t("app.pularConteudo")}
       </a>
       <AppSidebar />
+      {/* o aviso de troca de conta neste navegador (Alertas, "Neste navegador") vale em qualquer tela */}
+      <VigiaTrocas />
       <SidebarInset className="min-w-0">
         <SiteHeader titulo={t(`menu.secoes.${secao.id}`)} />
         <main id="conteudo" className="min-w-0 flex-1">
@@ -240,34 +243,37 @@ export function SecaoQuebrou({
     [erro, componentes]
   )
   return (
-    <Empty className="m-4 border md:m-6" role="alert">
-      <EmptyHeader className="max-w-lg">
-        <EmptyMedia variant="icon">
-          <CloudOffIcon />
-        </EmptyMedia>
-        <EmptyTitle>{versaoNova ? t("app.versaoNovaTitulo") : t("app.secaoQuebrou")}</EmptyTitle>
-        <EmptyDescription>{versaoNova ? t("app.versaoNovaTexto") : t("app.secaoQuebrouDica")}</EmptyDescription>
-        {mensagem ? (
-          <code className="mt-1 max-w-full rounded-md bg-muted px-2 py-1 font-mono text-xs break-words text-muted-foreground">
-            {mensagem.length > 240 ? `${mensagem.slice(0, 240)}…` : mensagem}
-          </code>
-        ) : null}
-      </EmptyHeader>
-      <EmptyContent className="flex-row flex-wrap justify-center">
-        {versaoNova ? (
-          <Button onClick={() => window.location.reload()}>
-            <RotateCwIcon data-icon="inline-start" />
-            {t("app.recarregar")}
-          </Button>
-        ) : (
-          <Button variant="outline" onClick={aoTentar}>
-            <RefreshCwIcon data-icon="inline-start" />
-            {t("app.tentarDeNovo")}
-          </Button>
-        )}
-        <BotaoCopiar texto={detalhes} rotulo={t("app.copiarDetalhes")} className="h-8" />
-      </EmptyContent>
-    </Empty>
+    // margem por fora (padding do invólucro): com margem no próprio cartão de largura cheia, ele vazava no celular
+    <div className="p-4 md:p-6">
+      <Empty className="border" role="alert">
+        <EmptyHeader className="max-w-lg">
+          <EmptyMedia variant="icon">
+            <CloudOffIcon />
+          </EmptyMedia>
+          <EmptyTitle>{versaoNova ? t("app.versaoNovaTitulo") : t("app.secaoQuebrou")}</EmptyTitle>
+          <EmptyDescription>{versaoNova ? t("app.versaoNovaTexto") : t("app.secaoQuebrouDica")}</EmptyDescription>
+          {mensagem ? (
+            <code className="mt-1 max-w-full rounded-md bg-muted px-2 py-1 font-mono text-xs break-words text-muted-foreground">
+              {mensagem.length > 240 ? `${mensagem.slice(0, 240)}…` : mensagem}
+            </code>
+          ) : null}
+        </EmptyHeader>
+        <EmptyContent className="flex-row flex-wrap justify-center">
+          {versaoNova ? (
+            <Button onClick={() => window.location.reload()}>
+              <RotateCwIcon data-icon="inline-start" />
+              {t("app.recarregar")}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={aoTentar}>
+              <RefreshCwIcon data-icon="inline-start" />
+              {t("app.tentarDeNovo")}
+            </Button>
+          )}
+          <BotaoCopiar texto={detalhes} rotulo={t("app.copiarDetalhes")} className="h-8" />
+        </EmptyContent>
+      </Empty>
+    </div>
   )
 }
 

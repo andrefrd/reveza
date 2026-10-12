@@ -168,7 +168,7 @@ Menu lateral, nada empilhado numa tela só:
    ranking; previsão de esgotar; exportar planilha.
 5. **Plano da semana**: cota semanal por conta dividida pelos dias, quanto já foi, alerta de ritmo.
 6. **Troca automática**: liga e desliga, modo (só no limite, limiar, rodízio), limiares, intervalo, ordem, agenda.
-7. **Alertas**: canais (Telegram, ntfy, e-mail, webhook, push do celular), quais eventos, botão de teste.
+7. **Alertas**: canais (Telegram, e-mail, webhook, notificação no celular), quais eventos, botão de teste; e, por navegador, o aviso de troca de conta com notificação e som enquanto o painel está aberto.
 8. **Integrações**: chaves de API, webhooks de saída, exemplos prontos (n8n, curl, script).
 9. **Time**: membros, papéis, convites, auditoria.
 10. **Minha conta**: senha, verificação em duas etapas, sessões abertas, idioma.
