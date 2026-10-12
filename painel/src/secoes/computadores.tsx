@@ -5,7 +5,6 @@ import * as React from "react"
 import {
   ActivityIcon,
   ChevronDownIcon,
-  DownloadIcon,
   LaptopIcon,
   PlusIcon,
   ShieldOffIcon,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { BarraUso, NomeConta, SeloEstado } from "@/components/painel/conta"
+import { BotaoAtualizar, CartaoAtualizacoes, LinhaAtualizacao, useAtualizar } from "@/components/painel/atualizar"
 import { BotaoCorrigir, ResultadoConserto, useCorrigir, useDiagnostico } from "@/components/painel/conserto"
 import { Codigo } from "@/components/painel/copiar"
 import { Confirmar } from "@/components/painel/confirmar"
@@ -69,6 +69,7 @@ export default function Computadores() {
       }
     >
       <AvisoPermissao />
+      {ativos.length ? <CartaoAtualizacoes /> : null}
       {ativos.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -138,6 +139,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
   const desatualizado = !!nova && compararVersao(pc.versao, nova) < 0
   const corrigir = useCorrigir(pc)
   const diag = useDiagnostico(pc, corrigir)
+  const atualizar = useAtualizar(pc)
   const itens = diag.diagnostico?.itens ?? []
   const okItens = itens.filter((i) => i.ok === true).length
   return (
@@ -224,6 +226,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
           </div>
         </dl>
         <ResultadoConserto andamento={corrigir.andamento} compacto />
+        <LinhaAtualizacao andamento={atualizar.andamento} />
       </CardContent>
       <CardFooter className="flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={!pode} onClick={() => trocar.abrir()}>
@@ -240,22 +243,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
           {t("computadores.acoes.diagnostico")}
         </Button>
         {corrigir.quantos ? <BotaoCorrigir corrigir={corrigir} variant="outline" /> : null}
-        {desatualizado ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!pode}
-            onClick={() =>
-              void acao(
-                () => fonte.comando(pc.id, "atualizar"),
-                t("computadores.atualizarPedido", { computador: pc.nome })
-              )
-            }
-          >
-            <DownloadIcon />
-            {t("computadores.acoes.atualizar")}
-          </Button>
-        ) : null}
+        <BotaoAtualizar atualizar={atualizar} />
         <Button
           variant="ghost"
           size="sm"

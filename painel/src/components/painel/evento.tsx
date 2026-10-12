@@ -72,6 +72,14 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
   const pc = (id: unknown) =>
     id ? (estado.computadores.find((c) => c.id === id)?.nome ?? String(id).slice(0, 8)) : t("evento.alguem")
   const vars = { computador: pc(d.computador), conta: conta(d.conta), de: conta(d.de), para: conta(d.para) }
+  // nos eventos de atualização, de e para são versões (X.Y.Z), não contas
+  const versao = (v: unknown) => (typeof v === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v) ? v : "?")
+  if (typeof d.atualizacao === "string" && ["pedida", "concluida", "falhou"].includes(d.atualizacao)) {
+    const v = { computador: vars.computador, de: versao(d.de), para: versao(d.para) }
+    const chave = d.atualizacao === "pedida" ? "evento.atualizacaoPedida" : d.atualizacao === "concluida" ? "evento.atualizacaoConcluida" : "evento.atualizacaoFalhou"
+    const motivo = d.atualizacao === "falhou" && typeof d.motivo === "string" ? d.motivo.slice(0, 200) : null
+    return { titulo: t(chave, v), detalhe: motivo ?? (d.sozinho === true ? t("evento.atualizacaoSozinho") : null) }
+  }
   let titulo: string
   let detalhe: string | null = null
   switch (e.tipo) {
@@ -98,7 +106,10 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
       titulo = d.motivo === "precisa_login" ? t("evento.erroLogin", vars) : t("evento.erro", vars)
       break
     case "alerta":
-      if (d.motivo === "sem_livre") titulo = t("evento.semLivre", vars)
+      if (d.motivo === "atualizacao_falhou") {
+        titulo = t("evento.atualizacaoSozinhoFalhou", { computador: vars.computador, para: versao(d.para) })
+        detalhe = typeof d.erro === "string" && d.erro ? d.erro.slice(0, 200) : null
+      } else if (d.motivo === "sem_livre") titulo = t("evento.semLivre", vars)
       else if (d.motivo === "teste") titulo = t("evento.teste", { canal: canal(d.canal) })
       else titulo = t("evento.alertaEnviado", { canal: canal(d.canal) })
       break

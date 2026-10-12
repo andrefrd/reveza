@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { coresPorWorkspace } from "@/lib/cores"
+import { versaoMaisNova } from "@/dados/derivados"
+import { andamentoDaAtualizacao, PEDIDO_ATUALIZAR, versaoDisponivel } from "@/lib/atualizar"
 import { andamentoDoConserto, diagnosticoDoComando, podeCorrigir } from "@/lib/conserto"
 import { fraseValida } from "@/lib/ligacao"
 import { FonteDemo, PALAVRAS, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
@@ -171,7 +173,7 @@ describe("FonteDemo", () => {
       const f = new FonteDemo({ agora: () => AGORA, atrasoMs: 0, relogio: false, versao: "2.3.0" })
       const antes = await f.carregar()
       const atrasado = antes.computadores.find((c) => c.versao === "2.2.0")!
-      await f.comando(atrasado.id, "atualizar")
+      await f.comando(atrasado.id, "atualizar", { ...PEDIDO_ATUALIZAR })
       await vi.runAllTimersAsync()
       const depois = await f.carregar()
       expect(depois.computadores.map((c) => c.versao)).toEqual(["2.3.0", "2.3.0"])
@@ -208,12 +210,47 @@ describe("FonteDemo", () => {
       // o Rodar agora responde o diagnóstico, como o agente
       const rodar = await f.comando("pc-desktop", "diagnostico")
       await vi.advanceTimersByTimeAsync(2800)
-      const rodado = diagnosticoDoComando(await f.lerComando(rodar.id), "0.4.1")
+      const rodado = diagnosticoDoComando(await f.lerComando(rodar.id), versaoAnterior(versaoDemo()) ?? versaoDemo())
       expect(rodado!.itens.find((i) => i.id === "credenciais")).toMatchObject({ ok: true })
       expect(rodado!.itens.find((i) => i.id === "relogio")).toMatchObject({ ok: false, fazer: expect.stringMatching(/^acerte/) })
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("Atualizar: o Desktop tem versão nova; o pedido leva só 'a mais nova' e ele volta na versão nova", async () => {
+    vi.useFakeTimers()
+    try {
+      const f = new FonteDemo({ agora: () => AGORA, atrasoMs: 0, relogio: false, versao: "2.3.0" })
+      const antes = await f.carregar()
+      const desktop = antes.computadores.find((c) => c.id === "pc-desktop")!
+      const outros = versaoMaisNova(antes.computadores.map((c) => c.versao))
+      expect(versaoDisponivel(desktop, outros)).toBe("2.3.0")
+      expect(versaoDisponivel(antes.computadores.find((c) => c.id === "pc-notebook")!, outros)).toBeNull()
+      const cmd = await f.comando("pc-desktop", "atualizar", { ...PEDIDO_ATUALIZAR })
+      await vi.advanceTimersByTimeAsync(2700)
+      let e = await f.carregar()
+      expect(andamentoDaAtualizacao(e.computadores.find((c) => c.id === "pc-desktop")!, await f.lerComando(cmd.id), e.eventos, AGORA)).toMatchObject({
+        fase: "atualizando",
+        para: "2.3.0",
+      })
+      await vi.advanceTimersByTimeAsync(4100)
+      e = await f.carregar()
+      const depois = e.computadores.find((c) => c.id === "pc-desktop")!
+      expect(depois.versao).toBe("2.3.0")
+      expect(andamentoDaAtualizacao(depois, await f.lerComando(cmd.id), e.eventos, AGORA)).toEqual({ fase: "concluida", para: "2.3.0" })
+      expect(e.eventos[0]).toMatchObject({ dados: { atualizacao: "concluida", de: "2.2.0", para: "2.3.0" } })
+      expect((await f.auditoria(1)).some((a) => a.acao === "comando")).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("atualizar sozinho de madrugada começa desligado e só administrador liga", async () => {
+    const f = nova()
+    expect((await f.carregar()).config.atualizarSozinho).toBe(false)
+    await f.salvarConfig({ atualizarSozinho: true })
+    expect((await f.carregar()).config.atualizarSozinho).toBe(true)
   })
 
   it("avisa quem assinou quando algo muda", async () => {

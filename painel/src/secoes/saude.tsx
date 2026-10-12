@@ -4,14 +4,16 @@
 import * as React from "react"
 import { ActivityIcon, PlayIcon } from "lucide-react"
 
+import { BotaoAtualizar, COMANDO_ATUALIZAR_PAINEL, LinhaAtualizacao, useAtualizar } from "@/components/painel/atualizar"
 import { BotaoCorrigir, nomeDoItem, ResultadoConserto, useCorrigir, useDiagnostico } from "@/components/painel/conserto"
+import { painelAtras } from "@/lib/atualizar"
 import { Pagina } from "@/components/painel/pagina"
 import { MarcaEstado } from "@/components/rb"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
-import { compararVersao, estadoComputador, versaoMaisNova } from "@/dados/derivados"
+import { estadoComputador } from "@/dados/derivados"
 import type { Computador } from "@/dados/tipos"
 import { useT } from "@/i18n"
 import { emDemo } from "@/lib/demo"
@@ -24,12 +26,11 @@ export default function Saude() {
   const { t } = useT()
   const estado = useEstado()
   const ativos = estado.computadores.filter((c) => !c.revogado)
-  const nova = versaoMaisNova(ativos.map((c) => c.versao))
   return (
     <Pagina titulo={t("menu.secoes.saude")} descricao={t("saude.descricao")}>
       <div className="grid gap-4 lg:grid-cols-2">
         {ativos.map((pc) => (
-          <CartaoSaude key={pc.id} pc={pc} nova={nova} />
+          <CartaoSaude key={pc.id} pc={pc} />
         ))}
         <Painel />
       </div>
@@ -37,7 +38,7 @@ export default function Saude() {
   )
 }
 
-function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
+function CartaoSaude({ pc }: { pc: Computador }) {
   const { t, tn, tx, idioma } = useT()
   const agora = useAgora(5000)
   const { pode } = usePermissao()
@@ -48,7 +49,8 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
   const diag = useDiagnostico(pc, corrigir)
   const d = diag.diagnostico
   const rodando = diag.rodando
-  const atrasada = nova && compararVersao(pc.versao, nova) < 0
+  const atualizar = useAtualizar(pc)
+  const atrasada = atualizar.disponivel
   const atraso = d?.atrasoBuscaMs ?? null
   return (
     <Card>
@@ -101,12 +103,18 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
                   variant="outline"
                   className="border-atencao-borda bg-atencao-fundo text-[10px] whitespace-normal text-atencao"
                 >
-                  {t("saude.desatualizada", { versao: nova ?? "" })}
+                  {t("saude.desatualizada", { versao: atrasada ?? "" })}
                 </Badge>
               ) : null}
             </dd>
           </div>
         </dl>
+        {atualizar.disponivel || atualizar.andamento ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <LinhaAtualizacao andamento={atualizar.andamento} className="min-w-0 flex-1" />
+            <BotaoAtualizar atualizar={atualizar} className="ml-auto" />
+          </div>
+        ) : null}
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-2">
             <p className="text-sm font-medium">{t("saude.diagnostico")}</p>
@@ -177,6 +185,7 @@ function Painel() {
   const { latenciaMs } = useDados()
   const estado = useEstado()
   const demo = emDemo()
+  const atras = painelAtras(__VERSAO_PAINEL__, estado.computadores)
   const cacheado = typeof navigator !== "undefined" && !!navigator.serviceWorker?.controller
   const linhas: [string, React.ReactNode][] = [
     [t("saude.painel.versao"), <span className="font-mono">{__VERSAO_PAINEL__}</span>],
@@ -205,6 +214,12 @@ function Painel() {
             </div>
           ))}
         </dl>
+        {atras ? (
+          <p className="mt-3 text-xs break-words text-atencao">
+            {t("computadores.atualizacao.painelAtras", { painel: __VERSAO_PAINEL__, computadores: atras })}{" "}
+            <code className="font-mono">{COMANDO_ATUALIZAR_PAINEL}</code>
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )

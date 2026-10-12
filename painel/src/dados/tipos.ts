@@ -79,6 +79,10 @@ export interface Diagnostico {
   versao: string
   atrasoBuscaMs: number | null
   itens: ItemDiagnostico[]
+  /** A versão mais nova publicada, que o agente leu (no máximo a cada 6 h). */
+  versaoNova?: string | null
+  /** A atualização do programa em andamento neste computador. */
+  atualizacao?: { para: string; desde: string } | null
 }
 
 export interface Atribuicao {
@@ -113,6 +117,8 @@ export interface ConfigTroca {
   fuso: string
   /** Toda pessoa administradora precisa da verificação em duas etapas (desligado: cada uma escolhe). */
   exigirDuasEtapas: boolean
+  /** Cada computador se atualiza sozinho de madrugada (3h às 5h no fuso), um por vez. Desligado de fábrica. */
+  atualizarSozinho: boolean
   /** Só leitura: quando o banco marcou o próximo rodízio. */
   proximoRodizioEm: string | null
 }
@@ -173,7 +179,14 @@ export interface PontoHistorico {
 
 export type CanalAlerta = "telegram" | "email" | "webhook" | "push"
 export type EventoAlerta =
-  "sem_livre" | "precisa_login" | "computador_parado" | "login_vence" | "resumo_dia" | "troca" | "limite"
+  | "sem_livre"
+  | "precisa_login"
+  | "computador_parado"
+  | "login_vence"
+  | "resumo_dia"
+  | "troca"
+  | "limite"
+  | "atualizacao_falhou"
 
 export interface Alerta {
   id: string

@@ -3,6 +3,39 @@ import { secao } from "../secao"
 export default secao({
   pt: {
     computadores: {
+      atualizacao: {
+        titulo: "Atualizações",
+        descricao:
+          "O programa de cada computador se atualiza por aqui: só com versão oficial publicada e mais nova que a dele, pelo instalador da própria versão, que guarda uma cópia do estado antes e volta sozinho para a anterior se a nova não subir.",
+        disponiveis: "Versão nova disponível para {n} computador(es).",
+        emDia: "Os computadores estão na versão mais nova que conhecem.",
+        todos: "Atualizar todos ({n})",
+        todosPedido: "Atualização pedida a {n} computador(es)",
+        todosFalhou: "Não consegui pedir a atualização a nenhum computador.",
+        botao: "Versão {versao} disponível · Atualizar",
+        atualizando: "Atualizando…",
+        pedido: "Atualização pedida a {computador}",
+        dica: "O computador baixa a versão oficial mais nova, guarda uma cópia do estado e se atualiza; as sessões abertas continuam.",
+        soAdmin: "Só um administrador pode atualizar.",
+        fase: {
+          pedido: "Pedido enviado: o computador pega na próxima busca.",
+          atualizando: "Atualizando…",
+          atualizandoPara: "Atualizando para a {versao}… (leva alguns minutos)",
+          concluida: "Voltou na versão nova ({versao}).",
+          falhou: "Não atualizou: {motivo}",
+          semSuporte: "Este computador está numa versão que não se atualiza pelo painel: rode {comando} nele.",
+        },
+        sozinho: {
+          titulo: "Atualizar sozinho de madrugada",
+          texto:
+            "Com versão nova publicada, cada computador se atualiza entre 3h e 5h ({fuso}), quando não há troca de conta nem sessão no limite. Um por vez: o próximo só começa quando o anterior voltou na versão nova; se um voltar para a anterior, os outros param e sai um alerta.",
+          ligada: "Atualizar sozinho de madrugada: ligado",
+          desligada: "Atualizar sozinho de madrugada: desligado",
+        },
+        painelNuvem:
+          "O botão Atualizar troca só o programa dos computadores. O painel e a nuvem são atualizados no computador principal (o que criou a instalação), pelo instalador, que pede os tokens do Supabase e da Vercel:",
+        painelAtras: "O painel está na {painel}; os computadores já estão na {computadores}.",
+      },
       descricao:
         "Cada computador tem identidade própria, revogável sozinha. Ele conversa com a nuvem no tempo de atualização que você escolher (5 a 30 segundos); nada fica aberto nele.",
       ligar: "Ligar computador novo",
@@ -100,6 +133,39 @@ export default secao({
   },
   en: {
     computadores: {
+      atualizacao: {
+        titulo: "Updates",
+        descricao:
+          "Each computer's program is updated from here: only with an official published version newer than its own, through that version's installer, which keeps a copy of the state first and goes back to the previous one by itself if the new one does not start.",
+        disponiveis: "New version available for {n} computer(s).",
+        emDia: "The computers are on the newest version they know of.",
+        todos: "Update all ({n})",
+        todosPedido: "Update requested from {n} computer(s)",
+        todosFalhou: "Could not request the update from any computer.",
+        botao: "Version {versao} available · Update",
+        atualizando: "Updating…",
+        pedido: "Update requested from {computador}",
+        dica: "The computer downloads the newest official version, keeps a copy of the state and updates itself; open sessions carry on.",
+        soAdmin: "Only an administrator can update.",
+        fase: {
+          pedido: "Request sent: the computer picks it up on its next poll.",
+          atualizando: "Updating…",
+          atualizandoPara: "Updating to {versao}… (takes a few minutes)",
+          concluida: "Back on the new version ({versao}).",
+          falhou: "Did not update: {motivo}",
+          semSuporte: "This computer runs a version that can't update from the panel: run {comando} on it.",
+        },
+        sozinho: {
+          titulo: "Update by itself overnight",
+          texto:
+            "When a new version is published, each computer updates between 3 and 5 a.m. ({fuso}), when no account switch or session at the limit is going on. One at a time: the next only starts when the previous one is back on the new version; if one goes back to the previous version, the others stop and an alert goes out.",
+          ligada: "Update by itself overnight: on",
+          desligada: "Update by itself overnight: off",
+        },
+        painelNuvem:
+          "The Update button only replaces the computers' program. The panel and the cloud are updated on the main computer (the one that created the installation), by the installer, which asks for the Supabase and Vercel tokens:",
+        painelAtras: "The panel is on {painel}; the computers are already on {computadores}.",
+      },
       descricao:
         "Each computer has its own identity, revocable on its own. It talks to the cloud at the update interval you choose (5 to 30 seconds); nothing is left open on it.",
       ligar: "Link new computer",

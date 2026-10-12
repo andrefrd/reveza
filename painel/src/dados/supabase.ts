@@ -56,6 +56,7 @@ export const CONFIG_PADRAO: ConfigTroca = {
   esperaEntreTrocasS: 90,
   fuso: "America/Sao_Paulo",
   exigirDuasEtapas: false,
+  atualizarSozinho: false,
   proximoRodizioEm: null,
 }
 
@@ -73,6 +74,7 @@ export const CHAVES_CONFIG: Record<CampoGravavel, string> = {
   esperaEntreTrocasS: "espera_entre_trocas_s",
   fuso: "fuso",
   exigirDuasEtapas: "exigir_duas_etapas",
+  atualizarSozinho: "atualizar_sozinho",
 }
 
 const CAMPOS_CONTA: Record<keyof CamposConta, string> = {
@@ -210,7 +212,21 @@ export function paraDiagnostico(bruto: unknown, versao: string): Computador["dia
     return item
   })
   const atraso = typeof d.atrasoBuscaMs === "number" ? d.atrasoBuscaMs : null
-  return { em, versao: typeof d.versao === "string" ? d.versao : versao, atrasoBuscaMs: atraso, itens }
+  // só X.Y.Z: o painel compara e mostra; nada daqui vai para o pedido de atualização (que leva "mais_nova")
+  const semver = (v: unknown) => (typeof v === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v) ? v : null)
+  const at = d.atualizacao as Record<string, unknown> | null | undefined
+  const atualizacao =
+    at && typeof at === "object" && semver(at.para) && typeof at.desde === "string" && Number.isFinite(Date.parse(at.desde))
+      ? { para: semver(at.para)!, desde: new Date(Date.parse(at.desde)).toISOString() }
+      : null
+  return {
+    em,
+    versao: typeof d.versao === "string" ? d.versao : versao,
+    atrasoBuscaMs: atraso,
+    itens,
+    versaoNova: semver(d.versaoNova),
+    atualizacao,
+  }
 }
 
 function paraConta(l: Linha, janelas: Linha[], posse: Linha | undefined, validade: string | null = null): Conta {

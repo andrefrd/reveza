@@ -68,6 +68,7 @@ export const EVENTOS: EventoAlerta[] = [
   "login_vence",
   "resumo_dia",
   "troca",
+  "atualizacao_falhou",
 ]
 
 // Os campos de cada canal, como a Edge Function "alertas" usa: os de destino ficam na tabela; o de segredo vai só

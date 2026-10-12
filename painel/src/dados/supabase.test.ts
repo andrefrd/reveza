@@ -20,6 +20,7 @@ describe("FonteSupabase (partes puras)", () => {
   it("chaves de configuração e padrões iguais aos do banco", () => {
     expect(Object.values(CHAVES_CONFIG).sort()).toEqual(
       [
+        "atualizar_sozinho",
         "auto",
         "aviso",
         "espera_entre_trocas_s",
@@ -39,6 +40,7 @@ describe("FonteSupabase (partes puras)", () => {
       aviso: 90,
       troca: 95,
       rodizioOrdem: "aleatoria",
+      atualizarSozinho: false,
     })
   })
 

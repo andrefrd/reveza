@@ -456,6 +456,8 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     em: iso(t0 - 4 * MIN),
     versao: doComputador,
     atrasoBuscaMs: atraso,
+    // a mais nova publicada, que o agente leu no GitHub oficial (na demonstração, a versão do pacote)
+    versaoNova: versao,
     itens: [
       { id: "agente", ok: true, detalhe: `versão ${doComputador}, Node 22.12.0` },
       { id: "servico", ok: true, detalhe: "rodando" },
@@ -573,6 +575,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     esperaEntreTrocasS: 90,
     fuso: "America/Sao_Paulo",
     exigirDuasEtapas: false,
+    atualizarSozinho: false,
     proximoRodizioEm: null,
   }
   const alertas: Alerta[] = [
@@ -987,9 +990,23 @@ export class FonteDemo implements Fonte {
           }
         }
       }
-      if (acao === "atualizar") {
-        pc.versao = this.d.versao
-        if (pc.diagnostico) pc.diagnostico.versao = this.d.versao
+      if (acao === "atualizar" && typeof corpo.versao === "string") {
+        // como o agente: baixa a versão oficial mais nova e volta nela uns segundos depois
+        const de = pc.versao
+        const para = pc.diagnostico?.versaoNova ?? this.d.versao
+        cmd.resposta = { ok: true, atualizando: true, de, para }
+        this.evento("info", "atualizacao", { computador: computadorId, atualizacao: "pedida", de, para, sozinho: false })
+        setTimeout(() => {
+          pc.versao = para
+          if (pc.diagnostico) {
+            pc.diagnostico.versao = para
+            pc.diagnostico.itens = pc.diagnostico.itens.map((i) =>
+              i.id === "agente" ? { ...i, detalhe: `versão ${para}, Node 22.12.0` } : i
+            )
+          }
+          this.evento("info", "atualizacao", { computador: computadorId, atualizacao: "concluida", de, para, sozinho: false })
+          this.emitir()
+        }, 4000)
       }
       if (acao === "entrar_de_novo" || acao === "conectar") {
         const email = String(corpo.email ?? "").toLowerCase()
