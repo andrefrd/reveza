@@ -37,7 +37,6 @@ const APP = path.join(PASTA_APP, "agente", "dist", "src");
 const LANCADOR = path.join(BASE, "bin", "reveza.cmd");
 const TAREFA = "Reveza AI agente";
 const PORTA = 7788;
-const CODIGO = "K7Q2-M9XP"; // o código de 8 caracteres da 0.2.0 (o que aparece no computador novo)
 
 const resultados = [];
 const conferir = (nome, ok, detalhe = "") => {
@@ -265,7 +264,12 @@ const instalar = (...extra) => rodar(NODE, ["instalador/instalar.mjs", "--sim", 
   const antigo = digitador("{ESC}", "", 15);
   await executorReal.rodar(conf.comandoDaJanela("windows", "pt-BR"), { timeoutMs: 20_000 });
   info("o jeito antigo (PowerShell escondido): a janela apareceu?", String((await antigo) === 0));
-  for (const [teclas, esperado, nome, foto] of [[`${CODIGO}{ENTER}`, "liberou", "o código certo libera", "6-janela-de-confirmacao.png"], ["K7Q2M9{ENTER}", "errado", "só os 6 primeiros não liberam", ""], ["{ESC}", "recusou", "Esc recusa", ""]]) {
+  // o tamanho do código vem do próprio agente: o teste não fica para trás quando ele muda (a 0.2.0 passou de 6 para 8 e
+  // este teste, com o tamanho escrito à mão, ficou vermelho depois do lançamento)
+  const { TAMANHO_CODIGO } = await modulo("ligar.js");
+  const CODIGO = "K7Q2M9XPABCDEFGH".slice(0, TAMANHO_CODIGO);
+  const PARCIAL = CODIGO.slice(0, -2);
+  for (const [teclas, esperado, nome, foto] of [[`${CODIGO}{ENTER}`, "liberou", "o código certo libera", "6-janela-de-confirmacao.png"], [`${PARCIAL}{ENTER}`, "errado", "o código sem os 2 últimos não libera", ""], ["{ESC}", "recusou", "Esc recusa", ""]]) {
     const d = digitador(teclas, foto);
     const t1 = Date.now();
     const r = await conf.pedirConfirmacao(executorReal, "windows", CODIGO, "pt-BR");

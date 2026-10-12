@@ -11,6 +11,7 @@
 //                                             a última versão sem subir a versão
 
 import { execFileSync, execSync } from "node:child_process";
+import { ensaioVale, lerEnsaio, soDocumentacao } from "./ensaio.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,6 +135,10 @@ function lancar(nova) {
   const notas = secaoDoChangelog(changelog, nova);
   if (!notas) throw new Error("a entrada da CHANGELOG está vazia");
   conferirCi();
+  // nada sai sem o ensaio verde da mesma árvore, aqui e nos testes do GitHub (scripts/ensaio.mjs)
+  if (!ensaioVale(lerEnsaio(), [git("rev-parse", "HEAD^{tree}")])) {
+    throw new Error("rode antes `node scripts/ensaio.mjs` (testes aqui e no GitHub sobre esta mesma árvore): nenhuma versão sai sem ensaio verde");
+  }
   for (const f of PACOTES) trocar(f, `"version": "${atual}"`, `"version": "${nova}"`);
   for (const f of TRAVAS) {
     const t = JSON.parse(ler(f));
@@ -186,6 +191,12 @@ function posLancamento(nova) {
   }
 }
 
+/** O sha remoto da linha do pre-push (o que a main tinha antes deste envio). */
+function remotoSha(linha) {
+  const s = linha.split(" ")[3] || "";
+  return /^0+$/.test(s) || !s ? "origin/main" : s;
+}
+
 /** Hook de pre-push: o git passa "<ref local> <sha local> <ref remota> <sha remota>" por linha no stdin. */
 function prePush() {
   let entrada = "";
@@ -209,6 +220,29 @@ function prePush() {
       console.error(`\nRECUSADO: há mudança no que se instala desde ${tag} e a versão continua ${atual}.`);
       console.error("Escreva a entrada nova no topo da CHANGELOG.md, commite e rode: node scripts/versao.mjs lancar X.Y.Z\n");
       process.exit(1);
+    }
+    // o que vai para a main roda os testes do GitHub: só vai com o ensaio verde da mesma árvore (ou da de antes do
+    // commit de versão). Documentação não pede ensaio; mudança só nos fluxos do GitHub também não (o disparo manual
+    // usa o fluxo da main, então ela não se ensaia: confira com cuidado)
+    let novos = [];
+    try {
+      novos = git("diff", "--name-only", `${remotoSha(linha)}..${sha}`).split("\n").filter(Boolean);
+    } catch {
+      novos = mudados;
+    }
+    const exige = novos.filter((f) => !soDocumentacao([f]) && !f.startsWith(".github/workflows/"));
+    if (exige.length) {
+      const arvores = [git("rev-parse", `${sha}^{tree}`)];
+      try {
+        arvores.push(git("rev-parse", `${sha}~1^{tree}`));
+      } catch {
+        // sem pai
+      }
+      if (!ensaioVale(lerEnsaio(), arvores)) {
+        console.error(`\nRECUSADO: ${exige.length} arquivo(s) que os testes do GitHub provam e nenhum ensaio verde desta árvore.`);
+        console.error("Rode antes: node scripts/ensaio.mjs (testes aqui e no GitHub, sem publicar nada)\n");
+        process.exit(1);
+      }
     }
   }
 }
