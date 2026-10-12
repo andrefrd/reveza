@@ -93,12 +93,13 @@ export function detalhesDaFalha({ erro, componentes, caminho, versao, agora = ne
     .filter((l) => l && !l.startsWith(`${e?.name}:`) && l !== e?.message)
     .slice(0, 8)
     // só o arquivo do build, sem o domínio
-    .map((l) => l.replace(/https?:\/\/[^/\s)]+/g, ""))
+    .map((l) => l.replace(/https?:\/\/[^/\s)]+/g, "").replace(/\?[^\s):]*/g, ""))
   const comps = (componentes ?? "")
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
     .slice(0, 6)
+    .map((l) => l.replace(/https?:\/\/[^/\s)]+/g, "").replace(/\?[^\s):]*/g, ""))
   const linhas = [
     `Reveza AI · painel ${versao}`,
     `Tela: ${caminho.split(/[?#]/)[0]}`,
