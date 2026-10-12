@@ -47,6 +47,10 @@ jobs:
             https://*|http://*) echo "só gist do dono do repositório" >&2; exit 1 ;;
             *) printf '%s' "$ENSAIO" ;;
           esac | base64 -d | gunzip | git apply -v --whitespace=nowarn
+          # commita aqui: os testes que empacotam com `git archive HEAD` precisam ver a mudança (o ensaio da 0.2.1 no
+          # Windows ficou vermelho só por isso: a migração nova estava na pasta e não no HEAD)
+          git add -A
+          git -c user.name=ensaio -c user.email=ensaio@exemplo.invalid commit -q -m "ensaio"
 
       - name: Repositório dentro de um node_modules (como o npx deixa)
         run: |
