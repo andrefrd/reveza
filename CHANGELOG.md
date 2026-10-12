@@ -7,6 +7,31 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.2.1 · 12/10/2026
+
+Verificar atualização na hora e escolher como os computadores se atualizam sozinhos. Atualize primeiro o computador que
+criou a instalação com `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.2.1.tar.gz --atualizar` (com os
+tokens do Supabase e da Vercel: esta versão traz mudança no banco e o painel novo); os outros, pelo botão do painel.
+
+- **Verificar atualização** (Computadores): cada computador ligado confere na hora a versão publicada, sem esperar as
+  6 horas, e o painel mostra "Todos na versão mais nova" ou "Versão Y disponível", com Atualizar todos.
+- **Atualizar sozinho vira uma escolha:** Desligada (o padrão), De madrugada (3h às 5h) ou **Assim que sair** (o
+  computador se atualiza assim que acha a versão nova). Sempre um computador por vez e só com ele calmo (sem troca de
+  conta em andamento nem sessão no limite); se um voltar para a versão anterior, os outros param e sai um alerta. Quem
+  já tinha ligado continua de madrugada. O cartão mostra o andamento de cada computador.
+- **Trava de compatibilidade:** um computador não troca o programa por uma versão que traz mudança na nuvem ainda não
+  aplicada. O painel avisa: "A versão Y precisa da nuvem e do painel atualizados primeiro: rode a atualização no
+  computador principal". Depois disso, eles seguem sozinhos.
+- **Segurança (revisão de código da 0.2.0):** o computador novo recusa a chave do cofre quando a nuvem não tem a
+  impressão da chave da instalação; quem libera grava a impressão antes de entregar. Quem escrevesse direto no banco
+  poderia apagar a impressão e plantar uma chave dele no computador novo.
+- **Nada sai sem passar antes nos três sistemas:** `node scripts/ensaio.mjs` roda os testes daqui e leva a mudança aos
+  testes do GitHub (instalação em macOS, Linux e Windows, Windows de verdade e ponta a ponta) antes de publicar; o
+  lançamento e o envio para a main recusam código sem esse ensaio verde. O teste do Windows tira o tamanho do código de
+  ligação do próprio agente.
+- Computadores numa versão anterior à 0.2.1 só se atualizam sozinhos de madrugada; com "Assim que sair", o painel deixa
+  o Atualizar todos para eles.
+
 ## 0.2.0 · 12/10/2026
 
 Computador novo sem segredo na tela, e instalação mais curta. Atualize primeiro o computador que criou a instalação
