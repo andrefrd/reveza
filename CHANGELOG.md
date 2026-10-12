@@ -7,6 +7,41 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.7 · 12/10/2026
+
+Saúde que conserta, atualizar pelo painel, notificações e a tela de Alertas de volta. Atualize primeiro o computador que
+criou a instalação com `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.7.tar.gz --atualizar` (com os
+tokens do Supabase e da Vercel: esta versão traz mudanças no banco e o painel novo); nos outros computadores, o mesmo
+comando, que não pede token; daqui em diante, o botão Atualizar do painel.
+
+- **`reveza doctor` conserta o que tem conserto seguro:** serviço parado ou não instalado, mod ausente nas sessões e
+  Claude Code sem login (põe a conta que a nuvem mandou, ou a melhor livre). Cada linha diz "corrigido" ou o que fazer;
+  o que não tem conserto automático (entrar de novo numa conta, chave do cofre, relógio, Claude Code ausente ou velho)
+  só explica. `reveza doctor --so-ver` só confere.
+- **Corrigir na tela Saúde e no cartão do computador** (só administrador), com o resultado item a item. A tela diz que é
+  o `reveza doctor` de cada computador, e o Rodar agora mostra na hora o que o computador mandou (antes mostrava o
+  resultado guardado, de até 10 minutos antes).
+- **Atualizar pelo painel:** "Versão X disponível · Atualizar" em cada computador e "Atualizar todos" em Computadores. O
+  computador só aceita versão oficial publicada e mais nova que a dele, baixada do GitHub do projeto, e atualiza com a
+  cópia conferida e a volta sozinha da 0.1.6. O painel e a nuvem continuam sendo atualizados pelo instalador no
+  computador principal.
+- **Atualizar sozinho de madrugada** (opção em Computadores, desligada de fábrica): com versão nova publicada, cada
+  computador se atualiza entre 3h e 5h, sem troca de conta nem sessão no limite naquele momento, um por vez. Se um
+  voltar para a versão anterior, os outros param e sai um alerta.
+- **Tela de Alertas que abria quebrada depois de uma atualização do painel:** a aba aberta antes da versão nova pedia um
+  pedaço do painel que não existe mais. Agora a página se recarrega sozinha; se alguma tela quebrar, a caixa de erro
+  mostra a mensagem e tem "Copiar detalhes" (sem senha, token nem e-mail).
+- **Notificação no celular de ponta a ponta:** crie o alerta em Alertas, o navegador pede a permissão e o aparelho passa
+  a receber, com o texto do alerta (cifrado só para aquele aparelho). No iPhone e no iPad, só com o painel instalado
+  na tela inicial.
+- **Aviso de troca de conta no navegador:** em Alertas ou Minha conta, "Neste navegador" liga uma notificação e um sinal
+  curto a cada troca de conta enquanto o painel está aberto.
+- **O ntfy saiu dos canais de alerta** (painel, nuvem e instalador). A atualização da nuvem apaga algum alerta ntfy que
+  tenha sobrado.
+- A instalação e a atualização não acusam mais "nenhum login" enquanto a conta que a nuvem mandou está chegando.
+- **Correção:** com o Claude Code sem login, a troca de conta podia gravar o vazio por cima do login guardado da conta
+  que estava em uso (vinha da 0.1.4).
+
 ## 0.1.6 · 12/10/2026
 
 Cores por workspace e atualização que não perde nada. Quem tem a 0.1.5 atualiza com
