@@ -1,4 +1,5 @@
-// Domínio próprio do painel: validação, o passo a passo na Cloudflare e a conferência do DNS (por DNS sobre HTTPS).
+// Domínio próprio do painel: validação, o passo a passo do registro de DNS (em qualquer provedor) e a conferência do DNS
+// (por DNS sobre HTTPS).
 
 export function dominioValido(d) {
   const s = String(d || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -6,16 +7,41 @@ export function dominioValido(d) {
   return s;
 }
 
-/** Texto que guia a pessoa na Cloudflare (ou em outro provedor) para criar o registro que a Vercel pede. */
-export function passosCloudflare(registro, t) {
+/**
+ * O registro que a Vercel pede, para criar onde o domínio estiver (registro.br, Cloudflare, GoDaddy, Hostinger, Route 53
+ * ou qualquer outro DNS). A dica da Cloudflare (proxy desligado) vem por último, como observação.
+ */
+export function passosDns(registro, t) {
   const r = registro;
   return [
-    t("No painel da Cloudflare, abra o domínio e vá em DNS → Records → Add record:", "In the Cloudflare dashboard, open the domain and go to DNS → Records → Add record:"),
-    `    ${t("Tipo", "Type")}: ${r.tipo}    ${t("Nome", "Name")}: ${r.nome}    ${t("Conteúdo", "Target")}: ${r.valor}`,
-    t("    Proxy: desligado (nuvem cinza, \"DNS only\"). A Vercel emite o certificado; com a nuvem laranja ele não sai.",
-      "    Proxy: off (grey cloud, \"DNS only\"). Vercel issues the certificate; with the orange cloud it cannot."),
-    t("    Salve. Em outro provedor de DNS, o registro é o mesmo.", "    Save. With another DNS provider, the record is the same."),
+    t("No DNS de onde o domínio está (registro.br, Cloudflare, GoDaddy, Hostinger, Route 53 ou outro), crie este registro:",
+      "In the DNS where the domain lives (Cloudflare, GoDaddy, Namecheap, Route 53 or any other), create this record:"),
+    `    ${t("Tipo", "Type")}: ${r.tipo}    ${t("Nome", "Name")}: ${r.nome}    ${t("Valor", "Value")}: ${r.valor}`,
+    t("    Salve. A Vercel confere o registro e emite o certificado HTTPS sozinha (pode levar alguns minutos).",
+      "    Save it. Vercel checks the record and issues the HTTPS certificate by itself (it may take a few minutes)."),
+    t("    Na Cloudflare: deixe o proxy desligado (nuvem cinza, \"DNS only\"); com a nuvem laranja o certificado não sai.",
+      "    On Cloudflare: keep the proxy off (grey cloud, \"DNS only\"); with the orange cloud the certificate cannot be issued."),
   ];
+}
+
+/** O nome antigo (o passo a passo era só da Cloudflare). */
+export const passosCloudflare = passosDns;
+
+/**
+ * O domínio pedido por --dominio (ou REVEZA_DOMINIO): undefined quando não pediu; null para voltar ao endereço da Vercel
+ * (`--dominio vercel`); o subdomínio conferido. Inválido: erro (pela opção) ou nada (pela variável, como antes).
+ */
+export function dominioPedido(opcao, env = {}) {
+  if (opcao !== undefined) {
+    if (/^\s*vercel\s*$/i.test(String(opcao))) return null;
+    const d = dominioValido(opcao);
+    if (!d) throw new Error(`domínio inválido: ${opcao} (use um subdomínio, como contas.meudominio.com, ou vercel)`);
+    return d;
+  }
+  const v = env.REVEZA_DOMINIO;
+  if (!v) return undefined;
+  if (/^\s*vercel\s*$/i.test(v)) return null;
+  return dominioValido(v) ?? undefined;
 }
 
 /** O registro já responde como a Vercel pede? (consulta pública na Cloudflare, sem depender do DNS do computador) */

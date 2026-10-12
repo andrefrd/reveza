@@ -15,6 +15,8 @@
 //   ... --demo                                    abre o painel com dados de exemplo, sem nuvem e sem mexer em conta
 //   ... --doctor                                  confere a instalação
 //   ... --desinstalar                             tira o serviço e o mod (logins, chave do cofre e nuvem ficam)
+//   ... --dominio contas.meudominio.com           o painel no seu subdomínio (na instalação ou no --atualizar)
+//   ... --dominio vercel                          o painel volta ao endereço gratuito da Vercel (<projeto>.vercel.app)
 //   ... --idioma en                               perguntas em inglês
 //   ... --sim                                     sem perguntas (lê SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN e REVEZA_* do ambiente)
 //   ... --pasta <dir> | --sem-servico | --sem-react-bits | --versao | --ajuda
@@ -26,7 +28,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
-import { dnsPronto, dominioValido, passosCloudflare } from "./lib/dominio.mjs";
+import { dnsPronto, dominioPedido, dominioValido, passosDns } from "./lib/dominio.mjs";
 import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { etapasDoCaminho, manterNuvemPrevisto, numeroDaEtapa } from "./lib/etapas.mjs";
 import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
@@ -47,8 +49,8 @@ const REPO = "dantaspaulo/reveza";
 
 // ── argumentos ────────────────────────────────────────────────────────────────
 const FLAGS = ["--atualizar", "--sem-nuvem", "--com-nuvem", "--sair-da-sombra", "--ligar", "--sombra", "--importar", "--demo", "--doctor", "--desinstalar", "--idioma",
-  "--sim", "--pasta", "--sem-servico", "--sem-react-bits", "--versao", "--ajuda", "--help", "-h"];
-const COM_VALOR = ["--importar", "--idioma", "--pasta"];
+  "--sim", "--pasta", "--sem-servico", "--sem-react-bits", "--versao", "--ajuda", "--help", "-h", "--dominio"];
+const COM_VALOR = ["--importar", "--idioma", "--pasta", "--dominio"];
 export function lerArgs(argv) {
   const a = { flags: new Set(), valores: {} };
   for (let i = 0; i < argv.length; i++) {
@@ -184,6 +186,10 @@ async function nuvem(ctx) {
   if (!token && ctx.atualizar && ctx.inst?.nuvem) {
     // atualização só do computador: a nuvem e o painel que já estão no ar ficam como estão
     info(t("Sem token: a nuvem e o painel ficam como estão; o computador é atualizado.", "No token: the cloud and the panel stay as they are; this computer is updated."));
+    if (ctx.dominioPedido !== undefined) {
+      nao(t("o endereço do painel só muda com os tokens (a mudança é no painel e no login da nuvem): rode de novo com o token do Supabase",
+        "the panel address only changes with the tokens (it changes the panel and the cloud login): run again with the Supabase token"));
+    }
     ctx.manterNuvem = true;
     return;
   }
@@ -272,7 +278,10 @@ async function perguntarPainel(ctx) {
   }
   ctx.vercel = new Vercel(token, { equipe });
   ctx.projetoVercel = ctx.inst?.painel?.projeto || (await ctx.p.perguntar(t("Nome do projeto na Vercel", "Vercel project name"), process.env.REVEZA_VERCEL_PROJETO || "reveza")).toLowerCase();
-  if (!ctx.inst?.painel) {
+  if (!ctx.inst?.painel && ctx.dominioPedido !== undefined) {
+    // --dominio na instalação: sem pergunta (vercel = o endereço gratuito da Vercel)
+    ctx.dominio = ctx.dominioPedido;
+  } else if (!ctx.inst?.painel) {
     const d = await ctx.p.escolha(t("Endereço do painel", "Panel address"), [
       t(`o da Vercel (${ctx.projetoVercel}.vercel.app)`, `Vercel's (${ctx.projetoVercel}.vercel.app)`),
       t("um subdomínio meu (ex.: contas.meudominio.com)", "a subdomain of mine (e.g. accounts.mydomain.com)"),
@@ -281,7 +290,10 @@ async function perguntarPainel(ctx) {
       ctx.dominio = dominioValido(await ctx.p.perguntar(t("Subdomínio (ex.: contas.meudominio.com)", "Subdomain (e.g. accounts.mydomain.com)"), process.env.REVEZA_DOMINIO || ""));
       if (!ctx.dominio) nao(t("domínio inválido: fico com o da Vercel", "invalid domain: using Vercel's"));
     }
-  } else ctx.dominio = dominioValido(process.env.REVEZA_DOMINIO || "") || ctx.inst?.painel?.dominio || null; // atualização: REVEZA_DOMINIO liga ou troca o domínio
+  } else {
+    // atualização: --dominio (ou REVEZA_DOMINIO) liga, troca ou, com "vercel", tira o domínio; sem pedir, fica o de antes
+    ctx.dominio = ctx.dominioPedido !== undefined ? ctx.dominioPedido : ctx.inst?.painel?.dominio || null;
+  }
   ctx.equipe = equipe;
 }
 
@@ -416,7 +428,7 @@ async function painel(ctx) {
     pronto = reg.configurado || (await dnsPronto(ctx.dominio, reg.registro));
     if (!pronto) {
       console.log("");
-      for (const l of passosCloudflare(reg.registro, t)) console.log(`    ${l}`);
+      for (const l of passosDns(reg.registro, t)) console.log(`    ${l}`);
       if (!ctx.semPerguntas && (await ctx.p.sim(t("Já criou o registro? Eu confiro por até 5 minutos", "Created the record? I will check for up to 5 minutes"), true))) {
         for (let i = 0; i < 20 && !pronto; i++) {
           await new Promise((r) => setTimeout(r, 15000));
@@ -433,6 +445,12 @@ async function painel(ctx) {
   }
   if (site !== ctx.siteProvisorio) await trocarSite(ctx.gerencia, ctx.ref, site);
   ctx.site = site;
+  // voltou para o endereço da Vercel: o domínio segue ligado ao projeto lá até a pessoa tirar
+  const antes = ctx.inst?.painel?.dominio;
+  if (antes && !ctx.dominio) {
+    info(t(`O painel voltou para ${site}. ${antes} continua ligado ao projeto na Vercel: para tirar, Vercel → projeto → Settings → Domains, e apague o registro no DNS.`,
+      `The panel is back at ${site}. ${antes} is still attached to the Vercel project: to remove it, Vercel → project → Settings → Domains, and delete the DNS record.`));
+  }
 }
 
 async function contas(ctx) {
@@ -659,6 +677,13 @@ async function main() {
 
   const inst = lerInstalacao(ARQ_INST);
   const semPerguntas = tem("--sim") || !process.stdin.isTTY;
+  let pedidoDeDominio;
+  try {
+    pedidoDeDominio = dominioPedido(a.valores["--dominio"], process.env);
+  } catch (e) {
+    console.error(`\n  ${t("Parei", "Stopped")}: ${e.message}\n`);
+    process.exit(2);
+  }
   const ctx = {
     inst, semPerguntas, p: perguntador({ semPerguntas }),
     app: a.valores["--pasta"] ? path.resolve(a.valores["--pasta"]) : inst?.app || path.join(BASE, "app"),
@@ -666,6 +691,7 @@ async function main() {
     importar: a.valores["--importar"],
     semNuvem: tem("--sem-nuvem") || (!!inst && !inst.nuvem && !tem("--com-nuvem") && (tem("--atualizar") || !process.stdin.isTTY || tem("--sim"))),
     nuvemNova: !inst?.nuvem, semServico: tem("--sem-servico"), semReactBits: tem("--sem-react-bits"),
+    dominioPedido: pedidoDeDominio,
   };
   try {
     if (tem("--demo")) return await demo(ctx);

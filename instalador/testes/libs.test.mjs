@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { Vercel, listar } from "../lib/vercel.mjs";
 import { criarProjeto, conferirToken, organizacoes, projetos, regiaoSugerida } from "../lib/supabase.mjs";
-import { dnsPronto, dominioValido, passosCloudflare } from "../lib/dominio.mjs";
+import { dnsPronto, dominioPedido, dominioValido, passosCloudflare, passosDns } from "../lib/dominio.mjs";
 import { acharChatTelegram, testar } from "../lib/alertas.mjs";
 import { copiarEstado, criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath, voltarAtualizacao } from "../lib/programa.mjs";
 import { emailValido, senhaForte, t } from "../lib/texto.mjs";
@@ -138,13 +138,17 @@ test("região sugerida pelo fuso", () => {
   assert.equal(regiaoSugerida(""), "us-east-1");
 });
 
-test("domínio: validação, passos da Cloudflare e DNS conferido de fora", async () => {
+test("domínio: validação, o passo a passo do DNS (qualquer provedor, a Cloudflare como observação) e DNS conferido de fora", async () => {
   assert.equal(dominioValido("https://Contas.Exemplo.com/"), "contas.exemplo.com");
   assert.equal(dominioValido("sem ponto"), null);
   assert.equal(dominioValido("a..b.com"), null);
-  const passos = passosCloudflare({ tipo: "CNAME", nome: "contas", valor: "cname.vercel-dns.com" }, t).join("\n");
-  assert.match(passos, /DNS only/);
-  assert.match(passos, /CNAME/);
+  const linhas = passosDns({ tipo: "CNAME", nome: "contas", valor: "cname.vercel-dns.com" }, t);
+  assert.match(linhas[0], /No DNS de onde o domínio está \(registro\.br, Cloudflare, GoDaddy, Hostinger, Route 53 ou outro\)/, "neutro de provedor primeiro");
+  assert.match(linhas[1], /Tipo: CNAME {4}Nome: contas {4}Valor: cname\.vercel-dns\.com/);
+  assert.match(linhas[2], /certificado HTTPS/);
+  assert.match(linhas.at(-1), /Na Cloudflare: .*DNS only/, "a Cloudflare vem por último, como observação");
+  assert.equal(passosCloudflare, passosDns, "o nome antigo segue valendo");
+  assert.match(passosDns({ tipo: "A", nome: "@", valor: "76.76.21.21" }, t)[1], /Tipo: A {4}Nome: @/);
   const ok = rede([["cloudflare-dns.com", { Answer: [{ data: "cname.vercel-dns.com." }] }]]);
   assert.equal(await dnsPronto("contas.exemplo.com", { tipo: "CNAME", valor: "cname.vercel-dns.com" }, { fetch: ok.f }), true);
   const nao = rede([["cloudflare-dns.com", { Answer: [{ data: "outro.com." }] }]]);
@@ -379,4 +383,18 @@ test("atualização que não subiu: o programa anterior volta, a configuração 
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+});
+
+test("--dominio: subdomínio conferido, 'vercel' volta ao endereço da Vercel, e REVEZA_DOMINIO segue valendo", () => {
+  assert.equal(dominioPedido(undefined, {}), undefined, "sem pedir: fica o que já está");
+  assert.equal(dominioPedido("Contas.Exemplo.com", {}), "contas.exemplo.com");
+  assert.equal(dominioPedido("vercel", { REVEZA_DOMINIO: "outro.exemplo.com" }), null, "a opção vence a variável");
+  assert.equal(dominioPedido(" VERCEL ", {}), null);
+  assert.throws(() => dominioPedido("sem ponto", {}), /domínio inválido: sem ponto/);
+  assert.equal(dominioPedido(undefined, { REVEZA_DOMINIO: "painel.exemplo.com" }), "painel.exemplo.com");
+  assert.equal(dominioPedido(undefined, { REVEZA_DOMINIO: "vercel" }), null);
+  assert.equal(dominioPedido(undefined, { REVEZA_DOMINIO: "inválido" }), undefined, "variável inválida é ignorada, como antes");
+  const a = lerArgs(["--atualizar", "--dominio", "contas.exemplo.com"]);
+  assert.equal(a.valores["--dominio"], "contas.exemplo.com");
+  assert.equal(lerArgs(["--dominio"]).erro, "--dominio pede um valor");
 });
