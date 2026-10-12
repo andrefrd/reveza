@@ -1,5 +1,6 @@
 // FonteDemo: dados de exemplo gerados no próprio navegador (?demo=1). Nada vai para a nuvem.
-// 5 contas fictícias com nomes genéricos, 2 computadores, 30 dias de uso, sessões, eventos e o resto do painel.
+// 5 contas fictícias com nomes genéricos (3 delas no mesmo workspace, para a cor por workspace aparecer), 2 computadores,
+// 30 dias de uso, sessões, eventos e o resto do painel.
 // O gerador é determinístico pela semente: a mesma semente e o mesmo "agora" dão os mesmos dados (os testes contam com isso).
 
 import { abrirEnvelope, cifrarParaNavegador, codigoDeAcesso, codigoDeConfirmacao, criarPedido } from "@/lib/ligacao"
@@ -138,7 +139,7 @@ const MODELO_CONTAS: ModeloConta[] = [
   {
     id: "conta-laboratorio",
     email: "laboratorio@exemplo.com",
-    organizacao: "Laboratório",
+    organizacao: "Empresa Exemplo",
     plano: "team",
     nivel: "5x",
     cor: 3,
@@ -153,7 +154,7 @@ const MODELO_CONTAS: ModeloConta[] = [
   {
     id: "conta-reserva",
     email: "reserva@exemplo.com",
-    organizacao: "Reserva",
+    organizacao: "Empresa Exemplo",
     plano: "pro",
     nivel: null,
     cor: 4,

@@ -4,7 +4,7 @@ export default secao({
   pt: {
     contas: {
       descricao:
-        "As contas que se revezam nos seus computadores. Cada uma tem cor própria, prioridade, agenda e teto da semana.",
+        "As contas que se revezam nos seus computadores. As do mesmo workspace têm a mesma cor; cada uma tem prioridade, agenda e teto da semana.",
       conectar: "Conectar conta",
       colunas: {
         conta: "Conta",
@@ -37,8 +37,16 @@ export default secao({
       editar: {
         titulo: "Regras de {conta}",
         descricao: "Valem para as próximas escolhas da nuvem; a conta em uso não é tirada de quem está com ela.",
-        cor: "Cor",
+        cor: "Cor da conta",
+        corWorkspace: "Cor do workspace {workspace}",
+        corN: "Cor {n}",
+        corEmUso: "já é de {workspace}",
         corDica: "A cor segue a conta em todos os gráficos.",
+        corDicaWorkspace: {
+          um: "Vale para o workspace inteiro: as contas que entrarem nele depois ficam com a mesma cor.",
+          outros: "Vale para as {n} contas do workspace. Nos gráficos, cada uma aparece num tom desta cor.",
+        },
+        corOcupada: "As cores com cadeado já são de outro workspace.",
         prioridade: "Prioridade",
         prioridadeDica: "Menor número = preferida. A ordem também se arruma em Troca automática.",
         reserva: "Conta de reserva",
@@ -90,7 +98,7 @@ export default secao({
   en: {
     contas: {
       descricao:
-        "The accounts that take turns on your computers. Each one has its own color, priority, schedule and weekly cap.",
+        "The accounts that take turns on your computers. Accounts in the same workspace share a color; each one has its own priority, schedule and weekly cap.",
       conectar: "Connect account",
       colunas: {
         conta: "Account",
@@ -124,8 +132,16 @@ export default secao({
       editar: {
         titulo: "Rules for {conta}",
         descricao: "They apply to the cloud's next choices; the account in use isn't taken from whoever has it.",
-        cor: "Color",
+        cor: "Account color",
+        corWorkspace: "Color of the {workspace} workspace",
+        corN: "Color {n}",
+        corEmUso: "already used by {workspace}",
         corDica: "The color follows the account in every chart.",
+        corDicaWorkspace: {
+          um: "Applies to the whole workspace: accounts that join it later get the same color.",
+          outros: "Applies to the {n} accounts in the workspace. In charts, each one shows in a shade of this color.",
+        },
+        corOcupada: "Colors with a lock already belong to another workspace.",
         prioridade: "Priority",
         prioridadeDica: "Lower number = preferred. You can also reorder in Auto switch.",
         reserva: "Backup account",

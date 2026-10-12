@@ -33,7 +33,18 @@ export interface Conta {
   organizacao: string | null
   plano: string | null
   nivel: string | null
+  /**
+   * No banco, a cor gravada da conta. Nas telas, a cor do workspace dela: o painel troca ao carregar
+   * (lib/cores, pintarPorWorkspace), junto com os campos abaixo.
+   */
   cor: number
+  /** Tom da conta dentro do workspace, para os gráficos (0 = cor cheia, a conta mais antiga). */
+  tom?: number
+  /** Chave do workspace (organização, domínio ou a própria conta). */
+  workspace?: string
+  /** Nome do workspace para a tela; null quando a conta está sozinha (e-mail de provedor público, sem organização). */
+  nomeWorkspace?: string | null
+  contasNoWorkspace?: number
   prioridade: number
   reserva: boolean
   pausada: boolean

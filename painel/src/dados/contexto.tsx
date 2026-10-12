@@ -2,6 +2,7 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import { useT } from "@/i18n"
+import { pintarPorWorkspace } from "@/lib/cores"
 import { comDemo } from "@/lib/demo"
 import { navegar } from "@/lib/rota"
 import { ErroPainel, type Fonte } from "./fonte"
@@ -36,7 +37,8 @@ export function DadosProvider({ fonte, children }: { fonte: Fonte; children: Rea
         const inicio = performance.now()
         const novo = await fonte.carregar()
         setLatenciaMs(Math.round(performance.now() - inicio))
-        setEstado(novo)
+        // contas do mesmo workspace com a mesma cor (e um tom cada nos gráficos), em todas as telas de uma vez
+        setEstado({ ...novo, contas: pintarPorWorkspace(novo.contas) })
         setErro(null)
         setAtualizadoEm(new Date())
       } catch (e) {

@@ -6,6 +6,7 @@ import {
   CalendarClockIcon,
   KeyRoundIcon,
   LifeBuoyIcon,
+  LockIcon,
   MoreHorizontalIcon,
   PauseIcon,
   PlayIcon,
@@ -13,7 +14,7 @@ import {
   Settings2Icon,
 } from "lucide-react"
 
-import { BarraUso, NomeConta, SeloEstado } from "@/components/painel/conta"
+import { BarraUso, NomeConta, PontoConta, SeloEstado } from "@/components/painel/conta"
 import { DialogoLogin } from "@/components/painel/dialogo-login"
 import { EditorAgenda, resumoFaixa, useDias } from "@/components/painel/editor-agenda"
 import { AvisoPermissao, Pagina } from "@/components/painel/pagina"
@@ -275,36 +276,115 @@ function MenuConta({ conta, aoEditar, aoEntrar }: { conta: Conta; aoEditar: () =
   )
 }
 
-/** Seletor das 7 cores da paleta das contas. */
+/**
+ * Seletor das 7 cores da paleta. `ocupadas` são as cores de outros workspaces (cor -> nome): ficam apagadas, para dois
+ * workspaces não dividirem a mesma cor (cadeado e apagadas). Com as 7 em uso por outros, todas ficam livres.
+ */
 export function SeletorCor({
   valor,
   aoMudar,
   desligado,
+  rotulo,
+  ocupadas,
 }: {
   valor: number
   aoMudar: (v: number) => void
   desligado?: boolean
+  rotulo: string
+  ocupadas?: Map<number, string>
 }) {
   const { t } = useT()
+  const todasOcupadas = (ocupadas?.size ?? 0) >= N_CORES
   return (
-    <div role="radiogroup" aria-label={t("contas.editar.cor")} className="flex flex-wrap gap-2">
-      {Array.from({ length: N_CORES }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          role="radio"
-          aria-checked={indiceCor(valor) === i}
-          aria-label={`${t("contas.editar.cor")} ${i + 1}`}
-          disabled={desligado}
-          onClick={() => aoMudar(i)}
-          className={cn(
-            "size-8 rounded-full ring-offset-2 ring-offset-background transition outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
-            indiceCor(valor) === i && "ring-2 ring-foreground"
-          )}
-          style={{ background: corConta(i) }}
-        />
-      ))}
+    <div role="radiogroup" aria-label={rotulo} className="flex flex-wrap gap-2">
+      {Array.from({ length: N_CORES }, (_, i) => {
+        const dono = todasOcupadas || indiceCor(valor) === i ? undefined : ocupadas?.get(i)
+        return (
+          <button
+            key={i}
+            type="button"
+            role="radio"
+            aria-checked={indiceCor(valor) === i}
+            aria-label={
+              dono
+                ? `${t("contas.editar.corN", { n: i + 1 })}, ${t("contas.editar.corEmUso", { workspace: dono })}`
+                : t("contas.editar.corN", { n: i + 1 })
+            }
+            title={dono ? t("contas.editar.corEmUso", { workspace: dono }) : undefined}
+            disabled={desligado || !!dono}
+            onClick={() => aoMudar(i)}
+            className={cn(
+              "grid size-8 place-items-center rounded-full ring-offset-2 ring-offset-background transition outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+              dono && "disabled:opacity-35",
+              indiceCor(valor) === i && "ring-2 ring-foreground"
+            )}
+            style={{ background: corConta(i) }}
+          >
+            {dono ? <LockIcon className="size-3.5 text-foreground" aria-hidden /> : null}
+          </button>
+        )
+      })}
     </div>
+  )
+}
+
+/** A cor vale para o workspace: as contas dele (a que se edita primeiro) e as cores que outros workspaces já têm. */
+function useWorkspaceDaConta(conta: Conta | null) {
+  const estado = useEstado()
+  return React.useMemo(() => {
+    if (!conta) return { contas: [] as Conta[], ocupadas: new Map<number, string>() }
+    const mesmo = (c: Conta) => c.id === conta.id || (!!conta.workspace && c.workspace === conta.workspace)
+    const contas = [conta, ...estado.contas.filter((c) => mesmo(c) && c.id !== conta.id)].sort(
+      (a, b) => (a.tom ?? 0) - (b.tom ?? 0)
+    )
+    const ocupadas = new Map<number, string>()
+    for (const c of estado.contas)
+      if (!mesmo(c) && !ocupadas.has(indiceCor(c.cor))) ocupadas.set(indiceCor(c.cor), c.nomeWorkspace ?? c.email)
+    return { contas, ocupadas }
+  }, [conta, estado.contas])
+}
+
+/** O campo da cor na gaveta: diz de qual workspace é a cor e mostra o tom de cada conta dele nos gráficos. */
+function CampoCor({
+  conta,
+  contas,
+  ocupadas,
+  valor,
+  aoMudar,
+  desligado,
+}: {
+  conta: Conta
+  contas: Conta[]
+  ocupadas: Map<number, string>
+  valor: number
+  aoMudar: (v: number) => void
+  desligado?: boolean
+}) {
+  const { t, tn } = useT()
+  const nome = conta.nomeWorkspace
+  const rotulo = nome ? t("contas.editar.corWorkspace", { workspace: nome }) : t("contas.editar.cor")
+  const temOcupada = ocupadas.size < N_CORES && [...ocupadas.keys()].some((c) => c !== indiceCor(valor))
+  return (
+    <Field>
+      <FieldLabel className="break-words">{rotulo}</FieldLabel>
+      <SeletorCor valor={valor} aoMudar={aoMudar} desligado={desligado} rotulo={rotulo} ocupadas={ocupadas} />
+      <FieldDescription>
+        {nome ? tn("contas.editar.corDicaWorkspace", contas.length) : t("contas.editar.corDica")}
+        {temOcupada ? ` ${t("contas.editar.corOcupada")}` : ""}
+      </FieldDescription>
+      {contas.length > 1 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {contas.map((c) => (
+            <li key={c.id}>
+              <Badge variant="outline" className="max-w-full gap-1.5 font-normal">
+                <PontoConta cor={valor} tom={c.tom} className="ring-0" />
+                <span className="truncate">{c.email}</span>
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Field>
   )
 }
 
@@ -322,6 +402,7 @@ export function EditarConta({
   const estado = useEstado()
   const acao = useAcao()
   const { pode } = usePermissao()
+  const workspace = useWorkspaceDaConta(conta)
   // quem abre passa key={chave da abertura}: o rascunho nasce da conta a cada vez
   const [rascunho, setRascunho] = React.useState<Required<CamposConta> | null>(() =>
     conta
@@ -350,11 +431,14 @@ export function EditarConta({
             </SheetHeader>
             <div className="px-4">
               <FieldGroup>
-                <Field>
-                  <FieldLabel>{t("contas.editar.cor")}</FieldLabel>
-                  <SeletorCor valor={r.cor} aoMudar={(cor) => mudar({ cor })} desligado={!pode} />
-                  <FieldDescription>{t("contas.editar.corDica")}</FieldDescription>
-                </Field>
+                <CampoCor
+                  conta={conta}
+                  contas={workspace.contas}
+                  ocupadas={workspace.ocupadas}
+                  valor={r.cor}
+                  aoMudar={(cor) => mudar({ cor })}
+                  desligado={!pode}
+                />
                 <Field>
                   <FieldLabel htmlFor="prioridade">{t("contas.editar.prioridade")}</FieldLabel>
                   <Input
@@ -438,8 +522,20 @@ export function EditarConta({
                 disabled={!pode || salvando}
                 onClick={async () => {
                   setSalvando(true)
+                  // a cor só vai quando mudou, e aí para todas as contas do workspace (pelo mesmo caminho de gravação)
+                  const { cor, ...resto } = r
+                  const mudouCor = indiceCor(cor) !== indiceCor(conta.cor)
                   const [ok] = await acao(
-                    () => fonte.salvarConta(conta.id, { ...r, agenda: r.agenda.filter((f) => f.dias.length > 0) }),
+                    async () => {
+                      await fonte.salvarConta(conta.id, {
+                        ...resto,
+                        agenda: resto.agenda.filter((f) => f.dias.length > 0),
+                        ...(mudouCor ? { cor } : {}),
+                      })
+                      if (mudouCor)
+                        for (const outra of workspace.contas)
+                          if (outra.id !== conta.id) await fonte.salvarConta(outra.id, { cor })
+                    },
                     t("contas.editar.salvo", { conta: conta.email })
                   )
                   setSalvando(false)

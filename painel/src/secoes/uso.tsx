@@ -23,7 +23,7 @@ import { useAgora, useConsulta, useEstado } from "@/dados/contexto"
 import { cheia, p5, p7 } from "@/dados/derivados"
 import type { Instantaneo, LinhaUso, SessaoUso } from "@/dados/tipos"
 import { useT } from "@/i18n"
-import { COR_OUTRAS, corConta, seriesPorConta } from "@/lib/cores"
+import { COR_OUTRAS, corConta, juntasPorWorkspace, seriesPorConta } from "@/lib/cores"
 import { baixarArquivo, paraCsv } from "@/lib/csv"
 import { chaveDia, fmtDia, fmtDuracao, fmtDataHora, fmtFuturo, fmtNumero, fmtTokens, fmtUsd } from "@/lib/formato"
 import { diasEntre, mapaCalor, porDia, ranking, sessoesPorDia, totais, type Dimensao, type Metrica } from "@/lib/uso"
@@ -241,15 +241,16 @@ function GraficoPorDia({
     const chaves = new Map<string, string>()
     const series: { chave: string; contaId: string }[] = []
     const config: ChartConfig = {}
-    // a ordem das camadas segue a prioridade (estável), não o volume
-    const ordem = [...estado.contas].sort((a, b) => a.prioridade - b.prioridade)
+    // a ordem das camadas segue a prioridade (estável), não o volume, com as contas do mesmo workspace juntas
+    const ordem = juntasPorWorkspace(estado.contas)
     for (const c of ordem) {
       const s = mapa.get(c.id)
       if (!s || s === "outras") continue
       const chave = `c${series.length}`
       chaves.set(c.id, chave)
       series.push({ chave, contaId: c.id })
-      config[chave] = { label: c.email, color: corConta(c.cor) }
+      // as contas do mesmo workspace na mesma cor, cada uma num tom
+      config[chave] = { label: c.email, color: corConta(c.cor, c.tom) }
     }
     if ([...mapa.values()].includes("outras") || uso.some((l) => !l.contaId)) {
       series.push({ chave: "outras", contaId: "outras" })
@@ -680,7 +681,7 @@ function SessoesCaras({ estado, sessoes, agora }: { estado: Instantaneo; sessoes
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span className="flex -space-x-0.5">
                           {contas.map((c) => (
-                            <PontoConta key={c!.id} cor={c!.cor} />
+                            <PontoConta key={c!.id} cor={c!.cor} tom={c!.tom} />
                           ))}
                         </span>
                         <span className="truncate font-medium">{s.projeto || t("comum.semProjeto")}</span>

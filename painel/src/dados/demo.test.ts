@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { coresPorWorkspace } from "@/lib/cores"
 import { fraseValida } from "@/lib/ligacao"
 import { FonteDemo, PALAVRAS, gerarDemo } from "./demo"
 import { ErroPainel } from "./fonte"
@@ -116,6 +117,16 @@ describe("FonteDemo", () => {
     expect(e.contas[0].id).toBe("conta-trabalho") // ids não mudam
     f.usarIdioma("pt-BR")
     expect((await f.carregar()).eu.nome).toBe("Administração")
+  })
+
+  it("tem contas de um mesmo workspace, para a cor por workspace aparecer", () => {
+    const d = gerarDemo(AGORA, 7)
+    const cores = coresPorWorkspace(d.contas)
+    const empresa = d.contas.filter((c) => c.organizacao === "Empresa Exemplo").map((c) => cores.get(c.id)!)
+    expect(empresa.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(empresa.map((c) => c.cor)).size).toBe(1)
+    expect(new Set(empresa.map((c) => c.tom)).size).toBe(empresa.length)
+    expect(new Set([...cores.values()].map((c) => c.cor)).size).toBe(new Set(d.contas.map((c) => c.organizacao)).size)
   })
 
   it("avisa quem assinou quando algo muda", async () => {

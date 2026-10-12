@@ -18,12 +18,13 @@ import { corConta } from "@/lib/cores"
 import { fmtPct } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 
-export function PontoConta({ cor, className }: { cor: number; className?: string }) {
+/** O ponto com a cor do workspace da conta. `tom` só onde várias contas aparecem juntas sem o nome de cada uma. */
+export function PontoConta({ cor, tom = 0, className }: { cor: number; tom?: number; className?: string }) {
   return (
     <span
       aria-hidden
       className={cn("inline-block size-2.5 shrink-0 rounded-full ring-2 ring-background", className)}
-      style={{ background: corConta(cor) }}
+      style={{ background: corConta(cor, tom) }}
     />
   )
 }
@@ -33,17 +34,19 @@ export function NomeConta({
   className,
   mostrarOrg = false,
 }: {
-  conta: Pick<Conta, "email" | "cor" | "organizacao">
+  conta: Pick<Conta, "email" | "cor" | "organizacao" | "nomeWorkspace">
   className?: string
   mostrarOrg?: boolean
 }) {
+  // o workspace que deu a cor (a organização ou, sem ela, o domínio do e-mail)
+  const workspace = conta.nomeWorkspace ?? conta.organizacao
   return (
     <span className={cn("inline-flex max-w-full min-w-0 items-center gap-2", className)}>
       <PontoConta cor={conta.cor} />
       <span className="min-w-0">
         <span className="block truncate">{conta.email}</span>
-        {mostrarOrg && conta.organizacao ? (
-          <span className="block truncate text-xs text-muted-foreground">{conta.organizacao}</span>
+        {mostrarOrg && workspace ? (
+          <span className="block truncate text-xs text-muted-foreground">{workspace}</span>
         ) : null}
       </span>
     </span>

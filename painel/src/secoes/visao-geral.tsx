@@ -39,7 +39,7 @@ import {
 } from "@/dados/derivados"
 import type { Computador, Conta, Instantaneo, PontoHistorico, Sistema } from "@/dados/tipos"
 import { useT } from "@/i18n"
-import { corConta } from "@/lib/cores"
+import { corConta, juntasPorWorkspace } from "@/lib/cores"
 import { comDemo } from "@/lib/demo"
 import { chaveDia, fmtFuturo, fmtHora, fmtPct, fmtRelativo, fmtUsd } from "@/lib/formato"
 import { preverEsgotar, type Previsao } from "@/lib/plano"
@@ -425,10 +425,11 @@ function ResumoContas({ estado, agora }: { estado: Instantaneo; agora: Date }) {
 function GraficoJanela({ estado, historico }: { estado: Instantaneo; historico: PontoHistorico[] | null }) {
   const { t, idioma } = useT()
   const [horas, setHoras] = React.useState("6")
-  const contas = estado.contas.filter((c) => historico?.some((p) => p.contaId === c.id))
+  const contas = juntasPorWorkspace(estado.contas.filter((c) => historico?.some((p) => p.contaId === c.id)))
   const config = React.useMemo(() => {
     const cfg: ChartConfig = {}
-    contas.forEach((c, i) => (cfg[`c${i}`] = { label: c.email, color: corConta(c.cor) }))
+    // uma linha por conta: as do mesmo workspace na mesma cor, cada uma num tom
+    contas.forEach((c, i) => (cfg[`c${i}`] = { label: c.email, color: corConta(c.cor, c.tom) }))
     return cfg
   }, [contas])
   const dados = React.useMemo(() => {
@@ -535,7 +536,7 @@ function GraficoJanela({ estado, historico }: { estado: Instantaneo; historico: 
         <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 px-2 text-xs text-muted-foreground sm:px-0">
           {contas.map((c) => (
             <li key={c.id} className="flex items-center gap-1.5">
-              <span className="h-0.5 w-3 rounded-full" style={{ background: corConta(c.cor) }} aria-hidden />
+              <span className="h-0.5 w-3 rounded-full" style={{ background: corConta(c.cor, c.tom) }} aria-hidden />
               {c.email}
             </li>
           ))}

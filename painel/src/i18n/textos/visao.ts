@@ -66,7 +66,8 @@ export default secao({
       },
       grafico: {
         titulo: "Janela de 5 horas",
-        descricao: "Uso de cada conta ao longo do tempo. As linhas tracejadas são o aviso e a troca.",
+        descricao:
+          "Uso de cada conta ao longo do tempo, um tom da cor do workspace para cada. As linhas tracejadas são o aviso e a troca.",
         h6: "6 horas",
         h24: "24 horas",
         aviso: "aviso",
@@ -145,7 +146,8 @@ export default secao({
       },
       grafico: {
         titulo: "5-hour window",
-        descricao: "Each account's usage over time. Dashed lines are the warning and the switch.",
+        descricao:
+          "Each account's usage over time, one shade of its workspace color each. Dashed lines are the warning and the switch.",
         h6: "6 hours",
         h24: "24 hours",
         aviso: "warning",

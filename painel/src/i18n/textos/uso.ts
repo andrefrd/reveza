@@ -21,7 +21,8 @@ export default secao({
       },
       porDia: {
         titulo: "Por dia, por conta",
-        descricao: "Cada cor é uma conta. Passe o dedo ou o mouse numa barra para ver o detalhe.",
+        descricao:
+          "Cada cor é um workspace e cada tom, uma conta dele. Passe o dedo ou o mouse numa barra para ver o detalhe.",
       },
       ranking: {
         titulo: "Ranking",
@@ -91,7 +92,7 @@ export default secao({
       },
       porDia: {
         titulo: "Per day, per account",
-        descricao: "Each color is an account. Hover or tap a bar for the details.",
+        descricao: "Each color is a workspace and each shade, one of its accounts. Hover or tap a bar for the details.",
       },
       ranking: {
         titulo: "Ranking",
