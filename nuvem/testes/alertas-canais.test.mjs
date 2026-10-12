@@ -56,3 +56,16 @@ test("rodar a 0017 numa instalação com alerta ntfy apaga o alerta e o tópico 
   assert.equal((await b.sql("select count(*)::int as n from vault.secrets where id = $1", [vault]))[0].n, 0);
   assert.equal(await b.rpc("servico", "servico_segredo_alerta", { p_alerta: tg.id }), "123456:TOKEN-DO-BOT");
 });
+
+test("push: cada um confere só a própria inscrição (o painel mostra se este aparelho recebe)", async () => {
+  const b = await banco();
+  const admin = { id: await b.usuario("admin"), aal: "aal2" };
+  const leitor = { id: await b.usuario("leitura"), aal: "aal1" };
+  const endpoint = "https://fcm.googleapis.com/fcm/send/abc123";
+  const r = await b.rpc(leitor, "painel_push_inscrever", { p_endpoint: endpoint, p_p256dh: "B".repeat(87), p_auth: "a".repeat(22) });
+  assert.equal(r.ok, true);
+  const consulta = "select id from public.push_inscricoes where endpoint = $1 limit 1";
+  assert.equal((await b.como(leitor, consulta, [endpoint])).length, 1);
+  assert.equal((await b.como(admin, consulta, [endpoint])).length, 0, "a inscrição de outra pessoa não aparece");
+  await assert.rejects(b.como(leitor, "select p256dh from public.push_inscricoes"), /permission denied/);
+});

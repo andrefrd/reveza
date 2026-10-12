@@ -1194,4 +1194,8 @@ export class FonteDemo implements Fonte {
       this.auditar("push", "este aparelho")
     })
   }
+
+  async pushRegistrado(): Promise<boolean> {
+    return false
+  }
 }

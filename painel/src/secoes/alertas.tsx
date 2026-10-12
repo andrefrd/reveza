@@ -443,13 +443,18 @@ function AparelhoPush() {
   const suporte = suportePush()
   const [recebe, setRecebe] = React.useState<boolean | null>(null)
   const [enviando, setEnviando] = React.useState(false)
+  // "recebe" só quando a inscrição deste navegador também está na nuvem: uma inscrição local que não chegou lá (ou
+  // que o serviço de push venceu e a nuvem apagou) volta a oferecer o botão
   React.useEffect(() => {
     let vivo = true
-    void inscricaoAtual().then((i) => vivo && setRecebe(Boolean(i)))
+    void inscricaoAtual()
+      .then(async (i) => (i ? fonte.pushRegistrado(i.endpoint) : false))
+      .catch(() => false)
+      .then((r) => vivo && setRecebe(r))
     return () => {
       vivo = false
     }
-  }, [])
+  }, [fonte])
 
   if (suporte !== "ok")
     return (

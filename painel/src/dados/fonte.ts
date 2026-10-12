@@ -91,6 +91,8 @@ export interface Fonte {
   meuIdioma(idioma: Idioma): Promise<void>
   chavePushPublica(): Promise<string | null>
   inscreverPush(inscricao: PushSubscriptionJSON): Promise<void>
+  /** A nuvem tem a inscrição deste aparelho (o endereço dela) em nome de quem está logado? */
+  pushRegistrado(endpoint: string): Promise<boolean>
 }
 
 /** Erro com código conhecido, para a tela traduzir a mensagem. */

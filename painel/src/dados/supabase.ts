@@ -782,6 +782,13 @@ export class FonteSupabase implements Fonte {
     return import.meta.env.VITE_VAPID_PUBLICA ?? null
   }
 
+  async pushRegistrado(endpoint: string) {
+    // a segurança de linha só deixa cada um ler as próprias inscrições
+    const { data, error } = await supabase().from("push_inscricoes").select("id").eq("endpoint", endpoint).limit(1)
+    if (error) erro(error)
+    return Boolean(data?.length)
+  }
+
   async inscreverPush(inscricao: PushSubscriptionJSON) {
     await rpc("painel_push_inscrever", {
       p_endpoint: inscricao.endpoint,
