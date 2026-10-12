@@ -1,0 +1,50 @@
+# Instala o Reveza de verdade em macOS, Linux e Windows (os três sistemas que ele promete), do mesmo jeito que o
+# `npx github:dantaspaulo/reveza` deixa: o repositório dentro de um node_modules. Sem nuvem, sem serviço e sem conta:
+# o que se prova aqui é que o instalador roda, copia, compila o agente e o comando `reveza` responde em cada sistema.
+name: Instalar nos três sistemas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  instalar:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Testes do agente
+        working-directory: agente
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test
+
+      - name: Instalador, de dentro de um node_modules (como o npx deixa)
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/npx/node_modules/reveza"
+          mkdir -p "$D"
+          git archive HEAD | tar -x -C "$D"
+          export HOME="$RUNNER_TEMP/casa" USERPROFILE="$RUNNER_TEMP/casa"
+          mkdir -p "$HOME"
+          cd "$D"
+          node instalador/instalar.mjs --sim --sem-servico --sem-nuvem --sem-react-bits 2>&1 | tee "$RUNNER_TEMP/saida.txt"
+          grep -q "Pronto: Reveza AI" "$RUNNER_TEMP/saida.txt"
+
+      - name: O comando reveza responde
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/casa" USERPROFILE="$RUNNER_TEMP/casa"
+          node "$HOME/.reveza/app/agente/dist/src/cli.js" versao
+          node "$HOME/.reveza/app/agente/dist/src/cli.js" doctor || true
