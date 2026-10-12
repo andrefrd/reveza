@@ -329,7 +329,7 @@ async function painel(ctx) {
   prepararPasta(RAIZ, BUILD);
   const proj = await ctx.vercel.projeto(ctx.projetoVercel);
   const publicar = async (dominio, vercelHost) => {
-    const b = construir(BUILD, { supabaseUrl: ctx.url, anon: ctx.anon, dominio, vercelHost, repo: REPO, vapid: ctx.vapidPublica, reactBits: !ctx.semReactBits, log: info });
+    const b = construir(BUILD, { supabaseUrl: ctx.url, anon: ctx.anon, dominio, vercelHost, repo: REPO, versao: VERSAO, vapid: ctx.vapidPublica, reactBits: !ctx.semReactBits, log: info });
     if (b.componentes) info(t(`${b.componentes} componentes do React Bits nesta máquina`, `${b.componentes} React Bits components on this machine`));
     return await ctx.vercel.publicar(proj, b.dist, { log: info });
   };

@@ -97,6 +97,7 @@ Os tokens do Supabase e da Vercel **não ficam guardados** em lugar nenhum.
 | Precisa de | |
 |---|---|
 | 🟢 **Node 20.19 ou mais novo** | no macOS, no Windows ou no Linux, inclusive numa VPS sem tela |
+| 🪟 **No Windows** | o `npx github:` precisa do [Git](https://git-scm.com/download/win); sem ele, use o pacote da versão: `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.2.tar.gz` |
 | 🧡 **Claude Code** | instalado em cada computador que vai revezar contas |
 | ☁️ **Supabase e Vercel** | contas grátis bastam; sem elas, use `--sem-nuvem` |
 | 🌐 **Domínio** | opcional, com o passo a passo da Cloudflare |

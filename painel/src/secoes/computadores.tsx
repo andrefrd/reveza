@@ -41,7 +41,7 @@ import { useDialogo } from "@/hooks/use-dialogo"
 import { useT } from "@/i18n"
 import { fmtDuracao, fmtPct, fmtRelativo } from "@/lib/formato"
 import { comDemo } from "@/lib/demo"
-import { comandoInstalador } from "@/lib/instalador"
+import { comandoInstalador, sistemaDoNavegador, type SistemaDoNavegador } from "@/lib/instalador"
 import { codigoDeLigacao, lerCodigoDeAcesso } from "@/lib/ligacao"
 import { Link } from "@/lib/rota"
 import { cn } from "@/lib/utils"
@@ -405,7 +405,7 @@ function LigarPeloTerminal({ codigoAcesso }: { codigoAcesso?: string | null }) {
           <strong className="mr-1">2.</strong>
           {t("computadores.ligacao.passo2")}
         </span>
-        <Codigo texto={comandoInstalador("--ligar")} />
+        <ComandoPorSistema extra="--ligar" />
         {codigoAcesso ? (
           <>
             <span className="text-xs text-muted-foreground">{t("computadores.ligacao.codigo")}</span>
@@ -527,7 +527,7 @@ function LigarEmUmPasso() {
         <strong className="mr-1">1.</strong>
         {t("computadores.ligacao.umPasso.rode")}
       </p>
-      <Codigo texto={comandoInstalador("--ligar")} />
+      <ComandoPorSistema extra="--ligar" />
       <p className="text-sm">
         <strong className="mr-1">2.</strong>
         {t("computadores.ligacao.umPasso.cole")}
@@ -560,5 +560,33 @@ function OutroJeito() {
         <LigarPeloTerminal />
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+/** O comando de instalar com as instruções do sistema de quem vai rodar (abre no sistema deste navegador). */
+function ComandoPorSistema({ extra }: { extra: string }) {
+  const { t } = useT()
+  const [sistema, setSistema] = React.useState<SistemaDoNavegador>(() => sistemaDoNavegador())
+  const sistemas: SistemaDoNavegador[] = ["macos", "windows", "linux"]
+  return (
+    <div className="flex flex-col gap-2">
+      <div role="tablist" aria-label={t("computadores.ligacao.sistemas.rotulo")} className="flex gap-1 self-start rounded-lg bg-muted p-1">
+        {sistemas.map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="tab"
+            aria-selected={sistema === s}
+            onClick={() => setSistema(s)}
+            className={cn("rounded-md px-3 py-1 text-xs font-medium", sistema === s ? "bg-background shadow-sm" : "text-muted-foreground")}
+          >
+            {t(`computadores.ligacao.sistemas.${s}.nome`)}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">{t(`computadores.ligacao.sistemas.${sistema}.abrir`)}</p>
+      <Codigo texto={comandoInstalador(extra)} />
+      <p className="text-xs text-muted-foreground">{t("computadores.ligacao.sistemas.requisitos")}</p>
+    </div>
   )
 }

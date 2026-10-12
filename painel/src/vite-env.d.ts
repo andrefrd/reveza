@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string
   /** Repositório de onde o instalador é baixado, para os comandos mostrados no painel (ex.: pessoa/reveza). */
   readonly VITE_REVEZA_REPO?: string
+  readonly VITE_REVEZA_VERSAO?: string
   /** Chave pública VAPID do push no celular (pública por natureza; a privada fica na Edge Function). */
   readonly VITE_VAPID_PUBLICA?: string
 }

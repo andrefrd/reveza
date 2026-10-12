@@ -23,7 +23,7 @@ export function prepararPasta(raiz, build) {
 }
 
 /** Compila e devolve a pasta pronta para publicar (com o vercel.json dentro). */
-export function construir(build, { supabaseUrl, anon, dominio, vercelHost, repo = "", vapid = "", reactBits = true, log = () => {} }) {
+export function construir(build, { supabaseUrl, anon, dominio, vercelHost, repo = "", versao = "", vapid = "", reactBits = true, log = () => {} }) {
   // Versões travadas (package-lock.json, com o resumo de cada pacote) e sem script de instalação de terceiros: o
   // pacote do painel roda com a sessão do administrador (auditoria de segurança de 11/10/2026).
   if (!existsSync(path.join(build, "package-lock.json"))) throw new Error("painel/package-lock.json ausente: a instalação só usa versões travadas");
@@ -45,7 +45,7 @@ export function construir(build, { supabaseUrl, anon, dominio, vercelHost, repo 
   log("compilando o painel");
   r = rodar(npm, ["run", "build"], {
     cwd: build,
-    env: ambienteLimpo({ VITE_SUPABASE_URL: supabaseUrl, VITE_SUPABASE_ANON_KEY: anon, VITE_REVEZA_REPO: repo, VITE_VAPID_PUBLICA: vapid || "" }),
+    env: ambienteLimpo({ VITE_SUPABASE_URL: supabaseUrl, VITE_SUPABASE_ANON_KEY: anon, VITE_REVEZA_REPO: repo, VITE_REVEZA_VERSAO: versao || "", VITE_VAPID_PUBLICA: vapid || "" }),
   });
   if (!r.ok) throw new Error(`build do painel falhou: ${trechoDoErro(r.saida + r.erro)}`);
   const dist = path.join(build, "dist");

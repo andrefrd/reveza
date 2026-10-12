@@ -7,6 +7,19 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.3 · 11/10/2026
+
+Computador novo em qualquer sistema. Quem tem a 0.1.2 atualiza com `npx github:dantaspaulo/reveza#v0.1.3 --atualizar`.
+
+- **O painel mostra o passo a passo do sistema do computador novo** (macOS, Windows ou Linux), já aberto no sistema de
+  quem está olhando: como abrir o terminal, o comando e o que precisa estar instalado.
+- **Sem precisar do Git:** o comando do painel baixa o pacote da versão direto do GitHub
+  (`npx https://github.com/dantaspaulo/reveza/archive/refs/tags/vX.Y.Z.tar.gz --ligar`). O `npx github:...` pedia o Git,
+  que o Windows não traz, e o computador novo fica na mesma versão dos outros.
+- **Instalação conferida de verdade nos três sistemas:** a cada envio, o GitHub instala o Reveza no macOS, no Linux e no
+  Windows (de dentro de um `node_modules`, como o npx deixa) e roda os testes do agente em cada um.
+- README: compartilhar no WhatsApp leva ao site, que tem a imagem de compartilhamento.
+
 ## 0.1.2 · 11/10/2026
 
 Apoio ao projeto e versão num lugar só. Quem tem a 0.1.1 atualiza com `npx github:dantaspaulo/reveza#v0.1.2 --atualizar`.

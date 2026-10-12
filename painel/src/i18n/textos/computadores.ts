@@ -75,6 +75,13 @@ export default secao({
         codigo: "Código de acesso",
         codigoAviso: "Aparece uma vez só e leva a senha do computador. Não mande por chat nem e-mail; se perder, revogue o computador aqui.",
         outroAcesso: "Criar outro",
+        sistemas: {
+          rotulo: "Sistema do computador novo",
+          macos: { nome: "macOS", abrir: "Abra o Terminal (Command + espaço, digite Terminal) e rode:" },
+          windows: { nome: "Windows", abrir: "Abra o PowerShell (menu Iniciar, digite PowerShell) e rode:" },
+          linux: { nome: "Linux", abrir: "Abra o terminal (ou entre por SSH, numa VPS) e rode:" },
+          requisitos: "Precisa do Node 20.19 ou mais novo (nodejs.org) e do assistente de código instalados. O mesmo comando vale nos três sistemas.",
+        },
         umPasso: {
           descricao: "Um código só: o computador novo entra sozinho, sem você digitar senha nem frase.",
           inicio: "Clique em Gerar. O {computador} vai abrir uma janela pedindo um código, que aparece aqui; digite lá e clique em Liberar.",
@@ -166,6 +173,13 @@ export default secao({
         codigo: "Access code",
         codigoAviso: "Shown only once and carries the computer's password. Don't send it by chat or email; if lost, revoke the computer here.",
         outroAcesso: "Create another",
+        sistemas: {
+          rotulo: "New computer's system",
+          macos: { nome: "macOS", abrir: "Open Terminal (Command + space, type Terminal) and run:" },
+          windows: { nome: "Windows", abrir: "Open PowerShell (Start menu, type PowerShell) and run:" },
+          linux: { nome: "Linux", abrir: "Open the terminal (or SSH into it, on a VPS) and run:" },
+          requisitos: "It needs Node 20.19 or newer (nodejs.org) and the coding assistant installed. The same command works on all three systems.",
+        },
         umPasso: {
           descricao: "One code: the new computer joins on its own, without you typing a password or phrase.",
           inicio: "Click Generate. {computador} will open a window asking for a code, shown here; type it there and click Release.",

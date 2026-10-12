@@ -70,6 +70,10 @@ export function versoes() {
     const m = new RegExp(badge("(\\d+\\.\\d+\\.\\d+)")).exec(ler(f));
     r[`${f} (badge)`] = m?.[1];
   }
+  for (const [f] of BADGES) {
+    const m = /archive\/refs\/tags\/v(\d+\.\d+\.\d+)\.tar\.gz/.exec(ler(f));
+    if (m) r[`${f} (pacote da versão)`] = m[1];
+  }
   r["CHANGELOG.md"] = primeiraDoChangelog(ler("CHANGELOG.md"));
   return r;
 }
@@ -115,6 +119,8 @@ function lancar(nova) {
   for (const [f, badge, alt] of BADGES) {
     trocar(f, badge(atual), badge(nova));
     trocar(f, alt(atual), alt(nova));
+    const t = ler(f);
+    writeFileSync(path.join(RAIZ, f), t.replaceAll(`archive/refs/tags/v${atual}.tar.gz`, `archive/refs/tags/v${nova}.tar.gz`));
   }
   const depois = versoes();
   if (conferir(depois) !== nova || depois["CHANGELOG.md"] !== nova) throw new Error("a troca de versão não fechou");

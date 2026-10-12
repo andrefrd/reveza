@@ -97,6 +97,7 @@ final check. The Supabase and Vercel tokens are **not stored** anywhere.
 | You need | |
 |---|---|
 | 🟢 **Node 20.19 or newer** | on macOS, Windows or Linux, including a headless VPS |
+| 🪟 **On Windows** | `npx github:` needs [Git](https://git-scm.com/download/win); without it, use the release package: `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.2.tar.gz` |
 | 🧡 **Claude Code** | installed on each computer that will rotate accounts |
 | ☁️ **Supabase and Vercel** | free accounts are enough; without them, use `--sem-nuvem` |
 | 🌐 **A domain** | optional, with a step-by-step guide on Cloudflare |
