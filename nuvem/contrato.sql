@@ -202,6 +202,23 @@ create table webhooks_saida (
   criado_por uuid not null references auth.users
 );
 
+-- Computador novo pedindo para entrar (0019, versão 0.2.0): o código aparece NELE e é digitado num computador que já
+-- tem a chave do cofre. Ninguém lê direto a chave pública nem o envelope; o painel lê o andamento (membro).
+create table ligacao_pedidos (
+  computador_id uuid primary key references computadores on delete cascade,  -- o computador novo (linha pendente)
+  aprovador uuid references computadores on delete set null,                  -- onde a janela abre (o painel escolhe)
+  aprovador_em timestamptz,
+  publica jsonb,                             -- chave pública ECDH P-256 do computador novo; registrada uma vez só
+  pedido_em timestamptz,
+  expira_em timestamptz,                     -- pedido_em + 10 minutos
+  envelope jsonb,                            -- a chave do cofre cifrada para `publica` (ECDH + HKDF-SHA256 + AES-256-GCM)
+  entregue_por uuid references computadores on delete set null,
+  entregue_em timestamptz,
+  lido_em timestamptz,                       -- lido uma vez: o envelope sai do banco
+  recusado text,                             -- recusado_na_tela, dois_pedidos, codigo_errado
+  recusado_em timestamptz
+);
+
 create table auditoria (
   id bigint generated always as identity primary key,
   em timestamptz not null default now(),
@@ -226,8 +243,15 @@ create table auditoria (
 -- agente_reservar_comando(id)                                   -> {ok, comando?}  (pendente -> reservado, atômico)
 -- agente_responder_comando(id, http, resposta)                  -> {ok}
 -- agente_evento(tipo, texto, dados)                             -> {ok}
--- agente_ligacao_publicar(embrulho bytea, sal bytea)            -> {ok, expira_em}  (chave do cofre embrulhada, 10 min)
--- agente_ligacao_buscar()                                       -> {embrulho, sal}  (computador novo, uma vez)
+-- agente_ligacao_publicar(embrulho bytea, sal bytea)            -> {ok, expira_em}  (frase de emergência, 10 min)
+-- agente_ligacao_buscar()                                       -> {embrulho, sal}  (computador já ativo, uma vez)
+-- agente_ligacoes_abertas()                                     -> {pedidos: [{computador_id, publica, expira_em, para_mim}]}
+--     (também vem em agente_ola.ligacoes; mais de um aberto = todos recusados)
+-- agente_ligacao_entregar(computador_id, publica, envelope)     -> {ok}  (só o pedido aberto com a mesma chave pública)
+-- agente_ligacao_recusar(computador_id, motivo)                 -> {ok}
+-- Só a identidade PENDENTE dona do pedido (antes de entrar; agente_registrar recusa pendente sem a chave recebida):
+-- agente_ligacao_pedir(publica jsonb)                           -> {ok, computador_id, expira_em}  (uma vez, 10 min)
+-- agente_ligacao_receber()                                      -> {estado: esperando|entregue|recusado|vencido|lido, envelope?, impressao?}
 
 -- ------------------------------------------------------------------------------------------------ funções do painel
 -- Leitura: views com RLS (membros leem tudo, menos cofre, alertas.destino e chaves_api de outros).
@@ -235,9 +259,10 @@ create table auditoria (
 -- painel_config(chave, valor)
 -- painel_conta(conta_id, campos jsonb)           cor, prioridade, reserva, pausada, agenda, teto_semana
 -- painel_trocar_agora(computador_id, conta_id)   força atribuição (respeita posse)
--- painel_comando(computador_id, acao, corpo)     enfileira para o computador
+-- painel_comando(computador_id, acao, corpo)     enfileira para o computador (a ação ligar saiu na 0.2.0)
 -- painel_convidar(email, papel) / painel_revogar_membro(user_id) / painel_mudar_papel(user_id, papel)
 -- painel_revogar_computador(computador_id)
+-- painel_ligacao_aprovador(computador_novo, aprovador)  em qual computador a janela de liberar abre
 -- painel_alerta(...) / painel_webhook(...) / painel_chave_api(...)  (segredos vão ao Vault pela função)
 -- Qualquer membro: painel_meu_idioma(idioma), painel_push_inscrever(endpoint, p256dh, auth)
 

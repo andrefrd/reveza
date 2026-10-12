@@ -1,5 +1,5 @@
 // O que o painel lê e pede além do básico: sessões abertas, e-mail dos membros, validade dos logins e o comando
-// "ligar" (frase de computador novo cifrada para o navegador).
+// "ligar" (a frase cifrada para o navegador, que saiu na 0.2.0).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { banco } from "./apoio.mjs";
@@ -49,15 +49,14 @@ test("validade dos logins: membro vê a data, nunca o cifrado", async () => {
   assert.deepEqual(Object.keys(v[0]).sort(), ["conta_id", "expira_em", "versao"]);
 });
 
-test("comando ligar: só com a chave pública P-256 do navegador", async () => {
+test("comando ligar saiu (0.2.0): o painel não pede mais a frase cifrada para o navegador", async () => {
   const { b, admin } = await cenario();
   const pc = await b.computador("pc");
   const publica = { kty: "EC", crv: "P-256", x: "a".repeat(43), y: "b".repeat(43), ext: true };
-  const r = await b.rpc(admin, "painel_comando", { p_computador: pc.pc, p_acao: "ligar", p_corpo: { publica, idioma: "en" } });
-  assert.equal(r.ok, true);
-  for (const corpo of [{}, { publica: { ...publica, crv: "P-384" } }, { publica: { ...publica, x: "x'; drop" } }, { publica, idioma: "fr" }]) {
-    await assert.rejects(b.rpc(admin, "painel_comando", { p_computador: pc.pc, p_acao: "ligar", p_corpo: corpo }), /ligação inválido/);
-  }
+  await assert.rejects(b.rpc(admin, "painel_comando", { p_computador: pc.pc, p_acao: "ligar", p_corpo: { publica, idioma: "en" } }),
+    /ligação pelo painel saiu/);
+  const [{ n }] = await b.sql("select count(*)::int as n from public.comandos where acao = 'ligar'");
+  assert.equal(n, 0);
 });
 
 test("tempo de atualização: só 5, 10, 15 ou 30 segundos", async () => {
