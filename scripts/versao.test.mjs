@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes } from "./versao.mjs";
+import { conferir, maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes } from "./versao.mjs";
 
 const CHANGELOG = `# Versões
 
@@ -17,10 +17,16 @@ Recurso novo.
 Correção.
 `;
 
-test("todas as versões do repositório batem (package.json, travas, agente, badges e CHANGELOG)", () => {
-  const v = versoes();
-  const unicas = new Set(Object.values(v));
-  assert.equal(unicas.size, 1, JSON.stringify(v, null, 2));
+test("todas as versões do repositório batem (package.json, travas, agente, badges; CHANGELOG igual ou à frente)", () => {
+  assert.doesNotThrow(() => conferir(versoes()));
+});
+
+test("conferir recusa pacote fora da versão e aceita a CHANGELOG uma versão à frente", () => {
+  const base = { "package.json": "0.1.1", "agente/src/config.ts": "0.1.1", "README.md (badge)": "0.1.1" };
+  assert.equal(conferir({ ...base, "CHANGELOG.md": "0.1.1" }), "0.1.1");
+  assert.equal(conferir({ ...base, "CHANGELOG.md": "0.1.2" }), "0.1.1");
+  assert.throws(() => conferir({ ...base, "agente/src/config.ts": "0.1.0", "CHANGELOG.md": "0.1.1" }));
+  assert.throws(() => conferir({ ...base, "CHANGELOG.md": "0.1.0" }), "CHANGELOG atrás");
 });
 
 test("CHANGELOG: a primeira entrada e o texto de uma versão", () => {

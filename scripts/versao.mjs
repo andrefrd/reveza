@@ -74,12 +74,17 @@ export function versoes() {
   return r;
 }
 
-function conferir() {
-  const v = versoes();
-  const unicas = [...new Set(Object.values(v))];
-  if (unicas.length !== 1 || !SEMVER.test(unicas[0] ?? "")) {
+/**
+ * Tudo na mesma versão. A CHANGELOG pode estar uma versão à frente: é o momento entre escrever a entrada nova e rodar o
+ * `lancar`. Devolve a versão dos pacotes.
+ */
+export function conferir(v = versoes()) {
+  const { "CHANGELOG.md": changelog, ...resto } = v;
+  const unicas = [...new Set(Object.values(resto))];
+  const ok = unicas.length === 1 && SEMVER.test(unicas[0] ?? "") && SEMVER.test(changelog ?? "") && (changelog === unicas[0] || maior(changelog, unicas[0]));
+  if (!ok) {
     for (const [f, x] of Object.entries(v)) console.error(`  ${String(x).padEnd(8)} ${f}`);
-    throw new Error("as versões não batem (rode node scripts/versao.mjs lancar X.Y.Z depois de escrever a CHANGELOG)");
+    throw new Error("as versões não batem (escreva a CHANGELOG e rode node scripts/versao.mjs lancar X.Y.Z)");
   }
   return unicas[0];
 }
@@ -111,7 +116,8 @@ function lancar(nova) {
     trocar(f, badge(atual), badge(nova));
     trocar(f, alt(atual), alt(nova));
   }
-  if (conferir() !== nova) throw new Error("a troca de versão não fechou");
+  const depois = versoes();
+  if (conferir(depois) !== nova || depois["CHANGELOG.md"] !== nova) throw new Error("a troca de versão não fechou");
   const arquivos = [...PACOTES, ...TRAVAS, CONFIG, ...BADGES.map(([f]) => f)];
   const titulo = notas.split("\n")[0].replace(/[.:]$/, "").slice(0, 80);
   git("commit", "-q", "-m", `chore: versão ${nova}\n\n${titulo}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, "--", ...arquivos);
