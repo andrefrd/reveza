@@ -95,6 +95,42 @@ describe("troca", () => {
     assert.equal(e().ativa, b);
   });
 
+  test("o assistente saiu da conta em uso: a troca não apaga o login guardado dela", async () => {
+    m = await montar();
+    const a = await ativaEm(m, "A", 10);
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set(pasta(a), blob("A0", true, 600, m.relogio.agora())); // a cópia guardada é mais velha que a da principal
+    m.cred.d.set("principal", { mcpOAuth: { servidor: { accessToken: "mcp-da-maquina" } } });
+    const r = await tr().trocar(b, "o assistente estava sem login");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token("principal"), "B1");
+    assert.equal(m.cred.token(pasta(a)), "A1", "o login mais novo de A (o último visto na principal) fica guardado, nada de vazio por cima");
+    assert.equal(r.de, a, "a conta que saiu ainda é devolvida (a posse dela é solta depois)");
+  });
+
+  test("o assistente saiu da conta em uso e a troca é para ela mesma: o login dela volta para a principal", async () => {
+    m = await montar();
+    const a = await ativaEm(m, "A", 10);
+    m.cred.d.set("principal", { mcpOAuth: { servidor: { accessToken: "mcp-da-maquina" } } });
+    const r = await tr().trocar(a, "o assistente estava sem login");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token("principal"), "A1", "antes, 'já está nela' encerrava a troca e a principal seguia sem login");
+    assert.deepEqual(m.cred.agora("principal")!.mcpOAuth, { servidor: { accessToken: "mcp-da-maquina" } });
+    assert.equal(e().ativa, a);
+  });
+
+  test("login de ninguém conhecido e morto na principal não vai para a pasta da conta em uso", async () => {
+    m = await montar();
+    const a = await ativaEm(m, "A", 10);
+    const b = contaEstacionada(m, "B", 3);
+    m.cred.d.set("principal", blob("X1", false, -60, m.relogio.agora()));
+    m.api.recusados.add("X1");
+    const r = await tr().trocar(b, "login morto");
+    assert.ok(r.ok, r.erro);
+    assert.equal(m.cred.token(pasta(a)), "A1");
+    assert.equal(m.cred.token("principal"), "B1");
+  });
+
   test("login vencido e sem renovação na principal: troca e guarda uma cópia do login antigo", async () => {
     m = await montar();
     const b = contaEstacionada(m, "B", 3);

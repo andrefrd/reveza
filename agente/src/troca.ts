@@ -236,6 +236,8 @@ export class Trocador {
     const alvo = contas[destino];
     if (!alvo) return { ok: false, erro: "conta desconhecida" };
     let atual = await this.cred.ler(PRINCIPAL);
+    // A principal não tem login de conta nenhuma (vazia, só os logins MCP, ou um login morto de ninguém conhecido).
+    let semConta = !hashToken(atual);
     if (atual && !(await this.identidade(atual))) {
       // Sem login nenhum na principal (computador novo, ou o assistente saiu da conta) ou com um login que não vale
       // mais, não há conta em uso a proteger: a troca segue. Antes ela era adiada para sempre, e o computador novo
@@ -245,10 +247,16 @@ export class Trocador {
         this.evento("erro", "Não consegui identificar a conta em uso (sem rede?); troca adiada.");
         return { ok: false, erro: "não consegui identificar a conta em uso" };
       }
+      semConta = true;
       if (hashToken(atual)) this.guardarCopiaDaPrincipal(atual);
       this.evento("info", `O assistente estava ${motivo}; a conta da troca entra no lugar.`);
     }
-    const de = await this.conferirPrincipalDentro();
+    // Principal sem conta: o que está nela não é login de ninguém daqui, então não vai para a pasta da conta que consta
+    // em uso (antes ia, e apagava o login guardado dela), e "já está nela" não vale (a principal seguia vazia). O último
+    // login visto dessa conta na principal, se for mais novo que o guardado, fica guardado (12/10/2026).
+    const anterior = this.estado.ativa;
+    if (semConta) await this.guardarUltimaPrincipal(anterior);
+    const de = semConta ? null : await this.conferirPrincipalDentro();
     if (de === destino) return { ok: true, de };
     const r = await this.travaConta(destino).com(async () => {
       let blobAlvo = await this.cred.ler(alvo.pasta);
@@ -291,10 +299,15 @@ export class Trocador {
     const p2 = pctEfetivo(alvo, t);
     const textoDe = de ? `${contas[de]!.email}${p !== null ? ` (${p.toFixed(0)}%)` : ""}` : "conta desconhecida";
     const textoPara = `${alvo.email}${p2 !== null ? ` (${p2.toFixed(0)}%)` : ""}`;
-    this.evento("troca", `Troquei de ${textoDe} para ${textoPara}. Motivo: ${motivo}.`, { de, para: destino, motivo });
+    this.evento(
+      "troca",
+      semConta ? `Pus ${textoPara} no assistente, que estava sem login. Motivo: ${motivo}.` : `Troquei de ${textoDe} para ${textoPara}. Motivo: ${motivo}.`,
+      { de: de ?? anterior, para: destino, motivo },
+    );
     this.salvar();
     this.relogio.agendar(() => void this.conferirTroca(destino, de, 1), CONFERIR_TROCA_MS);
-    return { ok: true, de };
+    // a conta que constava em uso saiu (a posse dela é solta depois), mesmo com a principal sem login
+    return { ok: true, de: de ?? (anterior !== destino ? anterior : null) };
   }
 
   /**
@@ -316,6 +329,19 @@ export class Trocador {
   }
 
   private principalRecusadaDesde: Record<string, number> = {};
+
+  /**
+   * A principal ficou sem a conta `id` (o assistente saiu dela): o último login dela visto na principal vai para a pasta
+   * dela quando é mais novo que o guardado, a mesma regra de quando a conta muda por fora. Sem isso ele se perderia.
+   */
+  private async guardarUltimaPrincipal(id: string | null): Promise<void> {
+    if (!id || !this.estado.contas[id] || !this.ultimaPrincipal || this.ultimaPrincipal[0] !== id) return;
+    const pasta = this.estado.contas[id]!.pasta;
+    const guardada = await this.cred.ler(pasta);
+    const visto = this.ultimaPrincipal[1];
+    if (hashToken(visto) === hashToken(guardada) || expiraEm(visto) <= expiraEm(guardada)) return;
+    await this.cred.gravar(pasta, comLogin(guardada, soLogin(visto)));
+  }
 
   /** Cópia do login que sai da principal sem ter dono no Reveza: nada se perde, mesmo login morto. */
   private guardarCopiaDaPrincipal(atual: Blob): void {
