@@ -201,8 +201,13 @@ export async function pedirParaEntrar(guarda: Guarda, nuvem: Nuvem, o: OpcoesPed
       } catch {
         throw new Error("a chave entregue não abriu com a chave deste computador (o pedido foi trocado no caminho): gere outro código no painel");
       }
-      // a chave precisa ser a desta instalação; outra dividiria o cofre
-      if (r.impressao && r.impressao !== impressaoDaChave(k)) {
+      // a chave precisa ser a desta instalação; outra dividiria o cofre. Sem a impressão na nuvem, recusa: um pedido só
+      // é liberado por um computador que já tem a chave, e ele grava a impressão ao subir. Aceitar sem impressão
+      // deixaria quem escreve direto no banco plantar uma chave dele aqui (revisão de código da 0.2.0, 12/10/2026).
+      if (!r.impressao) {
+        throw new Error("a nuvem não tem a impressão da chave do cofre desta instalação: abra o Reveza num computador que já o usa (ele grava a impressão) e gere outro código no painel");
+      }
+      if (r.impressao !== impressaoDaChave(k)) {
         throw new Error("a chave recebida não é a desta instalação: libere num computador que já usa o Reveza nesta instalação");
       }
       await guarda.gravar(SEGREDO_COFRE, k.toString("base64"));
@@ -223,6 +228,11 @@ export async function pedirParaEntrar(guarda: Guarda, nuvem: Nuvem, o: OpcoesPed
 
 /** Quem tem a chave do cofre: entrega para um pedido já conferido. */
 export async function entregarChave(nuvem: Nuvem, k: Buffer, pedido: PedidoLigacao): Promise<void> {
+  // quem entrega garante a impressão da chave na nuvem (grava se faltar): o computador novo recusa chave sem impressão
+  const daInstalacao = await nuvem.cofreImpressao(impressaoDaChave(k));
+  if (daInstalacao && daInstalacao !== impressaoDaChave(k)) {
+    throw new Error("a chave do cofre deste computador não é a da instalação: libere em outro computador");
+  }
   const env = await cifrarChaveParaComputadorNovo(pedido.publica, k, pedido.computador_id);
   const r = await nuvem.ligacaoEntregar(pedido.computador_id, pedido.publica, env);
   if (!r.ok) throw new Error(r.erro ?? "a nuvem recusou a entrega");

@@ -192,6 +192,25 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
     assert.equal(await lerChave(nova), null);
   });
 
+  test("sem a impressão da chave na nuvem, a chave entregue não é guardada (quem escreve no banco não planta chave)", async () => {
+    const { banco, velha, nv, nn } = await cena();
+    const nova = new GuardaFalsa();
+    await assert.rejects(
+      pedirParaEntrar(nova, nn, {
+        aoMostrarCodigo: () => undefined,
+        dormir: async () => {
+          const p = banco.pedidos.get("pc-novo")!;
+          if (p.envelope) return;
+          await liberarComputadorNovo(velha, nv, await codigoDaChave(p.publica!));
+          banco.cofreImpressao = null; // alguém apagou a impressão depois da entrega
+        },
+        intervaloMs: 0,
+      }),
+      /não tem a impressão da chave do cofre/,
+    );
+    assert.equal(await lerChave(nova), null);
+  });
+
   test("recusado ou vencido: o computador novo para com a mensagem de gerar outro código", async () => {
     const { banco, nv, nn } = await cena();
     const nova = new GuardaFalsa();
