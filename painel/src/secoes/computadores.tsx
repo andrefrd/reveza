@@ -377,7 +377,7 @@ const FASES_EM_CURSO = new Set<FaseLigacao>(["esperando_pedido", "esperando_codi
  */
 function LigarComputadorNovo() {
   const { t, idioma } = useT()
-  const { fonte } = useDados()
+  const { fonte, recarregar } = useDados()
   const estado = useEstado()
   const agora = useAgora(1000)
   const acao = useAcao()
@@ -401,8 +401,11 @@ function LigarComputadorNovo() {
         const e = await fonte.estadoLigacao(novoId)
         if (!vivo) return
         setLig(e)
-        // entrou: o próximo código não revoga este computador
-        if (e.fase === "ligado") pendente.current = null
+        // entrou: o próximo código não revoga este computador, e a lista relê já (com o nome dele)
+        if (e.fase === "ligado") {
+          pendente.current = null
+          void recarregar()
+        }
       } catch {
         // sem conexão por um instante: tenta na próxima volta
       }
@@ -413,7 +416,7 @@ function LigarComputadorNovo() {
       vivo = false
       clearInterval(id)
     }
-  }, [fonte, novoId, emCurso])
+  }, [fonte, novoId, emCurso, recarregar])
 
   const gerar = async () => {
     setEtapa({ tipo: "criando" })
@@ -506,7 +509,7 @@ function LigarComputadorNovo() {
           <span>{t("computadores.ligacao.passoDigitar", { computador: nomeAprovador })}</span>
           <span className="text-xs text-muted-foreground">{t("computadores.ligacao.semTela")}</span>
           <Codigo texto="reveza ligar XXXX-XXXX" />
-          {seletor ? (
+          {seletor && (fase === "esperando_pedido" || fase === "esperando_codigo") ? (
             <Field>
               <FieldLabel htmlFor="ligar-pc" className="text-xs text-muted-foreground">
                 {t("computadores.ligacao.outroComputador")}
@@ -534,7 +537,9 @@ function LigarComputadorNovo() {
           )}
           <span className={cn(fase === "ligado" ? "text-ok" : fim ? "text-foreground" : "text-muted-foreground")}>
             {fase === "ligado"
-              ? t("computadores.ligacao.fase.ligado", { computador: novo?.nome ?? "" })
+              ? novo && novo.sistema !== "pendente"
+                ? t("computadores.ligacao.fase.ligado", { computador: novo.nome })
+                : t("computadores.ligacao.fase.ligadoSemNome")
               : fase === "recusado"
                 ? t(`computadores.ligacao.fase.${lig?.motivo ?? "recusado_na_tela"}`)
                 : t(`computadores.ligacao.fase.${fase}`, { computador: nomeAprovador })}

@@ -844,7 +844,7 @@ export class FonteDemo implements Fonte {
       this.relogio = setInterval(() => {
         const t = this.agora().getTime()
         for (const c of this.d.computadores) {
-          if (c.revogado || c.id.startsWith("pc-novo")) continue
+          if (c.revogado || c.sistema === "pendente") continue
           c.vistoEm = new Date(t - 1000 - Math.floor(Math.random() * 3000)).toISOString()
         }
         this.emitir()

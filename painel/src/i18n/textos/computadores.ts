@@ -107,6 +107,7 @@ export default secao({
           esperando_codigo: "O computador novo pediu para entrar. Digite o código que aparece nele na janela de {computador}.",
           entregue: "Chave entregue, cifrada só para o computador novo. Esperando ele terminar…",
           ligado: "{computador} entrou. Pronto!",
+          ligadoSemNome: "O computador novo entrou. Pronto!",
           vencido: "O pedido venceu (10 minutos). Gere outro código.",
           recusado_na_tela: "O pedido foi recusado na janela. Se foi engano, gere outro código.",
           dois_pedidos:
@@ -230,6 +231,7 @@ export default secao({
           esperando_codigo: "The new computer asked to join. Type the code it shows in the window on {computador}.",
           entregue: "Key delivered, encrypted for the new computer only. Waiting for it to finish…",
           ligado: "{computador} joined. Done!",
+          ligadoSemNome: "The new computer joined. Done!",
           vencido: "The request expired (10 minutes). Generate another code.",
           recusado_na_tela: "The request was refused in the window. If that was a mistake, generate another code.",
           dois_pedidos: "Two computers asked to join at the same time, and both were refused, for safety. Generate again, one at a time.",
