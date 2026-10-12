@@ -159,13 +159,16 @@ a dele, pelo instalador da própria versão nova, num processo separado, com a c
   outros param e sai um alerta. O agente da 0.2.1 conta no diagnóstico que entende o "assim que sair"
   (`assimQueSair`); os de antes só vão sozinhos de madrugada, e o painel deixa o Atualizar todos para eles.
 - **Trava de compatibilidade**: uma versão nova pode trazer migração da nuvem. Antes de rodar o instalador, o agente
-  compara as migrações do pacote baixado (`nuvem/migracoes`) com os nomes que a nuvem já aplicou (`agente_migracoes()`,
-  só a lista de nomes de `reveza_migracoes`; o computador não lê a tabela). Faltando alguma, ou com a nuvem sem a função
-  ou sem o registro, não atualiza: o painel mostra "A versão Y precisa da nuvem atualizada primeiro: use Atualizar a
-  nuvem" (até a 0.2.1, era no computador principal, com os tokens; desde a 0.3.0 a nuvem se atualiza sozinha, 7e), e o
-  agente confere a nuvem de 5 em 5 minutos (sem baixar de novo) até poder seguir. Por isso mudança de banco que uma
-  versão exige vai sempre num arquivo novo de migração: a trava compara nomes, e um arquivo reaplicável que muda com o
-  mesmo nome não é visto por ela.
+  compara as migrações do pacote baixado (`nuvem/migracoes`) com as que a nuvem já aplicou (`agente_migracoes()`: os
+  nomes e, desde a 0.3.1, o resumo sha256 de cada uma em `reveza_migracoes`; o computador não lê a tabela). Falta a que
+  não tem o nome lá e, enquanto a nuvem estiver numa versão anterior (`nuvem_versao`), também a reaplicável que existe
+  com outro conteúdo (a 0099 muda quase toda versão); com a nuvem na mesma versão ou adiante, basta o nome. O resumo é
+  do texto com fim de linha LF (`.gitattributes` fixa LF nos `.sql`; o registrado com CRLF por um clone no Windows de
+  antes da 0.3.1 também vale), igual no instalador, na função `atualizar-nuvem` e no agente. Faltando alguma, ou com a
+  nuvem sem a função ou sem o registro, não atualiza: o painel mostra "A versão Y precisa da nuvem atualizada
+  primeiro: use Atualizar a nuvem" (até a 0.2.1, era no computador principal, com os tokens; desde a 0.3.0 a nuvem se
+  atualiza sozinha, 7e), e o agente confere a nuvem de 5 em 5 minutos (sem baixar de novo) até poder seguir. Mudança
+  de tabela continua indo num arquivo novo de migração: o instalador recusa migração de tabela que mudou.
 - **A ordem** (0.3.0): com a atualização completa ligada (7e), a vez de se atualizar sozinho (`agente_vez_de_atualizar`)
   espera as funções e o painel da versão da nuvem irem ao ar (`motivo: publicacao`), e para se a publicação parou
   (`publicacao_falhou`). Enquanto um computador publica, ele mesmo não se atualiza (a publicação é um processo dele).

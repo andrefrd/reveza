@@ -209,8 +209,12 @@ export type ResultadoConferencia =
   | { fase: "sem_resposta" }
   | { fase: "em_dia"; versao: string }
   | { fase: "disponivel"; versao: string; atras: number; precisaNuvem: boolean }
+  /** Quem sabe conferir respondeu que não conseguiu (sem acesso ao GitHub, por exemplo), e ninguém conferiu. */
+  | { fase: "nao_conferiu"; erro: string }
 
 const ativo = (pc: Computador) => !pc.revogado && pc.sistema !== "pendente"
+/** O Verificar atualização chegou na 0.2.1: os de antes recusam o pedido sem saber o que é. */
+const sabeConferir = (pc: Computador) => SEMVER.test(pc.versao) && compararVersao(pc.versao, "0.2.1") >= 0
 
 /**
  * O resultado da rodada: conferindo (alguém ainda pode responder), ninguém respondeu, todos na mais nova, ou a versão
@@ -229,6 +233,17 @@ export function resultadoDaConferencia(c: Conferencia, computadores: Computador[
     .map((x) => x.resposta!)
   // computador de versão anterior recusa o pedido (não sabe conferir): responde, mas sem versão
   const recusaram = ids.some((id) => c.lidos[id]?.estado === "recusado")
+  // o que sabe conferir (0.2.1 em diante) e recusou com motivo não conferiu: sem nenhuma conferência, "em dia" seria mentira
+  if (!respostas.length) {
+    const pcDoPedido = new Map(Object.entries(c.pedidos).map(([pc, id]) => [id, pc]))
+    const erros = ids.flatMap((id) => {
+      const x = c.lidos[id]
+      const pc = computadores.find((p) => p.id === pcDoPedido.get(id))
+      const erro = x?.resposta?.erro
+      return x?.estado === "recusado" && typeof erro === "string" && pc && sabeConferir(pc) ? [erro] : []
+    })
+    if (erros.length) return { fase: "nao_conferiu", erro: erros[0]! }
+  }
   if (!respostas.length && !recusaram) return { fase: "sem_resposta" }
   const ativos = computadores.filter(ativo)
   const conhecidas = [
@@ -255,7 +270,7 @@ export function entendeAssimQueSair(pc: Computador): boolean {
   return pc.diagnostico?.assimQueSair === true
 }
 
-export type EstadoNaAtualizacao = "em_dia" | "atualizando" | "na_fila" | "falhou" | "precisa_nuvem" | "disponivel"
+export type EstadoNaAtualizacao = "em_dia" | "atualizando" | "na_fila" | "parada" | "falhou" | "precisa_nuvem" | "disponivel"
 
 /**
  * Onde cada computador está na atualização para `alvo` (o andamento do cartão de cima): já nela, atualizando agora (a vez
@@ -277,6 +292,8 @@ export function andamentoDeTodos(
     if (a?.fase === "precisa_nuvem") return { pc, estado: "precisa_nuvem" as const }
     if (vez?.estado === "em_andamento" && vez.computadorId === pc.id) return { pc, estado: "atualizando" as const }
     const vaiSozinho = modo === "madrugada" || (modo === "assim_que_sair" && entendeAssimQueSair(pc))
+    // um voltou para a anterior: a vez parou para todos até o administrador retomar (não fica "esperando a vez" para sempre)
+    if (vaiSozinho && vez?.estado === "falhou") return { pc, estado: "parada" as const }
     return { pc, estado: vaiSozinho ? ("na_fila" as const) : ("disponivel" as const) }
   })
 }
@@ -304,6 +321,8 @@ export type FaseNuvem =
   /** Nuvem de antes da 0.3.0: ela ainda não sabe a versão dela (o instalador grava na primeira atualização). */
   | { fase: "desconhecida" }
   | { fase: "atualizando"; versao: string | null }
+  /** Começou e não terminou em 10 minutos (a função caiu no meio): o banco já deixa tentar de novo. */
+  | { fase: "interrompida"; versao: string | null }
   | { fase: "falhou"; versao: string | null; motivo: string }
   | { fase: "publicando"; versao: string; computadorId: string | null }
   | { fase: "publicacao_falhou"; versao: string; motivo: string }
@@ -315,14 +334,15 @@ export type FaseNuvem =
 
 /** Em que pé estão a nuvem e o painel, para a linha "Nuvem e painel" do cartão de atualizações. */
 export function faseDaNuvem(n: EstadoNuvem | null | undefined, agora: Date): FaseNuvem {
-  if (!n?.versao) {
-    if (n?.atualizacao?.estado === "atualizando") return { fase: "atualizando", versao: n.atualizacao.para }
-    return { fase: "desconhecida" }
-  }
   const t = agora.getTime()
   const recente = (iso: string | null, min: number) => !!iso && t - Date.parse(iso) < min * MIN
-  const at = n.atualizacao
-  if (at?.estado === "atualizando" && recente(at.desde, 10)) return { fase: "atualizando", versao: at.para }
+  const at = n?.atualizacao
+  // a mesma janela do banco (servico_nuvem_comecar): depois de 10 minutos, "atualizando" é uma rodada que caiu
+  if (at?.estado === "atualizando") {
+    if (recente(at.desde, 10)) return { fase: "atualizando", versao: at.para }
+    if (!n?.versao || (at.para && SEMVER.test(at.para) && compararVersao(at.para, n.versao) > 0)) return { fase: "interrompida", versao: at.para }
+  }
+  if (!n?.versao) return { fase: "desconhecida" }
   if (at?.estado === "falhou" && at.para && compararVersao(at.para, n.versao) > 0) {
     return { fase: "falhou", versao: at.para, motivo: at.motivo ?? "" }
   }

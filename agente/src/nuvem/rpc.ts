@@ -265,8 +265,17 @@ export class NuvemRpc implements Nuvem {
     const r = await this.chamar("agente_migracoes", {});
     if (r.nomes === null || r.nomes === undefined) return null;
     if (!Array.isArray(r.nomes)) throw new ErroNuvem("agente_migracoes: resposta fora do formato", false, "formato");
-    // só nome de arquivo de migração (como o registro do instalador aceita)
-    return r.nomes.filter((n): n is string => typeof n === "string" && /^[0-9a-z_.]{1,120}$/.test(n));
+    // só nome de arquivo de migração (como o registro do instalador aceita) e resumo sha256
+    const nome = (n: unknown): n is string => typeof n === "string" && /^[0-9a-z_.]{1,120}$/.test(n);
+    const nomes = r.nomes.filter(nome);
+    let hashes: Record<string, string> | null = null;
+    if (r.hashes && typeof r.hashes === "object" && !Array.isArray(r.hashes)) {
+      hashes = {};
+      for (const [n, h] of Object.entries(r.hashes as Record<string, unknown>)) {
+        if (nome(n) && typeof h === "string" && /^[0-9a-f]{64}$/.test(h)) hashes[n] = h;
+      }
+    }
+    return { nomes, hashes };
   }
 
   async credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string) {

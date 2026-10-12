@@ -731,7 +731,9 @@ export class FonteSupabase implements Fonte {
       body: { acao: "atualizar" },
     })
     if (error || !data || typeof data.estado !== "string") {
-      const msg = String(data?.erro ?? error?.message ?? "")
+      // a função responde 401/403 com o motivo no corpo ("confirme a verificação em duas etapas", "só administrador")
+      const corpo = error ? await lerCorpoDoErro(error) : null
+      const msg = String(data?.erro ?? corpo?.erro ?? error?.message ?? "")
       throw new ErroPainel(/duas etapas/.test(msg) ? "precisa_aal2" : codigoDoErro(msg), msg)
     }
     return { ok: data.ok === true, estado: data.estado, para: data.para ?? null, motivo: data.motivo ?? null }

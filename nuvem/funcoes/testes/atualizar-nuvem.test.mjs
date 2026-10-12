@@ -12,7 +12,7 @@ import { gzipSync } from "node:zlib";
 import { PGlite } from "@electric-sql/pglite";
 import * as L from "../atualizar-nuvem/logica.ts";
 import { tratar } from "../atualizar-nuvem/tratar.ts";
-import { migracoes as migracoesDoInstalador, planoMigracoes as planoDoInstalador } from "../../provisionar.mjs";
+import { migracoes as migracoesDoInstalador, planoMigracoes as planoDoInstalador, hashesAceitos as hashesDoInstalador } from "../../provisionar.mjs";
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const sha = (t) => createHash("sha256").update(t).digest("hex");
@@ -175,6 +175,18 @@ test("o plano das migrações é o do instalador (mesmos nomes, mesma ordem, mes
   feitas.set("0001_base.sql", "2".repeat(64));
   await assert.rejects(L.planoMigracoes(daFuncao, feitas), /0001_base\.sql mudou depois de aplicada/);
   await assert.rejects(L.planoMigracoes(daFuncao, new Map()), /não tem o registro/);
+});
+
+test("o fim de linha não muda o resumo: nuvem instalada de um clone com CRLF (Windows) não trava nem reaplica", async () => {
+  const doRepo = migracoesDoInstalador(path.join(RAIZ, "nuvem", "migracoes"));
+  const daFuncao = L.migracoesDoPacote(L.lerTar(await L.gunzip(pacoteDe("9.9.9"))), "reveza-9.9.9");
+  const crlf = new Map(doRepo.map((m) => [m.nome, sha(m.sql.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n"))]));
+  assert.deepEqual(await L.planoMigracoes(daFuncao, crlf), [], "a função aceita o resumo registrado com CRLF");
+  assert.deepEqual(planoDoInstalador(doRepo, crlf, true), [], "o instalador também");
+  // e os dois registram o resumo com LF, o mesmo para o arquivo com CRLF ou com LF
+  const m = doRepo.find((x) => x.nome === "0021_atualizar_nuvem.sql");
+  assert.equal(await L.hashDe(m.sql.replace(/\n/g, "\r\n")), await L.hashDe(m.sql));
+  assert.deepEqual(await L.hashesAceitos(m.sql), hashesDoInstalador(m.sql));
 });
 
 test("toda migração de hoje cabe numa transação; as que não cabem são recusadas antes de começar", () => {

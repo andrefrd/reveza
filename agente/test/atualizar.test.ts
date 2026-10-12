@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as zlib from "node:zlib";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
@@ -19,6 +20,7 @@ import {
   lerPedido,
   MAIS_NOVA,
   migracoesDoPacote,
+  resumosDoPacote,
   modoAtualizar,
   naMadrugada,
   rodarSeparado,
@@ -306,6 +308,16 @@ describe("extrair o pacote com o Node", () => {
     assert.deepEqual(migracoesDoPacote(path.join(tmp.dir, "x", "reveza-0.1.7")), ["0001_a.sql", "0002_b.sql"]);
     assert.deepEqual(faltamNaNuvem(["0001_a.sql", "0002_b.sql", "0003_c.sql"], ["0002_b.sql", "0001_a.sql", "0009_outra.sql"]), ["0003_c.sql"]);
     assert.deepEqual(faltamNaNuvem(["0001_a.sql"], ["0001_a.sql"]), []);
+    // com os resumos: o mesmo nome com outro conteúdo também falta; o resumo com CRLF vale; nuvem sem resumo, só o nome
+    const resumos = resumosDoPacote(path.join(tmp.dir, "x", "reveza-0.1.7"));
+    const lf = createHash("sha256").update("-- migração\n").digest("hex");
+    const crlf = createHash("sha256").update("-- migração\r\n").digest("hex");
+    assert.deepEqual(resumos["0001_a.sql"], [lf, crlf]);
+    const nomes = ["0001_a.sql", "0002_b.sql"];
+    assert.deepEqual(faltamNaNuvem(nomes, { nomes, hashes: { "0001_a.sql": crlf, "0002_b.sql": "a".repeat(64) } }, resumos), ["0002_b.sql"]);
+    assert.deepEqual(faltamNaNuvem(nomes, { nomes, hashes: { "0001_a.sql": lf, "0002_b.sql": lf } }, resumos), []);
+    assert.deepEqual(faltamNaNuvem(nomes, { nomes, hashes: null }, resumos), []);
+    assert.deepEqual(faltamNaNuvem(nomes, { nomes, hashes: { "0002_b.sql": "a".repeat(64) } }, null), [], "sem os resumos do pacote: só o nome");
     fs.writeFileSync(arq, pacote("0.1.8", [], null));
     extrairTarGz(arq, path.join(tmp.dir, "y"));
     assert.throws(() => migracoesDoPacote(path.join(tmp!.dir, "y", "reveza-0.1.8")), /não tem as migrações da nuvem/);
@@ -912,6 +924,23 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
     assert.equal(cmd.resposta?.atualizando, true);
     assert.equal(exec.iniciados.length, 1);
     assert.equal(m!.agente.travaNuvem, null);
+  });
+
+  test("o mesmo nome com outro conteúdo (reaplicável que mudou) falta até a nuvem chegar nesta versão; adiante, basta o nome", async () => {
+    await preparar();
+    banco.migracoes!.push(NOVA_MIGRACAO);
+    const lf = createHash("sha256").update("-- migração\n").digest("hex");
+    const crlf = createHash("sha256").update("-- migração\r\n").digest("hex");
+    banco.hashesMigracoes = { "0001_base.sql": crlf, "0099_permissoes.sql": "a".repeat(64), [NOVA_MIGRACAO]: lf };
+    const cmd = await pedir({ versao: MAIS_NOVA });
+    assert.equal(cmd.http, 409, JSON.stringify(cmd.resposta));
+    assert.deepEqual(cmd.resposta?.faltam, ["0099_permissoes.sql"], "o resumo registrado com CRLF vale; o da 0099 é de outra versão");
+    assert.equal(exec.iniciados.length, 0);
+    // a nuvem já está nesta versão (ou adiante): a 0099 dela pode ser mais nova que a do pacote
+    banco.config = { ...banco.config, nuvem_versao: NOVA };
+    const depois = await pedir({ versao: MAIS_NOVA });
+    assert.equal(depois.estado, "feito", JSON.stringify(depois.resposta));
+    assert.equal(exec.iniciados.length, 1);
   });
 
   test("nuvem de antes da 0.2.1 (sem a função) ou sem o registro conta como desatualizada; sem rede, não atualiza e não trava", async () => {

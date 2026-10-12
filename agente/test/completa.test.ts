@@ -299,6 +299,7 @@ describe("a publicação das funções e do painel", () => {
     assert.deepEqual(chamada.argv.slice(2), ["--publicar-nuvem", "--ref", REF, "--partes", "funcoes,painel"]);
     assert.match(chamada.argv[1]!, new RegExp(`reveza-${NUVEM.replaceAll(".", "\\.")}[/\\\\]instalador[/\\\\]instalar\\.mjs$`));
     assert.deepEqual(JSON.parse(chamada.entrada!), TOKENS, "os tokens vão pela entrada padrão");
+    assert.equal(chamada.arvore, true, "no prazo, o build e a publicação que o instalador abriu morrem junto");
     assert.ok(!temToken(chamada.argv.join(" ")), "nunca em argumento");
     assert.equal(banco.publicacaoVez?.estado, "concluida");
     assert.deepEqual(banco.config.publicado, { funcoes: NUVEM, painel: NUVEM });
@@ -324,6 +325,17 @@ describe("a publicação das funções e do painel", () => {
     banco.config.publicacao_vez = { computador: "pc-1", para: NUVEM, estado: "falhou" };
     await m!.agente.busca();
     assert.equal(banco.chamadas.filter((c) => c.fn === "vezDePublicar").length, antes);
+  });
+
+  test("outra publicação viva neste computador (o instalador sai com 75): espera, sem contar falha nem alertar", async () => {
+    const { banco } = await preparar({ codigo: 75, saida: "\n  Parei: já há uma publicação em andamento neste computador\n" });
+    await m!.agente.busca();
+    await m!.agente.esperar();
+    assert.equal(banco.publicacaoVez?.estado, "em_andamento", "a vez segue com a publicação que está viva");
+    assert.ok(!banco.chamadas.some((c) => c.fn === "resultadoPublicacao"));
+    assert.equal(banco.alertas.length, 0);
+    assert.match(m!.log.linhas.join("\n"), /outra publicação segue viva neste computador/);
+    assert.equal(m!.agente.publicando, null);
   });
 
   test("um computador por vez: com a vez de outro, este espera; desligada ou sem nada a publicar, nem pede", async () => {

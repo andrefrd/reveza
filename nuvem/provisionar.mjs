@@ -56,7 +56,15 @@ export function migracoes(dir = path.join(aqui, "migracoes")) {
   return [...todas.filter((m) => !m.nome.startsWith("0099")), ...todas.filter((m) => m.nome.startsWith("0099"))];
 }
 
-const hashDe = (sql) => createHash("sha256").update(sql).digest("hex");
+const sha256 = (texto) => createHash("sha256").update(texto).digest("hex");
+// O resumo não depende do fim de linha: um clone no Windows (core.autocrlf) tem CRLF, o pacote da tag tem LF, e o
+// instalador, a função atualizar-nuvem e o agente precisam chegar ao mesmo resumo.
+const hashDe = (sql) => sha256(sql.replace(/\r\n/g, "\n"));
+/** Os resumos que valem para o mesmo arquivo: o de hoje (LF) e o que um clone com CRLF registrou antes da 0.3.1. */
+export const hashesAceitos = (sql) => {
+  const lf = sql.replace(/\r\n/g, "\n");
+  return [sha256(lf), sha256(lf.replace(/\n/g, "\r\n"))];
+};
 export const reaplicavel = (m) => /^-- reaplicável/m.test(m.sql);
 
 // Registro das migrações aplicadas (nome e hash), fechado para o painel e para os computadores.
@@ -84,7 +92,7 @@ export function planoMigracoes(todas, feitas, bancoExiste) {
   for (const m of todas) {
     const antes = conhecidas.get(m.nome);
     const hash = hashDe(m.sql);
-    if (antes === hash) continue;
+    if (antes !== undefined && hashesAceitos(m.sql).includes(antes)) continue;
     if (antes !== undefined && !reaplicavel(m)) {
       throw new Error(`${m.nome} mudou depois de aplicada e mexe em tabela: a mudança precisa ir numa migração nova`);
     }

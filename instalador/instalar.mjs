@@ -40,7 +40,7 @@ import { esperarConta } from "./lib/prova.mjs";
 import {
   acrescentarPath, ambienteLimpo, criarLancador, existe, gravarConfigLocal, gravarInstalacao, instalarMod, instalarPrograma, lerInstalacao,
   linhaPath, npm, portaOcupada, removerMod, rodar,
-  copiarEstado, voltarAtualizacao,
+  copiarEstado, travarPublicacao, voltarAtualizacao,
 } from "./lib/programa.mjs";
 import { conferirToken, criarProjeto, organizacoes, projetos, REGIOES, regiaoSugerida } from "./lib/supabase.mjs";
 import { emailValido, fraco, info, mascara, nao, negrito, numerarProximoTitulo, ok, perguntador, senhaForte, t, titulo, usarIdioma, verde } from "./lib/texto.mjs";
@@ -545,6 +545,17 @@ async function publicarNuvem(ctx, a) {
   if (typeof tokens?.supabase !== "string" || !tokens.supabase || typeof tokens?.vercel !== "string" || !tokens.vercel) {
     throw new Error(t("faltam os tokens do Supabase e da Vercel", "the Supabase and Vercel tokens are missing"));
   }
+  const soltar = travarPublicacao(path.join(BASE, "publicando.json"));
+  // código 75 (EX_TEMPFAIL): o agente entende "espere", não "falhou" (a primeira publicação segue e conta o resultado)
+  if (!soltar) throw Object.assign(new Error(t("já há uma publicação em andamento neste computador", "a publication is already running on this computer")), { codigoSaida: 75 });
+  try {
+    await publicarComTokens(ctx, ref, partes, tokens);
+  } finally {
+    soltar();
+  }
+}
+
+async function publicarComTokens(ctx, ref, partes, tokens) {
   ctx.gerencia = new Gerencia(tokens.supabase);
   ctx.ref = ref;
   const c = await lerPublicacao(consultar(ctx));
@@ -935,7 +946,7 @@ async function main() {
     const causa = e.cause && e.cause.message ? ` (${e.cause.message})` : "";
     console.error(`\n  ${t("Parei", "Stopped")}: ${e.message}${causa}\n`);
     if (process.env.REVEZA_DEPURAR) console.error(e.stack, e.cause);
-    process.exit(1);
+    process.exit(Number.isInteger(e.codigoSaida) ? e.codigoSaida : 1);
   }
 }
 

@@ -212,6 +212,16 @@ describe("Verificar atualização", () => {
     // computador de versão anterior recusa o pedido (não sabe conferir): vale o que já se sabe dele
     const antigo = rodada([comando(11, "recusado", { ok: false, erro: "o pedido de atualização só leva a versão" }), comando(12, "expirado")])
     expect(resultadoDaConferencia(antigo, dois(), t + PRAZO_DA_CONFERENCIA_MS + 1)).toEqual({ fase: "disponivel", versao: "0.1.7", atras: 2, precisaNuvem: false })
+    // quem sabe conferir (0.2.1 em diante) e não conseguiu (sem acesso ao GitHub): não é "todos em dia"
+    const semGithub = rodada([
+      comando(11, "recusado", { ok: false, erro: "o GitHub respondeu 403" }),
+      comando(12, "recusado", { ok: false, erro: "o GitHub respondeu 403" }, "pc-2"),
+    ])
+    const novos = [pc("0.3.0"), pc("0.3.0", { id: "pc-2", nome: "Desktop" })]
+    expect(resultadoDaConferencia(semGithub, novos, t)).toEqual({ fase: "nao_conferiu", erro: "o GitHub respondeu 403" })
+    // um conferiu: vale a conferência dele
+    const um = rodada([comando(11, "recusado", { ok: false, erro: "o GitHub respondeu 403" }), comando(12, "feito", conferido("0.3.0"), "pc-2")])
+    expect(resultadoDaConferencia(um, novos, t)).toEqual({ fase: "em_dia", versao: "0.3.0" })
   })
 
   it("a versão achada que precisa da nuvem e do painel primeiro aparece no resultado", () => {
@@ -252,6 +262,10 @@ describe("andamento de todos (o cartão de cima)", () => {
     ])
     // desligada: quem está atrás só tem a versão disponível (ninguém vai sozinho)
     expect(andamentoDeTodos([pcs[2]!], "0.1.7", [], null, "desligada", AGORA)[0]!.estado).toBe("disponivel")
+    // um voltou para a anterior: a vez parou, e quem iria sozinho fica "parada" (não "esperando a vez" para sempre)
+    const falhou = { computadorId: "b", para: "0.1.7", estado: "falhou" as const, desde: min(-90) }
+    expect(andamentoDeTodos([pcs[2]!], "0.1.7", [], falhou, "assim_que_sair", AGORA)[0]!.estado).toBe("parada")
+    expect(andamentoDeTodos([pcs[2]!], "0.1.7", [], falhou, "desligada", AGORA)[0]!.estado).toBe("disponivel")
   })
 
   it("agente de antes da 0.2.1 não entende o 'assim que sair' (precisa do botão), mas vai sozinho de madrugada", () => {
@@ -288,8 +302,14 @@ describe("a nuvem e o painel (0.3.0)", () => {
       fase: "atualizando",
       versao: "0.3.2",
     })
-    // a vez da nuvem venceu (10 minutos): não fica girando para sempre
-    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "atualizando", de: "0.3.0", para: "0.3.2", desde: min(-11), motivo: null } }), AGORA).fase).toBe("passo_manual")
+    // a vez da nuvem venceu (10 minutos): não fica girando para sempre, nem passa por "em dia" na versão de antes
+    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "atualizando", de: "0.3.0", para: "0.3.2", desde: min(-11), motivo: null } }), AGORA)).toEqual({
+      fase: "interrompida",
+      versao: "0.3.2",
+    })
+    // nuvem de antes da 0.3.0 (sem versão) com a primeira rodada caída: também libera o botão
+    expect(faseDaNuvem(nuvem({ versao: null, atualizacao: { estado: "atualizando", de: null, para: "0.3.2", desde: min(-2), motivo: null } }), AGORA).fase).toBe("atualizando")
+    expect(faseDaNuvem(nuvem({ versao: null, atualizacao: { estado: "atualizando", de: null, para: "0.3.2", desde: min(-11), motivo: null } }), AGORA).fase).toBe("interrompida")
     expect(faseDaNuvem(nuvem({ atualizacao: { estado: "falhou", de: "0.3.1", para: "0.3.2", desde: min(-2), motivo: "erro x" } }), AGORA)).toEqual({
       fase: "falhou",
       versao: "0.3.2",

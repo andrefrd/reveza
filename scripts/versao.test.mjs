@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conferir, maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes, workflowsVermelhos } from "./versao.mjs";
+import { conferir, maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, soArquivosDaVersao, versoes, workflowsVermelhos } from "./versao.mjs";
 
 const CHANGELOG = `# Versões
 
@@ -60,4 +60,11 @@ test("lançar recusa quando o run mais recente de algum workflow na main está v
   assert.deepEqual(workflowsVermelhos(runs), ["Windows de verdade"], "o vermelho antigo de um workflow que já ficou verde não conta");
   assert.deepEqual(workflowsVermelhos([{ workflowName: "Windows de verdade", conclusion: "", status: "in_progress" }, ...runs]), [], "rodando agora: espera o resultado");
   assert.deepEqual(workflowsVermelhos([]), []);
+});
+
+test("o ensaio da árvore de antes só vale para o commit de versão (só os arquivos da versão)", () => {
+  assert.equal(soArquivosDaVersao(["package.json", "agente/package.json", "agente/src/config.ts", "README.md", "package-lock.json"]), true);
+  assert.equal(soArquivosDaVersao(["package.json", "scripts/ensaio.mjs"]), false, "commit a mais depois do ensaio");
+  assert.equal(soArquivosDaVersao(["agente/src/agente.ts"]), false);
+  assert.equal(soArquivosDaVersao([]), false);
 });

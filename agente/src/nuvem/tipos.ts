@@ -191,10 +191,11 @@ export interface Nuvem {
   /** Como terminou a atualização sozinha deste computador (libera a vez, ou para os outros e vira alerta). */
   resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null): Promise<{ ok: boolean }>;
   /**
-   * Os nomes das migrações que a nuvem já aplicou (só os nomes). Null quando a nuvem não tem o registro; erro com código
+   * As migrações que a nuvem já aplicou: os nomes e o resumo de cada uma (hashes null numa nuvem de antes da 0.3.1). Null
+   * quando a nuvem não tem o registro; erro com código
    * PGRST202/42883 quando ela é de antes da 0.2.1 (sem a função).
    */
-  migracoesAplicadas(): Promise<string[] | null>;
+  migracoesAplicadas(): Promise<{ nomes: string[]; hashes: Record<string, string> | null } | null>;
   /** Atualização completa (0021): guarda os dois tokens cifrados com a chave do cofre (com a impressão dela). */
   credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string): Promise<{ ok: boolean }>;
   /** Os tokens cifrados (só computador ativo lê; sem a chave do cofre, não abre). */

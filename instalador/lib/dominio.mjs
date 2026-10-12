@@ -1,9 +1,16 @@
 // Domínio próprio do painel: validação, o passo a passo do registro de DNS (em qualquer provedor) e a conferência do DNS
 // (por DNS sobre HTTPS).
 
+import { domainToASCII } from "node:url";
+
+/**
+ * O subdomínio do painel, como a Vercel e o DNS entendem: minúsculas, sem esquema nem barra, sem o ponto final de nome
+ * absoluto (contas.x.com.) e com acento em punycode (painel.ação.com.br → painel.xn--ao-siap.com.br).
+ */
 export function dominioValido(d) {
-  const s = String(d || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  if (!/^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(s)) return null;
+  let s = String(d || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/\.$/, "");
+  if (/[^\x00-\x7f]/.test(s)) s = domainToASCII(s);
+  if (!/^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/.test(s)) return null;
   return s;
 }
 

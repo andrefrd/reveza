@@ -98,6 +98,41 @@ const carimbo = (d) => d.toISOString().replace(/[-:]/g, "").replace("T", "-").sl
  * Se a conferência falhar, lança: a atualização para antes de mexer em qualquer coisa. Mantém as 5 cópias mais novas
  * (as cópias de login antigo da principal, `principal-*.json`, não entram na conta).
  */
+const processoVivo = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e?.code === "EPERM";
+  }
+};
+
+/** Quanto vale a vez de uma publicação neste computador: a mesma da nuvem (45 minutos). */
+export const PUBLICACAO_TRAVA_MS = 45 * 60_000;
+
+/**
+ * Uma publicação (--publicar-nuvem) por computador: se o agente cair com o instalador ainda vivo (no Windows os filhos
+ * sobrevivem), o agente que volta pode pedir a vez de novo, e a nuvem devolve a mesma vez para o mesmo computador. A
+ * trava local segura o segundo enquanto o primeiro estiver vivo. Devolve a função que solta, ou null se a vez é de outro.
+ */
+export function travarPublicacao(arquivo, { agora = Date.now(), vivo = processoVivo, pid = process.pid } = {}) {
+  try {
+    const t = JSON.parse(readFileSync(arquivo, "utf8"));
+    if (Number.isInteger(t.pid) && t.pid !== pid && typeof t.desde === "number" && agora - t.desde < PUBLICACAO_TRAVA_MS && vivo(t.pid)) return null;
+  } catch {
+    // sem trava (ou ilegível): a vez é desta
+  }
+  mkdirSync(path.dirname(arquivo), { recursive: true, mode: 0o700 });
+  writeFileSync(arquivo, JSON.stringify({ pid, desde: agora }), { mode: 0o600 });
+  return () => {
+    try {
+      if (JSON.parse(readFileSync(arquivo, "utf8")).pid === pid) rmSync(arquivo, { force: true });
+    } catch {
+      // já saiu
+    }
+  };
+}
+
 export function copiarEstado(base, rotulo, { agora = new Date(), manter = MANTER_COPIAS } = {}) {
   const pasta = path.join(base, "copias");
   const destino = path.join(pasta, `${carimbo(agora)}-${rotulo.replace(/[^\w.-]/g, "_")}`);

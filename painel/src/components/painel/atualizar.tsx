@@ -7,6 +7,7 @@
 import * as React from "react"
 import {
   CircleCheckIcon,
+  CirclePauseIcon,
   CircleXIcon,
   ClockIcon,
   CloudAlertIcon,
@@ -172,6 +173,7 @@ const ICONE_DO_ESTADO: Record<EstadoNaAtualizacao, typeof MoonIcon | null> = {
   em_dia: CircleCheckIcon,
   atualizando: null,
   na_fila: ClockIcon,
+  parada: CirclePauseIcon,
   falhou: CircleXIcon,
   precisa_nuvem: CloudAlertIcon,
   disponivel: DownloadIcon,
@@ -216,6 +218,8 @@ export function LinhaNuvem() {
       ? t(`${k}.fase.desconhecida`)
       : f.fase === "atualizando"
         ? t(`${k}.fase.atualizando`, { versao: f.versao ?? "?" })
+        : f.fase === "interrompida"
+        ? t(`${k}.fase.interrompida`, { versao: f.versao ?? "?" })
         : f.fase === "falhou"
           ? t(`${k}.fase.falhou`, { versao: f.versao ?? "?", motivo: f.motivo || "?" })
           : f.fase === "publicando"
@@ -227,7 +231,8 @@ export function LinhaNuvem() {
                 : f.fase === "esperando_publicacao"
                   ? t(`${k}.fase.esperandoPublicacao`, { versao: f.versao })
                   : t(`${k}.fase.atualizada`, { versao: f.versao })
-  const atencao = f.fase === "falhou" || f.fase === "publicacao_falhou" || f.fase === "passo_manual" || f.fase === "desconhecida"
+  const atencao =
+    f.fase === "falhou" || f.fase === "interrompida" || f.fase === "publicacao_falhou" || f.fase === "passo_manual" || f.fase === "desconhecida"
   const Icone = atencao ? CloudAlertIcon : f.fase === "atualizada" ? CircleCheckIcon : null
   const cor = atencao ? "text-atencao" : f.fase === "atualizada" ? "text-ok" : "text-muted-foreground"
 
@@ -364,6 +369,11 @@ export function CartaoAtualizacoes() {
     else toast.error(t("computadores.atualizacao.todosFalhou"))
   }
 
+  // um voltou para a anterior: a vez parou para todos; retomar grava o mesmo jeito (o banco solta a vez parada)
+  const parada = estado.config.atualizacaoVez?.estado === "falhou" && modo !== "desligada"
+  const retomar = () =>
+    void acao(() => fonte.salvarConfig({ atualizarSozinho: modo }), t("computadores.atualizacao.parada.retomada"))
+
   const escolher = (v: string) => {
     const novo = v as ModoAtualizar
     if (!MODOS_ATUALIZAR.includes(novo) || novo === modo) return
@@ -379,6 +389,8 @@ export function CartaoAtualizacoes() {
       ? t("computadores.atualizacao.conferencia.conferindo", { n: resultado.responderam, total: resultado.total })
       : resultado?.fase === "sem_resposta"
         ? t("computadores.atualizacao.conferencia.semResposta")
+        : resultado?.fase === "nao_conferiu"
+        ? t("computadores.atualizacao.conferencia.naoConferiu", { erro: resultado.erro })
         : resultado?.fase === "em_dia" && !comAtualizacao.length
           ? t("computadores.atualizacao.conferencia.emDia", { versao: resultado.versao })
           : resultado?.fase === "disponivel" || (resultado && comAtualizacao.length)
@@ -448,6 +460,18 @@ export function CartaoAtualizacoes() {
           </Alert>
         ) : null}
 
+        {parada ? (
+          <Alert className="border-atencao-borda bg-atencao-fundo">
+            <CirclePauseIcon className="text-atencao" />
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-atencao">{t("computadores.atualizacao.parada.texto")}</span>
+              <Button size="sm" variant="outline" disabled={!pode} onClick={retomar}>
+                {t("computadores.atualizacao.parada.retomar")}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {mostrarAndamento && alvo ? (
           <div className="flex flex-col gap-2 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2 text-xs">
@@ -466,7 +490,7 @@ export function CartaoAtualizacoes() {
                     : e === "na_fila" && modo === "madrugada"
                       ? t("computadores.atualizacao.andamento.na_filaMadrugada")
                       : t(`computadores.atualizacao.andamento.${e}`)
-                const cor = e === "em_dia" ? "text-ok" : e === "falhou" || e === "precisa_nuvem" ? "text-atencao" : "text-muted-foreground"
+                const cor = e === "em_dia" ? "text-ok" : e === "falhou" || e === "parada" || e === "precisa_nuvem" ? "text-atencao" : "text-muted-foreground"
                 return (
                   <li key={pc.id} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate">{pc.nome}</span>

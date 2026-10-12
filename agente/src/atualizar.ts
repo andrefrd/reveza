@@ -13,6 +13,7 @@
 // (agente_migracoes, só a lista de nomes) e, faltando alguma, não se atualiza: a nuvem vem antes (desde a 0.3.0 ela se
 // atualiza sozinha, pelo Atualizar a nuvem do painel ou no jeito de atualizar sozinho; antes, pelo instalador).
 
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as zlib from "node:zlib";
@@ -257,10 +258,43 @@ export function migracoesDoPacote(raiz: string): string[] {
   return nomes.filter((n) => n.endsWith(".sql") && !n.startsWith(".")).sort();
 }
 
-/** As migrações do pacote que a nuvem ainda não aplicou (pelo nome, como o registro do instalador). */
-export function faltamNaNuvem(doPacote: string[], aplicadas: string[]): string[] {
-  const tem = new Set(aplicadas);
-  return doPacote.filter((n) => !tem.has(n));
+/** O que a nuvem disse (agente_migracoes): os nomes e, desde a 0.3.1, o resumo de cada uma (null numa nuvem antiga). */
+export interface MigracoesDaNuvem {
+  nomes: string[];
+  hashes: Record<string, string> | null;
+}
+
+const sha256 = (texto: string) => createHash("sha256").update(texto).digest("hex");
+
+/**
+ * Os resumos que valem para cada migração do pacote, o mesmo cálculo do instalador (provisionar.mjs, hashesAceitos): o
+ * sha256 do texto com fim de linha LF e o da mesma migração com CRLF (o que um clone no Windows registrava antes da 0.3.1).
+ */
+export function resumosDoPacote(raiz: string): Record<string, string[]> {
+  const dir = path.join(raiz, "nuvem", "migracoes");
+  const r: Record<string, string[]> = {};
+  for (const nome of migracoesDoPacote(raiz)) {
+    const lf = fs.readFileSync(path.join(dir, nome), "utf8").replace(/\r\n/g, "\n");
+    r[nome] = [sha256(lf), sha256(lf.replace(/\n/g, "\r\n"))];
+  }
+  return r;
+}
+
+/**
+ * As migrações do pacote que a nuvem ainda não aplicou: pelo nome e, com os resumos dos dois lados, também a que existe
+ * com outro conteúdo (uma reaplicável que mudou nesta versão, como as permissões da 0099: só o nome passaria, e o
+ * programa novo chamaria função que a nuvem ainda não tem). Sem resumos (nuvem de antes da 0.3.1, ou nuvem que já está
+ * nesta versão ou adiante), só o nome.
+ */
+export function faltamNaNuvem(doPacote: string[], aplicadas: string[] | MigracoesDaNuvem, resumos: Record<string, string[]> | null = null): string[] {
+  const nuvem = Array.isArray(aplicadas) ? { nomes: aplicadas, hashes: null } : aplicadas;
+  const tem = new Set(nuvem.nomes);
+  return doPacote.filter((n) => {
+    if (!tem.has(n)) return true;
+    const daNuvem = nuvem.hashes?.[n];
+    const aceitos = resumos?.[n];
+    return Boolean(daNuvem && aceitos && !aceitos.includes(daNuvem));
+  });
 }
 
 // ------------------------------------------------------------------------------------------------ processo separado

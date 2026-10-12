@@ -33,6 +33,7 @@ export default secao({
         conferencia: {
           conferindo: "Conferindo nos computadores… ({n} de {total} responderam)",
           semResposta: "Nenhum computador respondeu agora. Os ligados conferem sozinhos a cada 6 horas.",
+          naoConferiu: "Não deu para conferir agora: {erro}. Os ligados tentam de novo sozinhos a cada 6 horas.",
           emDia: "Todos na versão mais nova ({versao}).",
           disponivel: "Versão {versao} disponível para {n} computador(es).",
           comecaSozinho: "Com “Assim que sair”, eles começam sozinhos, um computador por vez.",
@@ -41,6 +42,12 @@ export default secao({
             "Os computadores numa versão anterior à 0.2.1 só se atualizam sozinhos de madrugada: para eles, use Atualizar todos; depois disso, eles vão sozinhos.",
         },
         precisaNuvem: "A versão {versao} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, acima.",
+        parada: {
+          texto:
+            "A atualização sozinha parou: um computador não voltou na versão nova. Confira o computador no cartão dele; os outros só seguem quando você retomar.",
+          retomar: "Retomar",
+          retomada: "Atualização sozinha retomada",
+        },
         andamento: {
           titulo: "Andamento",
           resumo: "{feitos} de {total} na {versao}",
@@ -48,6 +55,7 @@ export default secao({
           atualizando: "atualizando…",
           na_fila: "esperando a vez",
           na_filaMadrugada: "de madrugada",
+          parada: "parada",
           falhou: "não atualizou",
           precisa_nuvem: "esperando a nuvem",
           disponivel: "versão nova disponível",
@@ -78,6 +86,8 @@ export default secao({
             desconhecida:
               "A nuvem ainda não sabe a versão dela (instalação de antes da 0.3.0): rode uma vez a atualização pelo instalador, no computador que criou a instalação.",
             atualizando: "Atualizando a nuvem para a {versao}…",
+            interrompida:
+              "A atualização da nuvem para a {versao} não terminou (mais de 10 minutos sem resposta). A nuvem segue na versão de antes; Atualizar a nuvem tenta de novo.",
             falhou: "A atualização da nuvem para a {versao} parou: {motivo}. A nuvem segue na versão de antes; Atualizar a nuvem tenta de novo.",
             publicando: "Publicando as funções e o painel da {versao} em {computador}…",
             publicacaoFalhou: "A publicação das funções e do painel da {versao} parou: {motivo}. O painel de antes continua no ar; Atualizar a nuvem tenta de novo.",
@@ -228,6 +238,7 @@ export default secao({
         conferencia: {
           conferindo: "Checking on the computers… ({n} of {total} answered)",
           semResposta: "No computer answered right now. The ones that are on check by themselves every 6 hours.",
+          naoConferiu: "Could not check right now: {erro}. The ones that are on try again by themselves every 6 hours.",
           emDia: "All on the newest version ({versao}).",
           disponivel: "Version {versao} available for {n} computer(s).",
           comecaSozinho: "With “As soon as it comes out”, they start by themselves, one computer at a time.",
@@ -236,6 +247,12 @@ export default secao({
             "Computers on a version before 0.2.1 only update by themselves overnight: for them, use Update all; after that, they go by themselves.",
         },
         precisaNuvem: "Version {versao} needs the cloud updated first: use Update the cloud, above.",
+        parada: {
+          texto:
+            "Updating by itself stopped: a computer did not come back on the new version. Check that computer on its card; the others only go on when you resume.",
+          retomar: "Resume",
+          retomada: "Updating by itself resumed",
+        },
         andamento: {
           titulo: "Progress",
           resumo: "{feitos} of {total} on {versao}",
@@ -243,6 +260,7 @@ export default secao({
           atualizando: "updating…",
           na_fila: "waiting for its turn",
           na_filaMadrugada: "overnight",
+          parada: "stopped",
           falhou: "did not update",
           precisa_nuvem: "waiting for the cloud",
           disponivel: "new version available",
@@ -273,6 +291,8 @@ export default secao({
             desconhecida:
               "The cloud does not know its version yet (installation from before 0.3.0): run the update once with the installer, on the computer that created the installation.",
             atualizando: "Updating the cloud to {versao}…",
+            interrompida:
+              "The cloud update to {versao} did not finish (more than 10 minutes without an answer). The cloud stays on the previous version; Update the cloud tries again.",
             falhou: "The cloud update to {versao} stopped: {motivo}. The cloud stays on the previous version; Update the cloud tries again.",
             publicando: "Publishing the functions and the panel of {versao} on {computador}…",
             publicacaoFalhou: "Publishing the functions and the panel of {versao} stopped: {motivo}. The previous panel stays online; Update the cloud tries again.",

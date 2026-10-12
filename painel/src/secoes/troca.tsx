@@ -30,6 +30,7 @@ import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/co
 import type { ConfigTroca, Conta, Modo, OrdemRodizio } from "@/dados/tipos"
 import { useT } from "@/i18n"
 import { fmtDuracao, fmtFuturo, fmtPct } from "@/lib/formato"
+import { camposMudados } from "@/lib/rascunho"
 import { faixaRodizio, trocasPorDia } from "@/lib/regra"
 import { cn } from "@/lib/utils"
 import { useDialogo } from "@/hooks/use-dialogo"
@@ -91,16 +92,17 @@ export default function Troca() {
   }, [base])
 
   const cfg = r.config
-  const mudar = (campos: Partial<ConfigTroca>) => setR((x) => ({ ...x, config: { ...x.config, ...campos } }))
+  // só o que se mexeu nesta tela vai ao salvar: um rascunho antigo não regrava o que outra aba (ou outra tela) mudou
+  const tocados = React.useRef(new Set<keyof ConfigTroca>())
+  const mudar = (campos: Partial<ConfigTroca>) => {
+    for (const k of Object.keys(campos) as (keyof ConfigTroca)[]) tocados.current.add(k)
+    setR((x) => ({ ...x, config: { ...x.config, ...campos } }))
+  }
   const contaPorId = (id: string) => estado.contas.find((c) => c.id === id)!
 
   const salvar = async () => {
     setSalvando(true)
-    const camposConfig = Object.fromEntries(
-      (Object.keys(cfg) as (keyof ConfigTroca)[])
-        .filter((k) => k !== "proximoRodizioEm" && k !== "atualizacaoVez" && cfg[k] !== base.config[k])
-        .map((k) => [k, cfg[k]])
-    ) as Partial<ConfigTroca>
+    const camposConfig = camposMudados(cfg, base.config, tocados.current)
     const [ok] = await acao(async () => {
       if (Object.keys(camposConfig).length) await fonte.salvarConfig(camposConfig)
       if (r.ordem.join() !== base.ordem.join()) await fonte.ordenarContas(r.ordem)
@@ -108,7 +110,10 @@ export default function Troca() {
         if (reserva !== base.reservas[id]) await fonte.salvarConta(id, { reserva })
     }, t("troca.salvar.salvo"))
     setSalvando(false)
-    if (ok) ultimaBase.current = r
+    if (ok) {
+      ultimaBase.current = r
+      tocados.current.clear()
+    }
   }
 
   const mover = (i: number, d: -1 | 1) =>
@@ -399,7 +404,14 @@ export default function Troca() {
         <div className="sticky bottom-3 z-10 mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-xl border bg-popover/95 p-3 pl-4 shadow-lg backdrop-blur">
           <span className="text-sm font-medium">{t("troca.salvar.pendente")}</span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setR(base)} disabled={salvando}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                tocados.current.clear()
+                setR(base)
+              }}
+              disabled={salvando}
+            >
               {t("comum.descartar")}
             </Button>
             <Button onClick={() => void salvar()} disabled={!pode || salvando}>

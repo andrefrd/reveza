@@ -233,14 +233,15 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
     assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: true, motivo: null });
   });
 
-  test("a trava pelo banco: o agente lê só os nomes das migrações e compara com as do pacote de verdade", async () => {
+  test("a trava pelo banco: o agente lê os nomes e os resumos das migrações e compara com os do pacote de verdade", async () => {
     const apoio = (await import(pathToFileURL(APOIO).href)) as { banco: () => Promise<any> };
     const prov = (await import(pathToFileURL(path.resolve(aqui, "..", "..", "..", "nuvem", "provisionar.mjs")).href)) as {
       migracoes: () => { nome: string; sql: string }[];
       SQL_REGISTRO: string;
       sqlRegistrar: (nome: string, hash: string) => string;
+      hashesAceitos: (sql: string) => string[];
     };
-    const { faltamNaNuvem, migracoesDoPacote } = await import("../src/atualizar.js");
+    const { faltamNaNuvem, migracoesDoPacote, resumosDoPacote } = await import("../src/atualizar.js");
     const { createHash } = await import("node:crypto");
     const db = await apoio.banco();
     const p1 = await db.computador("p1");
@@ -258,6 +259,12 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
     assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!), ["0020_atualizar_escolha.sql"]);
     await db.sql(prov.sqlRegistrar("0020_atualizar_escolha.sql", "0".repeat(64)));
     assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!), []);
+    // com os resumos: o do agente é o mesmo do instalador (hashesAceitos), e a 0020 registrada com outro conteúdo falta
+    const resumos = resumosDoPacote(raiz);
+    for (const m of todas) assert.deepEqual(resumos[m.nome], prov.hashesAceitos(m.sql), m.nome);
+    assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!, resumos), ["0020_atualizar_escolha.sql"]);
+    await db.sql(prov.sqlRegistrar("0020_atualizar_escolha.sql", prov.hashesAceitos(todas.find((m) => m.nome === "0020_atualizar_escolha.sql")!.sql)[0]!));
+    assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!, resumos), []);
   });
 
   test("computador novo pelo banco: pede, o velho libera pelo código, a chave chega igual, uma vez, e só então ele entra", async () => {

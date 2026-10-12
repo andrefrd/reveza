@@ -8,9 +8,10 @@
 --    de madrugada, e os agentes de antes da 0.2.1 (que só entendem true) seguem atualizando de madrugada. Nos dois jeitos
 --    ligados vale a mesma vez da 0018: um computador por vez, e todos param se um voltar para a anterior.
 -- 2. `agente_migracoes()`: os NOMES das migrações que a nuvem já aplicou (registro `reveza_migracoes`, que o instalador
---    mantém). Uma versão nova pode trazer migração da nuvem e painel novo, que só o computador principal aplica (com os
---    tokens); o agente compara com as migrações que vêm no pacote da versão nova e não se atualiza se faltar alguma. O
---    computador não lê a tabela: só a lista de nomes, por esta função.
+--    mantém) e, desde a 0.3.1, o resumo (sha256) de cada uma. Uma versão nova pode trazer migração da nuvem e painel
+--    novo; o agente compara com as migrações que vêm no pacote da versão nova e não se atualiza se faltar alguma, ou se
+--    uma reaplicável mudou e a nuvem ainda está atrás. O computador não lê a tabela: só nomes e resumos (de arquivos
+--    públicos do repositório), por esta função.
 
 -- O jeito de atualizar sozinho, a partir do valor gravado: false/desligada, true/madrugada ou assim_que_sair.
 create or replace function public.rvz_modo_atualizar(p_valor jsonb) returns text
@@ -79,8 +80,12 @@ begin
   insert into public.config (chave, valor, mudado_por, mudado_em) values (p_chave, p_valor, auth.uid(), now())
   on conflict (chave) do update set valor = excluded.valor, mudado_por = excluded.mudado_por, mudado_em = now();
   if p_chave in ('modo', 'rodizio_minutos') then delete from public.config where chave = 'proximo_rodizio_em'; end if;
-  -- mudar a escolha destrava a vez (inclusive depois de uma atualização sozinha que voltou para a anterior)
-  if p_chave = 'atualizar_sozinho' then delete from public.config where chave = 'atualizacao_vez'; end if;
+  -- gravar a escolha (mesmo a mesma: é o Retomar do painel) destrava a vez parada, depois de uma atualização sozinha que
+  -- voltou para a anterior. A que está em andamento fica: apagá-la daria a vez a outro computador com este ainda no meio,
+  -- e o resultado dele (inclusive a volta para a anterior) não acharia a vez para parar os outros.
+  if p_chave = 'atualizar_sozinho' then
+    delete from public.config where chave = 'atualizacao_vez' and valor ->> 'estado' is distinct from 'em_andamento';
+  end if;
   perform public.rvz_auditar('config', p_chave, jsonb_build_object('valor', p_valor));
   return jsonb_build_object('ok', true);
 end $$;
@@ -166,16 +171,17 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- As migrações que a nuvem já aplicou, só os nomes. Sem o registro (banco montado fora do instalador): null, e o agente
--- não se atualiza sozinho sem saber.
+-- As migrações que a nuvem já aplicou: nomes e resumos. Sem o registro (banco montado fora do instalador): null, e o
+-- agente não se atualiza sozinho sem saber.
 create or replace function public.agente_migracoes() returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare v_nomes jsonb;
+declare v_nomes jsonb; v_hashes jsonb;
 begin
   perform public.rvz_exigir_computador();
   if to_regclass('public.reveza_migracoes') is null then
-    return jsonb_build_object('nomes', null);
+    return jsonb_build_object('nomes', null, 'hashes', null);
   end if;
-  execute 'select coalesce(jsonb_agg(nome order by nome), ''[]''::jsonb) from public.reveza_migracoes' into v_nomes;
-  return jsonb_build_object('nomes', v_nomes);
+  execute 'select coalesce(jsonb_agg(nome order by nome), ''[]''::jsonb), coalesce(jsonb_object_agg(nome, hash), ''{}''::jsonb)
+    from public.reveza_migracoes' into v_nomes, v_hashes;
+  return jsonb_build_object('nomes', v_nomes, 'hashes', v_hashes);
 end $$;

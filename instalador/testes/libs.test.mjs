@@ -142,6 +142,12 @@ test("domínio: validação, o passo a passo do DNS (qualquer provedor, a Cloudf
   assert.equal(dominioValido("https://Contas.Exemplo.com/"), "contas.exemplo.com");
   assert.equal(dominioValido("sem ponto"), null);
   assert.equal(dominioValido("a..b.com"), null);
+  // nome absoluto (ponto final) e acento (punycode, inclusive no fim)
+  assert.equal(dominioValido("contas.exemplo.com."), "contas.exemplo.com");
+  assert.equal(dominioValido("painel.ação.com.br"), "painel.xn--ao-siap.com.br");
+  assert.equal(dominioValido("contas.exemplo.xn--p1ai"), "contas.exemplo.xn--p1ai");
+  assert.equal(dominioValido("contas.exemplo.com:8080"), null, "porta não");
+  assert.equal(dominioValido("contas.exemplo.com/caminho"), null, "caminho não");
   const linhas = passosDns({ tipo: "CNAME", nome: "contas", valor: "cname.vercel-dns.com" }, t);
   assert.match(linhas[0], /No DNS de onde o domínio está \(registro\.br, Cloudflare, GoDaddy, Hostinger, Route 53 ou outro\)/, "neutro de provedor primeiro");
   assert.match(linhas[1], /Tipo: CNAME {4}Nome: contas {4}Valor: cname\.vercel-dns\.com/);
@@ -397,4 +403,30 @@ test("--dominio: subdomínio conferido, 'vercel' volta ao endereço da Vercel, e
   const a = lerArgs(["--atualizar", "--dominio", "contas.exemplo.com"]);
   assert.equal(a.valores["--dominio"], "contas.exemplo.com");
   assert.equal(lerArgs(["--dominio"]).erro, "--dominio pede um valor");
+});
+
+test("trava da publicação: a segunda espera a primeira viva; morta, vencida ou do mesmo processo, a vez é desta", async () => {
+  const { travarPublicacao, PUBLICACAO_TRAVA_MS } = await import("../lib/programa.mjs");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "reveza-trava-"));
+  try {
+    const arq = path.join(dir, "base", "publicando.json");
+    const soltar = travarPublicacao(arq, { agora: 1_000_000, pid: 111 });
+    assert.ok(soltar);
+    assert.deepEqual(JSON.parse(readFileSync(arq, "utf8")), { pid: 111, desde: 1_000_000 });
+    assert.equal(travarPublicacao(arq, { agora: 1_000_000 + 60_000, pid: 222, vivo: () => true }), null, "a primeira está viva");
+    assert.ok(travarPublicacao(arq, { agora: 1_000_000 + 60_000, pid: 111, vivo: () => true }), "o mesmo processo");
+    const morta = travarPublicacao(arq, { agora: 1_000_000 + 60_000, pid: 222, vivo: () => false });
+    assert.ok(morta, "a primeira morreu: a vez é da segunda");
+    assert.equal(JSON.parse(readFileSync(arq, "utf8")).pid, 222);
+    soltar(); // a primeira, ao terminar, não apaga a trava da segunda
+    assert.ok(existsSync(arq));
+    assert.ok(travarPublicacao(arq, { agora: 1_000_000 + 60_000 + PUBLICACAO_TRAVA_MS, pid: 333, vivo: () => true }), "vencida");
+    writeFileSync(arq, "{lixo");
+    const nova = travarPublicacao(arq, { agora: 5, pid: 444 });
+    assert.ok(nova, "ilegível: a vez é desta");
+    nova();
+    assert.equal(existsSync(arq), false, "solta ao terminar");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

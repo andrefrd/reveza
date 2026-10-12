@@ -1,7 +1,7 @@
 // Executor de programas: o agente roda `security`, o assistente, o PowerShell etc. só por aqui, para os testes
 // trocarem por um falso e nada de verdade rodar.
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 
 export interface Resultado {
   codigo: number;
@@ -19,6 +19,11 @@ export interface OpcoesRodar {
    * processo (o padrão aqui, para não piscar console) esconde também a primeira janela que ele abre.
    */
   janela?: boolean;
+  /**
+   * No prazo, mata também o que o programa abriu (o instalador abre o build do painel e a publicação). Sem isso, só o
+   * filho direto morre, e o neto segue publicando sozinho e segura a saída aberta até terminar.
+   */
+  arvore?: boolean;
 }
 
 export interface Processo {
@@ -39,6 +44,54 @@ export interface OpcoesIniciar {
 export interface Executor {
   rodar(argv: string[], op?: OpcoesRodar): Promise<Resultado>;
   iniciar(argv: string[], op?: OpcoesIniciar): Processo;
+}
+
+/**
+ * Os processos abaixo de `pid` (filhos, netos...), pela tabela `pid ppid` do `ps` (macOS e Linux). Pai antes dos filhos.
+ */
+export function descendentes(tabela: string, pid: number): number[] {
+  const filhos = new Map<number, number[]>();
+  for (const linha of tabela.split("\n")) {
+    const [p, pp] = linha.trim().split(/\s+/).map(Number);
+    if (!p || !pp || p === pp) continue;
+    const l = filhos.get(pp);
+    if (l) l.push(p);
+    else filhos.set(pp, [p]);
+  }
+  const todos: number[] = [];
+  const fila = [...(filhos.get(pid) ?? [])];
+  while (fila.length) {
+    const p = fila.shift()!;
+    if (todos.includes(p)) continue;
+    todos.push(p);
+    fila.push(...(filhos.get(p) ?? []));
+  }
+  return todos;
+}
+
+/** Mata o processo e tudo o que ele abriu: no Windows pelo `taskkill /T`; no macOS e no Linux, pela tabela do `ps`. */
+export function matarArvore(pid: number): void {
+  if (process.platform === "win32") {
+    try {
+      execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 10_000 });
+    } catch {
+      // já tinha saído
+    }
+    return;
+  }
+  let tabela = "";
+  try {
+    tabela = execFileSync("ps", ["-A", "-o", "pid=", "-o", "ppid="], { encoding: "utf8", timeout: 10_000 });
+  } catch {
+    // sem a tabela, ao menos o filho direto
+  }
+  for (const p of [pid, ...descendentes(tabela, pid)]) {
+    try {
+      process.kill(p, "SIGKILL");
+    } catch {
+      // já tinha saído
+    }
+  }
 }
 
 /** Programa JavaScript roda com o próprio Node; script de lote do Windows (.cmd/.bat) nunca (precisaria de shell). */
@@ -65,7 +118,10 @@ export const executorReal: Executor = {
       } catch (e) {
         return resolve({ codigo: 127, saida: "", erro: String(e) });
       }
-      const limite = setTimeout(() => filho.kill("SIGKILL"), op.timeoutMs ?? 20_000);
+      const limite = setTimeout(() => {
+        if (op.arvore && filho.pid) matarArvore(filho.pid);
+        else filho.kill("SIGKILL");
+      }, op.timeoutMs ?? 20_000);
       filho.stdout.on("data", (d: Buffer) => (saida += d.toString("utf8")));
       filho.stderr.on("data", (d: Buffer) => (erro += d.toString("utf8")));
       filho.on("error", (e) => {

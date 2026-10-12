@@ -11,7 +11,7 @@
 //                                             a última versão sem subir a versão
 
 import { execFileSync, execSync } from "node:child_process";
-import { ensaioVale, lerEnsaio, soDocumentacao } from "./ensaio.mjs";
+import { chamadoDireto, ensaioVale, lerEnsaio, repositorioDoOrigin, soDocumentacao } from "./ensaio.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,14 @@ const ler = (f) => readFileSync(path.join(RAIZ, f), "utf8");
 const git = (...a) => execFileSync("git", a, { cwd: RAIZ, encoding: "utf8" }).trim();
 
 export const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
+
+/** Os arquivos que o commit de versão do `lancar` muda (e só eles). */
+export const ARQUIVOS_DA_VERSAO = [...PACOTES, ...TRAVAS, CONFIG, ...BADGES.map(([f]) => f)];
+
+/** O commit muda só os arquivos da versão? (Só então o ensaio da árvore de antes dele vale para ele.) */
+export function soArquivosDaVersao(mudados) {
+  return mudados.length > 0 && mudados.every((f) => ARQUIVOS_DA_VERSAO.includes(f));
+}
 
 export function maior(a, b) {
   const x = SEMVER.exec(a).slice(1).map(Number);
@@ -110,8 +118,15 @@ export function workflowsVermelhos(runs) {
   return vermelhos;
 }
 
+/** O repositório de quem publica (o oficial ou um fork), pelo origin. */
+function repositorio() {
+  const r = repositorioDoOrigin(git("remote", "get-url", "origin"));
+  if (!r) throw new Error("o origin não é um repositório do GitHub");
+  return r;
+}
+
 function conferirCi() {
-  const saida = execFileSync("gh", ["run", "list", "-R", "dantaspaulo/reveza", "--branch", "main", "-L", "40", "--json", "workflowName,conclusion,status"], {
+  const saida = execFileSync("gh", ["run", "list", "-R", repositorio(), "--branch", "main", "-L", "40", "--json", "workflowName,conclusion,status"], {
     cwd: RAIZ,
     encoding: "utf8",
   });
@@ -155,7 +170,7 @@ function lancar(nova) {
   }
   const depois = versoes();
   if (conferir(depois) !== nova || depois["CHANGELOG.md"] !== nova) throw new Error("a troca de versão não fechou");
-  const arquivos = [...PACOTES, ...TRAVAS, CONFIG, ...BADGES.map(([f]) => f)];
+  const arquivos = ARQUIVOS_DA_VERSAO;
   // título da release: a primeira frase da entrada (o resto vai nas notas)
   const titulo = notas.split("\n")[0].split(/\.\s/)[0].replace(/[.:]$/, "").slice(0, 80);
   git("commit", "-q", "-m", `chore: versão ${nova}\n\n${titulo}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, "--", ...arquivos);
@@ -163,7 +178,7 @@ function lancar(nova) {
   git("push", "-q", "origin", "main");
   git("tag", "-a", `v${nova}`, "-m", `Reveza AI ${nova}`);
   git("push", "-q", "origin", `v${nova}`);
-  execFileSync("gh", ["release", "create", `v${nova}`, "-R", "dantaspaulo/reveza", "--title", `Reveza AI ${nova}: ${titulo}`, "--notes", notas, "--latest"], {
+  execFileSync("gh", ["release", "create", `v${nova}`, "-R", repositorio(), "--title", `Reveza AI ${nova}: ${titulo}`, "--notes", notas, "--latest"], {
     cwd: RAIZ,
     stdio: "inherit",
   });
@@ -233,8 +248,10 @@ function prePush() {
     const exige = novos.filter((f) => !soDocumentacao([f]) && !f.startsWith(".github/workflows/"));
     if (exige.length) {
       const arvores = [git("rev-parse", `${sha}^{tree}`)];
+      // a árvore de antes só vale quando o último commit é o de versão do `lancar` (só os arquivos da versão)
       try {
-        arvores.push(git("rev-parse", `${sha}~1^{tree}`));
+        const doUltimo = git("diff", "--name-only", `${sha}~1..${sha}`).split("\n").filter(Boolean);
+        if (soArquivosDaVersao(doUltimo)) arvores.push(git("rev-parse", `${sha}~1^{tree}`));
       } catch {
         // sem pai
       }
@@ -247,7 +264,7 @@ function prePush() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (chamadoDireto(import.meta.url)) {
   try {
     const cmd = process.argv[2];
     if (cmd === "conferir") console.log(`ok: tudo na versão ${conferir()}`);

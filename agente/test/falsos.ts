@@ -176,12 +176,12 @@ export class CliFalsa implements Cli {
 }
 
 export class ExecutorFalso implements Executor {
-  chamadas: { argv: string[]; entrada?: string }[] = [];
+  chamadas: { argv: string[]; entrada?: string; arvore?: boolean }[] = [];
   /** Processos iniciados (soltos ou não), com as opções: nada roda de verdade. */
   iniciados: { argv: string[]; op: OpcoesIniciar }[] = [];
   responder: (argv: string[], entrada?: string) => Resultado = () => ({ codigo: 0, saida: "", erro: "" });
-  async rodar(argv: string[], op: { entrada?: string } = {}) {
-    this.chamadas.push({ argv, entrada: op.entrada });
+  async rodar(argv: string[], op: { entrada?: string; arvore?: boolean } = {}) {
+    this.chamadas.push({ argv, entrada: op.entrada, ...(op.arvore ? { arvore: true } : {}) });
     return this.responder(argv, op.entrada);
   }
   iniciar(argv: string[] = [], op: OpcoesIniciar = {}): Processo {
@@ -233,6 +233,8 @@ export class BancoFalso {
   alertas: { texto: string; dados: Record<string, unknown> }[] = [];
   /** O registro das migrações aplicadas (reveza_migracoes): null = sem registro; o agente_migracoes devolve os nomes. */
   migracoes: string[] | null = [...MIGRACOES_DO_PACOTE];
+  /** O resumo de cada uma (0.3.1); null = nuvem de antes, que só devolve os nomes. */
+  hashesMigracoes: Record<string, string> | null = null;
   /** Nuvem de antes da 0.2.1: sem a função agente_migracoes. */
   semFuncaoMigracoes = false;
   config: Record<string, unknown> = { auto: false, modo: "limiar", aviso: 90, troca: 95, intervalo_s: 5, retomar_terminal: false };
@@ -551,11 +553,11 @@ export class NuvemFalsa implements Nuvem {
     return { pode: true, motivo: null };
   }
 
-  /** O agente_migracoes (0020): só os nomes; nuvem antiga não tem a função (o PostgREST responde PGRST202). */
+  /** O agente_migracoes (0020): nomes e resumos; nuvem antiga não tem a função (o PostgREST responde PGRST202). */
   async migracoesAplicadas() {
     this.registrarChamada("migracoesAplicadas");
     if (this.banco.semFuncaoMigracoes) throw new ErroNuvem("agente_migracoes: Could not find the function public.agente_migracoes", false, "PGRST202");
-    return this.banco.migracoes ? [...this.banco.migracoes] : null;
+    return this.banco.migracoes ? { nomes: [...this.banco.migracoes], hashes: this.banco.hashesMigracoes ? { ...this.banco.hashesMigracoes } : null } : null;
   }
 
   async credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string) {

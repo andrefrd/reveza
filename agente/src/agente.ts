@@ -45,14 +45,17 @@ import {
   faltamNaNuvem,
   lerPedido,
   migracoesDoPacote,
+  resumosDoPacote,
   modoAtualizar,
   rodarSeparado,
   TAREFA_ATUALIZAR,
   textoPrecisaNuvem,
   TRAVA_CONFERIR_S,
   ultimaLinha,
+  VERSAO_VALIDA,
   type AtualizacaoPendente,
   type FonteVersoes,
+  type MigracoesDaNuvem,
   type ModoAtualizar,
 } from "./atualizar.js";
 import { compararVersao } from "./doctor.js";
@@ -93,6 +96,8 @@ export interface Dependencias {
 
 /** A publicação das funções e do painel que não terminou nisso é dada como falha. */
 export const PUBLICACAO_VALIDA_MS = 40 * 60_000;
+/** O instalador sai com este código quando outra publicação segue viva neste computador (travarPublicacao): esperar. */
+export const PUBLICACAO_OCUPADA = 75;
 
 const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_login", "atualizar", "diagnostico", "retomar_sessao", "ligar"]);
 
@@ -126,6 +131,8 @@ export interface TravaNuvem {
   para: string;
   /** As migrações que vieram no pacote da versão nova. */
   precisa: string[];
+  /** O resumo de cada uma (resumosDoPacote). */
+  resumos: Record<string, string[]>;
   /** As que faltam na nuvem (null: a nuvem não disse quais, por ser de antes da 0.2.1 ou não ter o registro). */
   faltam: string[] | null;
   conferidaEm: number;
@@ -857,6 +864,7 @@ export class Agente {
     let pasta: string | null = null;
     let instalador: string;
     let precisa: string[];
+    let resumos: Record<string, string[]>;
     try {
       pasta = fs.mkdtempSync(path.join(os.tmpdir(), "reveza-atualizar-"));
       const pacote = path.join(pasta, `reveza-${para}.tar.gz`);
@@ -864,6 +872,7 @@ export class Agente {
       extrairTarGz(pacote, path.join(pasta, "pacote"));
       instalador = acharInstalador(path.join(pasta, "pacote"), para);
       precisa = migracoesDoPacote(path.dirname(path.dirname(instalador)));
+      resumos = resumosDoPacote(path.dirname(path.dirname(instalador)));
     } catch (e) {
       if (pasta) fs.rmSync(pasta, { recursive: true, force: true });
       const motivo = (e as Error).message;
@@ -872,14 +881,14 @@ export class Agente {
     }
     // a trava de compatibilidade: a nuvem já tem as migrações que a versão nova traz? (a nuvem vem antes)
     if (this.d.nuvem) {
-      const c = await this.conferirMigracoes(precisa);
+      const c = await this.conferirMigracoes(para, precisa, resumos);
       if (!c.ok) {
         fs.rmSync(pasta, { recursive: true, force: true });
         if (!c.precisaNuvem) {
           this.registrarEvento("erro", `A atualização para a ${para} não começou: ${c.erro}.`, { ...dados, motivo: c.erro });
           return { ok: false, status: 503, erro: `a atualização não começou: ${c.erro}` };
         }
-        const trava: TravaNuvem = { para, precisa, faltam: c.faltam, conferidaEm: this.d.relogio.agora() };
+        const trava: TravaNuvem = { para, precisa, resumos, faltam: c.faltam, conferidaEm: this.d.relogio.agora() };
         this.travaNuvem = trava;
         if (this.travaAvisada !== para) {
           this.travaAvisada = para;
@@ -929,14 +938,19 @@ export class Agente {
   }
 
   /**
-   * A trava de compatibilidade: a nuvem tem todas as migrações que vieram no pacote? Pergunta só os nomes
-   * (agente_migracoes). Nuvem de antes da 0.2.1 (sem a função) ou sem o registro conta como desatualizada; sem rede ou
-   * outro erro, não se sabe agora, e também não atualiza.
+   * A trava de compatibilidade: a nuvem tem todas as migrações que vieram no pacote, com o mesmo conteúdo? Pergunta os
+   * nomes e os resumos (agente_migracoes). Nuvem que já está nesta versão ou adiante (nuvem_versao) só precisa ter os
+   * nomes: uma reaplicável dela pode ser mais nova que a do pacote. Nuvem de antes da 0.2.1 (sem a função) ou sem o
+   * registro conta como desatualizada; sem rede ou outro erro, não se sabe agora, e também não atualiza.
    */
-  async conferirMigracoes(precisa: string[]): Promise<{ ok: true } | { ok: false; precisaNuvem: true; faltam: string[] | null } | { ok: false; precisaNuvem: false; erro: string }> {
+  async conferirMigracoes(
+    para: string,
+    precisa: string[],
+    resumos: Record<string, string[]>,
+  ): Promise<{ ok: true } | { ok: false; precisaNuvem: true; faltam: string[] | null } | { ok: false; precisaNuvem: false; erro: string }> {
     const nuvem = this.d.nuvem;
     if (!nuvem) return { ok: true };
-    let aplicadas: string[] | null;
+    let aplicadas: MigracoesDaNuvem | null;
     try {
       aplicadas = await nuvem.migracoesAplicadas();
     } catch (e) {
@@ -945,7 +959,9 @@ export class Agente {
       return { ok: false, precisaNuvem: false, erro: `não consegui conferir as migrações da nuvem (${(e as Error).message})` };
     }
     if (aplicadas === null) return { ok: false, precisaNuvem: true, faltam: null };
-    const faltam = faltamNaNuvem(precisa, aplicadas);
+    const versaoDaNuvem = this.configNuvem.nuvem_versao;
+    const aFrente = typeof versaoDaNuvem === "string" && VERSAO_VALIDA.test(versaoDaNuvem) && compararVersao(versaoDaNuvem, para) >= 0;
+    const faltam = faltamNaNuvem(precisa, aplicadas, aFrente ? null : resumos);
     return faltam.length ? { ok: false, precisaNuvem: true, faltam } : { ok: true };
   }
 
@@ -956,7 +972,7 @@ export class Agente {
     const t = this.d.relogio.agora();
     if (!forcar && t - tr.conferidaEm < TRAVA_CONFERIR_S) return false;
     tr.conferidaEm = t;
-    const c = await this.conferirMigracoes(tr.precisa);
+    const c = await this.conferirMigracoes(tr.para, tr.precisa, tr.resumos);
     if (c.ok) {
       this.travaNuvem = null;
       this.d.log.info(`a nuvem já tem as migrações da ${tr.para}: a atualização pode seguir`);
@@ -1100,6 +1116,7 @@ export class Agente {
     let segredos: string[] = [];
     let motivo: string | null = null;
     let pasta: string | null = null;
+    let ocupada = false;
     try {
       const tokens = abrirTokens(this.chave!, await nuvem.credenciaisLer());
       segredos = [tokens.supabase, tokens.vercel];
@@ -1117,11 +1134,13 @@ export class Agente {
         env: this.d.ambienteDoInstalador ?? {},
         cwd: pasta,
         timeoutMs: PUBLICACAO_VALIDA_MS,
+        arvore: true,
       });
       const saida = semSegredos(`${r.saida}${r.erro}`, segredos).replace(/\x1b\[[0-9;]*m/g, "");
       fs.mkdirSync(this.d.c.logs, { recursive: true, mode: 0o700 });
       gravarAtomico(path.join(this.d.c.logs, `publicacao-${para}.log`), saida);
-      if (r.codigo !== 0) {
+      if (r.codigo === PUBLICACAO_OCUPADA) ocupada = true;
+      else if (r.codigo !== 0) {
         const linhas = saida.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
         motivo = (linhas.reverse().find((l) => /Parei|Stopped|erro|falh/i.test(l)) ?? linhas[0] ?? `o instalador saiu com o código ${r.codigo}`).slice(0, 200);
       }
@@ -1129,6 +1148,11 @@ export class Agente {
       motivo = semSegredos(String((e as Error).message ?? e), segredos).slice(0, 200);
     } finally {
       if (pasta) fs.rmSync(pasta, { recursive: true, force: true });
+    }
+    if (ocupada) {
+      // a publicação de antes (de um agente que caiu com o instalador vivo) segue e grava o que publicou
+      this.d.log.info(`publicar ${para}: outra publicação segue viva neste computador; espero ela terminar`);
+      return { ok: false, motivo: "outra publicação em andamento neste computador" };
     }
     if (motivo) this.d.log.erro(`a publicação da ${para} não deu certo: ${motivo}`);
     else this.d.log.info(`funções e painel da ${para} publicados`);

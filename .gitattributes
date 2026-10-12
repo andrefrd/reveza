@@ -1,0 +1,3 @@
+# As migrações da nuvem são comparadas pelo resumo (sha256) entre o instalador, a função atualizar-nuvem e o agente: o
+# fim de linha não pode depender do sistema de quem clonou (o Git do Windows vem com core.autocrlf ligado).
+*.sql text eol=lf

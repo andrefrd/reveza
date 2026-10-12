@@ -7,6 +7,32 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.3.1 · 12/10/2026
+
+Correções da revisão de código da 0.2.1 e da 0.3.0. Traz uma mudança pequena no banco (a nuvem se atualiza sozinha, ou
+pelo Atualizar a nuvem do painel); os computadores, pelo botão ou sozinhos, depois dela.
+
+- **Trava de compatibilidade mais justa:** o computador compara também o conteúdo das migrações (o resumo), não só o
+  nome. Uma versão que só muda as permissões (0099) ou uma função já não passa antes de a nuvem chegar nela.
+- **Mudar "Atualizar sozinho" no meio de uma atualização** não tira mais a vez do computador que está atualizando
+  (antes podiam ficar dois ao mesmo tempo, e a volta para a versão anterior não parava os outros).
+- **Atualização sozinha parada** (um computador voltou para a anterior): o painel mostra "parada" e um botão Retomar,
+  em vez de "esperando a vez" para sempre.
+- **Verificar atualização** sem acesso ao GitHub diz que não deu para conferir, em vez de "Todos na versão mais nova".
+- **Atualizar a nuvem** sem as duas etapas leva para a tela das duas etapas (antes, só um aviso genérico de falha).
+- **Nuvem e painel:** uma atualização da nuvem que caiu no meio aparece como interrompida (o botão volta), em vez de
+  girar para sempre ou mostrar "em dia" na versão antiga.
+- **Salvar a tela Troca** grava só o que se mexeu nela: um rascunho antigo não volta mais o "Atualizar sozinho" (nem
+  outro campo) que outra aba mudou.
+- **Atualização completa:** no prazo, o build e a publicação que o instalador abriu morrem junto; e um segundo
+  instalador no mesmo computador espera o primeiro em vez de publicar junto.
+- **Windows:** as migrações (`.sql`) ficam sempre com fim de linha LF no clone (`.gitattributes`), e o resumo delas
+  não depende mais do fim de linha: uma nuvem instalada de um clone no Windows não trava a atualização sozinha.
+- **Domínio do painel:** `--dominio` aceita o ponto final (`contas.x.com.`) e acento (vira punycode).
+- Para quem desenvolve: o ensaio (`node scripts/ensaio.mjs`) acha a própria execução no GitHub pelo id, leva arquivo
+  binário no patch, manda mudança pequena sem gist, funciona em pasta com espaço ou acento e em worktree; o pre-push só
+  aceita o ensaio da árvore de antes para o commit de versão; os scripts de versão usam o repositório do `origin`.
+
 ## 0.3.0 · 12/10/2026
 
 A nuvem e o painel também se atualizam sozinhos. Esta versão traz mudança no banco e uma função nova da nuvem: atualize

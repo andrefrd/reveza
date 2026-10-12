@@ -239,8 +239,13 @@ async function sha256(dados: Uint8Array | string): Promise<string> {
   return hex(await crypto.subtle.digest("SHA-256", b));
 }
 
-/** O resumo de uma migração: o mesmo do instalador (sha256 do texto). */
-export const hashDe = (sql: string) => sha256(sql);
+/** O resumo de uma migração: o mesmo do instalador (sha256 do texto, com o fim de linha em LF). */
+export const hashDe = (sql: string) => sha256(sql.replace(/\r\n/g, "\n"));
+/** Os resumos que valem para o mesmo arquivo: o de hoje (LF) e o que um clone com CRLF registrou antes da 0.3.1. */
+export async function hashesAceitos(sql: string): Promise<string[]> {
+  const lf = sql.replace(/\r\n/g, "\n");
+  return [await sha256(lf), await sha256(lf.replace(/\n/g, "\r\n"))];
+}
 export const reaplicavel = (m: Migracao) => /^-- reaplicável/m.test(m.sql);
 
 /** O que aplicar (a regra do instalador, provisionar.mjs), com o resumo de cada uma. */
@@ -250,7 +255,7 @@ export async function planoMigracoes(todas: Migracao[], feitas: Map<string, stri
   for (const m of todas) {
     const antes = feitas.get(m.nome);
     const hash = await hashDe(m.sql);
-    if (antes === hash) continue;
+    if (antes !== undefined && (await hashesAceitos(m.sql)).includes(antes)) continue;
     if (antes !== undefined && !reaplicavel(m)) {
       throw new Error(`${m.nome} mudou depois de aplicada e mexe em tabela: a mudança precisa ir numa migração nova`);
     }
@@ -362,7 +367,7 @@ export async function aplicarUma(banco: Banco, m: Migracao & { hash: string }): 
     try {
       await banco.executar(`set local lock_timeout = '15s'; set local statement_timeout = '120s'; select pg_advisory_xact_lock(${TRAVA_MIGRACOES})`);
       const [ja] = await banco.consulta("select hash from public.reveza_migracoes where nome = $1", [m.nome]);
-      if (ja && ja.hash === m.hash) {
+      if (ja && (await hashesAceitos(m.sql)).includes(String(ja.hash))) {
         await banco.executar("rollback");
         return false;
       }

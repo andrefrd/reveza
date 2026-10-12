@@ -56,8 +56,17 @@ test("a vez vale nos dois jeitos ligados, um computador por vez; desligada não 
   await b.config("atualizar_sozinho", true);
   await b.sql("delete from public.config where chave = 'atualizacao_vez'");
   assert.deepEqual(await vez(b, pc2), { pode: true });
-  // mudar a escolha destrava a vez
+  // mudar a escolha no meio não tira a vez de quem está atualizando (senão seriam dois ao mesmo tempo)
   await escolher(b, admin, "madrugada");
+  assert.deepEqual(await vez(b, pc1), { pode: false, motivo: "outro" });
+  await escolher(b, admin, "desligada");
+  await escolher(b, admin, "assim_que_sair");
+  assert.deepEqual(await vez(b, pc1), { pode: false, motivo: "outro" });
+  // e o resultado de quem estava no meio ainda acha a vez: voltou para a anterior, os outros param
+  assert.deepEqual(await b.rpc(pc2, "agente_atualizacao_resultado", { p_para: "1.0.1", p_estado: "falhou", p_motivo: "voltou" }), { ok: true });
+  assert.deepEqual(await vez(b, pc1), { pode: false, motivo: "falhou" });
+  // gravar a mesma escolha (o Retomar do painel) destrava a vez parada
+  await escolher(b, admin, "assim_que_sair");
   assert.deepEqual(await vez(b, pc1), { pode: true });
 });
 
@@ -70,20 +79,22 @@ test("o alerta de quem voltou para a anterior diz como destravar", async () => {
   assert.match(a.texto, /escolher de novo como atualizar/);
 });
 
-test("as migrações da nuvem: o computador lê só os nomes, pela função; a tabela segue fechada", async () => {
+test("as migrações da nuvem: o computador lê só os nomes e os resumos, pela função; a tabela segue fechada", async () => {
   const { b, admin, pc1 } = await preparar();
   // sem o registro (banco montado fora do instalador): não se sabe
-  assert.deepEqual(await b.rpc(pc1, "agente_migracoes"), { nomes: null });
+  assert.deepEqual(await b.rpc(pc1, "agente_migracoes"), { nomes: null, hashes: null });
   await b.db.exec(SQL_REGISTRO);
-  assert.deepEqual(await b.rpc(pc1, "agente_migracoes"), { nomes: [] });
+  assert.deepEqual(await b.rpc(pc1, "agente_migracoes"), { nomes: [], hashes: {} });
   // como o instalador registra: o nome do arquivo e o hash
   const todas = migracoes();
   for (const m of todas) await b.sql(sqlRegistrar(m.nome, createHash("sha256").update(m.sql).digest("hex")));
   const { nomes } = await b.rpc(pc1, "agente_migracoes");
   assert.deepEqual(nomes, todas.map((m) => m.nome).sort());
   assert.ok(nomes.includes("0020_atualizar_escolha.sql"));
-  // nada além dos nomes chega ao computador
-  assert.deepEqual(Object.keys(await b.rpc(pc1, "agente_migracoes")), ["nomes"]);
+  // nada além dos nomes e dos resumos (de arquivos públicos) chega ao computador
+  const r = await b.rpc(pc1, "agente_migracoes");
+  assert.deepEqual(Object.keys(r).sort(), ["hashes", "nomes"]);
+  for (const m of todas) assert.equal(r.hashes[m.nome], createHash("sha256").update(m.sql).digest("hex"), m.nome);
   await assert.rejects(b.como(pc1, "select * from public.reveza_migracoes"), /permission denied/);
   await assert.rejects(b.como(admin, "select * from public.reveza_migracoes"), /permission denied/);
   // só computador ativo: administrador e anônimo não chamam
