@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 
 import { BarraUso, NomeConta, SeloEstado } from "@/components/painel/conta"
-import { BotaoCorrigir, ResultadoConserto, useCorrigir } from "@/components/painel/conserto"
+import { BotaoCorrigir, ResultadoConserto, useCorrigir, useDiagnostico } from "@/components/painel/conserto"
 import { Codigo } from "@/components/painel/copiar"
 import { Confirmar } from "@/components/painel/confirmar"
 import { AvisoPermissao, Pagina } from "@/components/painel/pagina"
@@ -137,7 +137,8 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
   const nova = versaoMaisNova(estado.computadores.filter((c) => !c.revogado).map((c) => c.versao))
   const desatualizado = !!nova && compararVersao(pc.versao, nova) < 0
   const corrigir = useCorrigir(pc)
-  const itens = corrigir.diagnostico?.itens ?? []
+  const diag = useDiagnostico(pc, corrigir)
+  const itens = diag.diagnostico?.itens ?? []
   const okItens = itens.filter((i) => i.ok === true).length
   return (
     <Card>
@@ -232,15 +233,10 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
         <Button
           variant="outline"
           size="sm"
-          disabled={!pode}
-          onClick={() =>
-            void acao(
-              () => fonte.comando(pc.id, "diagnostico"),
-              t("computadores.diagnosticoPedido", { computador: pc.nome })
-            )
-          }
+          disabled={!pode || diag.rodando}
+          onClick={() => void diag.pedir()}
         >
-          <ActivityIcon />
+          {diag.rodando ? <Spinner /> : <ActivityIcon />}
           {t("computadores.acoes.diagnostico")}
         </Button>
         {corrigir.quantos ? <BotaoCorrigir corrigir={corrigir} variant="outline" /> : null}

@@ -972,6 +972,19 @@ export class FonteDemo implements Fonte {
           }
           const corrigidos = conferencias.filter((c) => c.consertado).length
           this.evento("info", "conserto", { computador: computadorId, conserto: true, corrigidos, nao_deu: 0 })
+        } else {
+          // o Rodar agora responde o diagnóstico, como o agente (a tela mostra o da resposta)
+          const conferencias = pc.diagnostico.itens.map((i) => ({
+            id: i.id,
+            situacao: i.ok === true ? "ok" : i.ok === false ? "falha" : "aviso",
+            detalhe: i.detalhe ?? "",
+            ...(i.ok !== true && i.conserto ? { conserto: i.id } : {}),
+            ...(i.ok !== true && i.fazer ? { fazer: i.fazer } : {}),
+          }))
+          cmd.resposta = {
+            ok: true,
+            diagnostico: { conferencias, em: pc.diagnostico.em, versao: pc.versao, atrasoBuscaMs: pc.diagnostico.atrasoBuscaMs },
+          }
         }
       }
       if (acao === "atualizar") {

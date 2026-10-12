@@ -96,6 +96,11 @@ export class Agente {
   private usoEnviadoEm = 0;
   private historicoEnviado = new Map<string, number>();
   private diagnosticoEm = 0;
+  /**
+   * O diagnóstico que um comando do painel acabou de rodar (Rodar agora ou Corrigir): vai no próximo agente_ola, para o
+   * guardado na nuvem (que o cartão do computador mostra) ficar igual ao que o painel acabou de ver.
+   */
+  private diagnosticoParaMandar: Record<string, unknown> | null = null;
   private sombraAtribuicao = "";
   private ligacaoAvisada = false;
   /** O pareamento de computador novo em curso (só um por vez); `anulada` quando outro pedido chegou junto. */
@@ -430,7 +435,11 @@ export class Agente {
         this.salvar();
       }
       let diagnostico: Record<string, unknown> | null = null;
-      if (this.d.diagnostico && this.d.relogio.agora() - this.diagnosticoEm > 600) {
+      const pendente = this.diagnosticoParaMandar;
+      if (pendente) {
+        diagnostico = pendente;
+        this.diagnosticoEm = this.d.relogio.agora();
+      } else if (this.d.diagnostico && this.d.relogio.agora() - this.diagnosticoEm > 600) {
         this.diagnosticoEm = this.d.relogio.agora();
         diagnostico = await this.d.diagnostico().catch(() => null);
       }
@@ -438,6 +447,8 @@ export class Agente {
       const inicio = Date.now();
       const r = await nuvem.ola(VERSAO, diagnostico, ativa?.email ?? null);
       this.ultimaBuscaMs = Date.now() - inicio;
+      // só sai da fila depois de a nuvem receber (sem rede, vai na busca seguinte)
+      if (pendente && this.diagnosticoParaMandar === pendente) this.diagnosticoParaMandar = null;
       if (r.computador_id && r.computador_id !== this.estado.nuvem.computadorId) this.estado.nuvem.computadorId = r.computador_id;
       if (this.online === false) this.d.log.info("nuvem de volta");
       this.online = true;
@@ -847,11 +858,13 @@ export class Agente {
           await this.d.nuvem
             ?.evento("info", texto, { conserto: true, comando: cmd.id ?? null, corrigidos: r.corrigidos ?? 0, nao_deu: r.naoDeu ?? 0 })
             .catch(() => undefined);
-          // o próximo agente_ola leva o diagnóstico novo (só lido) para a tela Saúde
-          this.diagnosticoEm = 0;
+          // o próximo agente_ola leva o diagnóstico de depois do conserto para o guardado na nuvem
+          this.diagnosticoParaMandar = r.diagnostico;
           return { status: 200, corpo: { ok: true, corrigir: true, diagnostico: r.diagnostico } };
         }
         const diag = this.d.diagnostico ? await this.d.diagnostico() : {};
+        // o Rodar agora: o guardado na nuvem também fica novo (antes só mudava na conferência de 10 em 10 min)
+        if (this.d.diagnostico) this.diagnosticoParaMandar = diag;
         return { status: 200, corpo: { ok: true, diagnostico: diag } };
       }
       case "ligar": {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { coresPorWorkspace } from "@/lib/cores"
-import { andamentoDoConserto, podeCorrigir } from "@/lib/conserto"
+import { andamentoDoConserto, diagnosticoDoComando, podeCorrigir } from "@/lib/conserto"
 import { fraseValida } from "@/lib/ligacao"
 import { FonteDemo, PALAVRAS, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
 import { faixasDeAlerta } from "./derivados"
@@ -205,6 +205,12 @@ describe("FonteDemo", () => {
       expect(podeCorrigir(e.computadores.find((c) => c.id === "pc-desktop")!.diagnostico)).toBe(false)
       expect(e.eventos[0]).toMatchObject({ tipo: "info", dados: { conserto: true, corrigidos: 2 } })
       expect((await f.auditoria(1))[0]).toMatchObject({ acao: "comando" })
+      // o Rodar agora responde o diagnóstico, como o agente
+      const rodar = await f.comando("pc-desktop", "diagnostico")
+      await vi.advanceTimersByTimeAsync(2800)
+      const rodado = diagnosticoDoComando(await f.lerComando(rodar.id), "0.4.1")
+      expect(rodado!.itens.find((i) => i.id === "credenciais")).toMatchObject({ ok: true })
+      expect(rodado!.itens.find((i) => i.id === "relogio")).toMatchObject({ ok: false, fazer: expect.stringMatching(/^acerte/) })
     } finally {
       vi.useRealTimers()
     }

@@ -11,7 +11,15 @@ import { Spinner } from "@/components/ui/spinner"
 import { useAcao, useDados, usePermissao } from "@/dados/contexto"
 import type { Computador, ItemDiagnostico } from "@/dados/tipos"
 import { useT } from "@/i18n"
-import { andamentoDoConserto, consertaveis, diagnosticoAtual, PEDIDO_CORRIGIR, type AndamentoConserto } from "@/lib/conserto"
+import {
+  andamentoDoConserto,
+  consertaveis,
+  diagnosticoAtual,
+  diagnosticoDoComando,
+  maisNovo,
+  PEDIDO_CORRIGIR,
+  type AndamentoConserto,
+} from "@/lib/conserto"
 import { comDemo } from "@/lib/demo"
 import { Link } from "@/lib/rota"
 import { cn } from "@/lib/utils"
@@ -49,6 +57,36 @@ export function useCorrigir(pc: Computador) {
     diagnostico,
     /** Quantos problemas têm conserto automático agora (sem nenhum, sem botão). */
     quantos: consertaveis(diagnostico).length,
+  }
+}
+
+/**
+ * O "Rodar agora" de um computador: pede o diagnóstico e, quando ele volta, a tela mostra o que voltou (o guardado na
+ * nuvem só fica novo na busca seguinte do agente). `diagnostico` é o mais novo entre o guardado, o do Corrigir e este.
+ */
+export function useDiagnostico(pc: Computador, corrigir: ReturnType<typeof useCorrigir>) {
+  const { t } = useT()
+  const { fonte } = useDados()
+  const acao = useAcao()
+  const [cmdId, setCmdId] = React.useState<number | null>(null)
+  const cmd = useComando(cmdId)
+  const rodando = cmdId !== null && (!cmd || cmd.estado === "pendente" || cmd.estado === "reservado")
+  const rodado = diagnosticoDoComando(cmd, pc.versao)
+  const conserto = corrigir.andamento?.fase === "feito" ? corrigir.andamento.diagnostico : null
+  const diagnostico = maisNovo(pc.diagnostico, conserto, rodado)
+  const pedir = async () => {
+    const [ok, c] = await acao(() => fonte.comando(pc.id, "diagnostico"), t("saude.pedido", { computador: pc.nome }))
+    if (ok) setCmdId(c.id)
+  }
+  return {
+    pedir,
+    rodando,
+    diagnostico,
+    /** De onde veio o que a tela mostra: a conferência automática, o Rodar agora ou o Corrigir. */
+    origem: (diagnostico && diagnostico === rodado ? "rodado" : diagnostico && diagnostico === conserto ? "corrigir" : "automatico") as
+      | "rodado"
+      | "corrigir"
+      | "automatico",
   }
 }
 

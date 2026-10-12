@@ -3,7 +3,8 @@ import { secao } from "../secao"
 export default secao({
   pt: {
     saude: {
-      descricao: "O diagnóstico de cada computador (o mesmo do `reveza doctor`), o atraso da busca e as versões.",
+      descricao:
+        "Esta tela é o `reveza doctor` de cada computador: as mesmas conferências, que o agente roda sozinho a cada 10 minutos ou na hora, pelo Rodar agora. O que tem conserto automático ganha o Corrigir; o resto diz o que fazer.",
       busca: "Busca",
       atraso: "Atraso da busca",
       atrasoDica: "Quanto a última ida e volta até a nuvem levou.",
@@ -11,8 +12,10 @@ export default secao({
       versao: "Versão do agente",
       atualizada: "a mais nova",
       desatualizada: "a mais nova é {versao}",
-      diagnostico: "Diagnóstico",
-      diagnosticoEm: "lido {quando}",
+      diagnostico: "Diagnóstico (reveza doctor)",
+      diagnosticoEm: "conferência automática {quando}",
+      diagnosticoRodado: "rodado {quando} (Rodar agora)",
+      diagnosticoCorrigido: "conferido de novo {quando} (Corrigir)",
       semDiagnostico: "Este computador ainda não mandou diagnóstico.",
       rodar: "Rodar agora",
       rodando: "Pedido ao computador…",
@@ -72,7 +75,8 @@ export default secao({
   },
   en: {
     saude: {
-      descricao: "Each computer's diagnostics (the same as `reveza doctor`), polling delay and versions.",
+      descricao:
+        "This screen is each computer's `reveza doctor`: the same checks, which the agent runs by itself every 10 minutes or right away with Run now. What has an automatic fix gets Fix; the rest says what to do.",
       busca: "Polling",
       atraso: "Polling delay",
       atrasoDica: "How long the last round trip to the cloud took.",
@@ -80,8 +84,10 @@ export default secao({
       versao: "Agent version",
       atualizada: "the newest",
       desatualizada: "the newest is {versao}",
-      diagnostico: "Diagnostics",
-      diagnosticoEm: "read {quando}",
+      diagnostico: "Diagnostics (reveza doctor)",
+      diagnosticoEm: "automatic check {quando}",
+      diagnosticoRodado: "run {quando} (Run now)",
+      diagnosticoCorrigido: "checked again {quando} (Fix)",
       semDiagnostico: "This computer hasn't sent diagnostics yet.",
       rodar: "Run now",
       rodando: "Requested from the computer…",

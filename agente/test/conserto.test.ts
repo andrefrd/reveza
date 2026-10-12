@@ -451,7 +451,30 @@ describe("conserto da credencial: a troca pedida ao trocador", () => {
       assert.deepEqual(ev!.dados, { conserto: true, comando: 3, corrigidos: 1, nao_deu: 0 }, "o painel mostra o resumo pelos números, no idioma de quem vê");
       const antes = diagnosticos;
       await m!.agente.busca();
-      assert.equal(diagnosticos, antes + 1, "depois do conserto, o próximo agente_ola leva o diagnóstico novo");
+      const ola = banco.chamadas.filter((x) => x.fn === "ola");
+      assert.deepEqual(ola[ola.length - 1]!.args[1], (cmd.resposta as { diagnostico: unknown }).diagnostico, "o próximo agente_ola leva o diagnóstico de depois do conserto");
+      assert.equal(diagnosticos, antes, "o mesmo que o painel viu, sem rodar outro");
+      await m!.agente.busca();
+      assert.equal(banco.chamadas.filter((x) => x.fn === "ola").pop()!.args[1], null, "e só uma vez");
+    });
+
+    test("Rodar agora: o diagnóstico que voltou ao painel vai também no próximo agente_ola (o guardado fica novo)", async () => {
+      let n = 0;
+      await preparar({ diagnostico: async () => ({ conferencias: [], em: `rodada-${++n}` }) });
+      await m!.agente.busca();
+      const olas = () => banco.chamadas.filter((x) => x.fn === "ola").map((x) => (x.args[1] as { em?: string } | null)?.em ?? null);
+      assert.deepEqual(olas(), ["rodada-1"]);
+      banco.comandos.push({ id: 5, acao: "diagnostico", corpo: {}, pc: "pc-1", estado: "pendente" });
+      await m!.agente.busca();
+      const cmd = banco.comandos.find((c) => c.id === 5)!;
+      assert.equal((cmd.resposta as { diagnostico: { em: string } }).diagnostico.em, "rodada-2");
+      banco.foraDoAr = true;
+      await m!.agente.busca();
+      banco.foraDoAr = false;
+      await m!.agente.busca();
+      assert.deepEqual(olas(), ["rodada-1", null, "rodada-2"], "antes ficava só na resposta: o guardado esperava até 10 min; sem rede, vai na seguinte");
+      await m!.agente.busca();
+      assert.deepEqual(olas(), ["rodada-1", null, "rodada-2", null]);
     });
 
     test("agente sem conserto (versão de antes) responde que não conserta", async () => {

@@ -4,13 +4,13 @@
 import * as React from "react"
 import { ActivityIcon, PlayIcon } from "lucide-react"
 
-import { BotaoCorrigir, nomeDoItem, ResultadoConserto, useCorrigir } from "@/components/painel/conserto"
+import { BotaoCorrigir, nomeDoItem, ResultadoConserto, useCorrigir, useDiagnostico } from "@/components/painel/conserto"
 import { Pagina } from "@/components/painel/pagina"
 import { MarcaEstado } from "@/components/rb"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
+import { useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
 import { compararVersao, estadoComputador, versaoMaisNova } from "@/dados/derivados"
 import type { Computador } from "@/dados/tipos"
 import { useT } from "@/i18n"
@@ -18,7 +18,6 @@ import { emDemo } from "@/lib/demo"
 import { fmtNumero, fmtRelativo } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { jaInstalado } from "@/pwa/registrar"
-import { useComando } from "@/components/painel/dialogo-login"
 import { ICONE_SISTEMA } from "./visao-geral"
 
 export default function Saude() {
@@ -41,16 +40,14 @@ export default function Saude() {
 function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
   const { t, tn, tx, idioma } = useT()
   const agora = useAgora(5000)
-  const { fonte } = useDados()
-  const acao = useAcao()
   const { pode } = usePermissao()
-  const [cmdId, setCmdId] = React.useState<number | null>(null)
-  const cmd = useComando(cmdId)
-  const rodando = cmdId !== null && (!cmd || cmd.estado === "pendente" || cmd.estado === "reservado")
   const situacao = estadoComputador(pc, agora)
   const Sistema = ICONE_SISTEMA[pc.sistema]
   const corrigir = useCorrigir(pc)
-  const d = corrigir.diagnostico
+  // o que a tela mostra é o mais novo: o guardado (automático, de 10 em 10 min), o do Rodar agora ou o do Corrigir
+  const diag = useDiagnostico(pc, corrigir)
+  const d = diag.diagnostico
+  const rodando = diag.rodando
   const atrasada = nova && compararVersao(pc.versao, nova) < 0
   const atraso = d?.atrasoBuscaMs ?? null
   return (
@@ -76,13 +73,7 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
             variant="outline"
             size="sm"
             disabled={!pode || rodando}
-            onClick={async () => {
-              const [ok, c] = await acao(
-                () => fonte.comando(pc.id, "diagnostico"),
-                t("saude.pedido", { computador: pc.nome })
-              )
-              if (ok) setCmdId(c.id)
-            }}
+            onClick={() => void diag.pedir()}
           >
             <PlayIcon />
             {rodando ? t("saude.rodando") : t("saude.rodar")}
@@ -121,7 +112,14 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
             <p className="text-sm font-medium">{t("saude.diagnostico")}</p>
             {d ? (
               <span className="text-xs text-muted-foreground">
-                {t("saude.diagnosticoEm", { quando: fmtRelativo(d.em, agora, idioma) })}
+                {t(
+                  diag.origem === "rodado"
+                    ? "saude.diagnosticoRodado"
+                    : diag.origem === "corrigir"
+                      ? "saude.diagnosticoCorrigido"
+                      : "saude.diagnosticoEm",
+                  { quando: fmtRelativo(d.em, agora, idioma) }
+                )}
               </span>
             ) : null}
           </div>

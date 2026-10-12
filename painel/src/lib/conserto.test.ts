@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest"
 
 import { paraDiagnostico } from "@/dados/supabase"
 import type { Comando } from "@/dados/tipos"
-import { andamentoDoConserto, consertaveis, diagnosticoAtual, PEDIDO_CORRIGIR, podeCorrigir } from "./conserto"
+import {
+  andamentoDoConserto,
+  consertaveis,
+  diagnosticoAtual,
+  diagnosticoDoComando,
+  maisNovo,
+  PEDIDO_CORRIGIR,
+  podeCorrigir,
+} from "./conserto"
 
 const cmd = (estado: Comando["estado"], resposta: Record<string, unknown> | null = null): Comando => ({
   id: 1,
@@ -118,5 +126,42 @@ describe("Corrigir na tela Saúde", () => {
     expect(a.itens[0].id).toBe("y")
     expect(a.itens[0].consertado!.texto.length).toBe(400)
     expect(andamentoDoConserto(cmd("feito", { ok: true, corrigir: true, diagnostico: "lixo" }))).toMatchObject({ fase: "feito", itens: [] })
+  })
+})
+
+describe("Rodar agora na tela Saúde", () => {
+  // o caso do MacBook do Paulo (12/10/2026): o guardado dizia "nenhum login"; o Rodar agora voltou com a conta
+  const guardado = paraDiagnostico(
+    {
+      em: "2026-10-12T04:00:00.000Z",
+      conferencias: [{ id: "credenciais", nome: "Credencial em uso", situacao: "falha", detalhe: "nenhum login em Claude Code-credentials" }],
+    },
+    "0.1.6"
+  )
+  const resposta = {
+    ok: true,
+    diagnostico: {
+      em: "2026-10-12T04:12:00.000Z",
+      conferencias: [{ id: "credenciais", nome: "Credencial em uso", situacao: "ok", detalhe: "pa@exemplo.com; token vence em 478 min" }],
+    },
+  }
+
+  it("quando o comando volta, a tela mostra o diagnóstico da resposta (o mais novo), não o guardado", () => {
+    const rodado = diagnosticoDoComando(cmd("feito", resposta), "0.1.6")
+    expect(rodado!.itens[0]).toMatchObject({ id: "credenciais", ok: true, detalhe: "pa@exemplo.com; token vence em 478 min" })
+    expect(maisNovo(guardado, rodado)).toBe(rodado)
+    // o guardado ficou novo depois (o agente manda na busca seguinte): vale o mais novo
+    const depois = paraDiagnostico({ ...resposta.diagnostico, em: "2026-10-12T04:13:00.000Z" }, "0.1.6")
+    expect(maisNovo(depois, rodado)).toBe(depois)
+    expect(maisNovo(rodado, null, undefined)).toBe(rodado)
+    expect(maisNovo(null, undefined)).toBeNull()
+  })
+
+  it("só o comando terminado conta, e o do Corrigir fica com o andamento do conserto", () => {
+    expect(diagnosticoDoComando(null)).toBeNull()
+    expect(diagnosticoDoComando(cmd("reservado", resposta))).toBeNull()
+    expect(diagnosticoDoComando(cmd("recusado", { ok: false, erro: "x" }))).toBeNull()
+    expect(diagnosticoDoComando(cmd("feito", { ...resposta, corrigir: true }))).toBeNull()
+    expect(diagnosticoDoComando(cmd("feito", { ok: true, diagnostico: "lixo" }))).toBeNull()
   })
 })

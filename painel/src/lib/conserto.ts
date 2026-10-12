@@ -58,8 +58,21 @@ export function andamentoDoConserto(cmd: Comando | null, versao = ""): Andamento
  * máximo a cada 15 s, e o agente manda a conferência nova só na busca seguinte); depois, o que o computador mandou.
  */
 export function diagnosticoAtual(guardado: Diagnostico | null, andamento: AndamentoConserto | null): Diagnostico | null {
-  const novo = andamento?.fase === "feito" ? andamento.diagnostico : null
-  if (!novo) return guardado
-  if (!guardado) return novo
-  return Date.parse(novo.em) >= Date.parse(guardado.em) ? novo : guardado
+  return maisNovo(guardado, andamento?.fase === "feito" ? andamento.diagnostico : null)
+}
+
+/** O diagnóstico que um "Rodar agora" (comando "diagnostico" sem corrigir) devolveu, quando ele terminou. */
+export function diagnosticoDoComando(cmd: Comando | null, versao = ""): Diagnostico | null {
+  if (!cmd || cmd.estado !== "feito" || cmd.resposta?.corrigir === true) return null
+  return paraDiagnostico(cmd.resposta?.diagnostico, versao)
+}
+
+/**
+ * O mais novo, pelo `em`, entre o guardado na nuvem (que o agente manda sozinho a cada 10 min) e os que esta tela
+ * acabou de pedir. No empate fica o primeiro (o guardado).
+ */
+export function maisNovo(...ds: (Diagnostico | null | undefined)[]): Diagnostico | null {
+  let r: Diagnostico | null = null
+  for (const d of ds) if (d && (!r || Date.parse(d.em) > Date.parse(r.em))) r = d
+  return r
 }
