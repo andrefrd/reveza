@@ -31,8 +31,8 @@ export interface Caminhos {
   segredos: string;
   permitidas: string;
   /**
-   * Só se existir, este computador libera a frase de computador novo a pedido do painel (`reveza ligar --painel ligar`).
-   * Sem ele, a frase só sai pelo terminal: pelo painel, quem autoriza é a nuvem (auditoria de 11/10/2026).
+   * Arquivo da liberação sem perguntar da 0.1.x (`reveza ligar --painel ligar`), que deixava a nuvem autorizar sozinha.
+   * Saiu na 0.2.0: o agente não lê mais; `reveza ligar --painel ...` só o apaga.
    */
   ligarPeloPainel: string;
   /** Pasta de configuração que as sessões usam (onde fica o .credentials.json fora do macOS). */

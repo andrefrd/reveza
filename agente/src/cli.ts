@@ -18,7 +18,8 @@ import { ambienteDoUsuario, consertar, instalarMod, pastaDoPrograma, resumoConse
 import { GithubOficial } from "./atualizar.js";
 import { carregarEstado, type EstadoLocal } from "./estado.js";
 import { importar } from "./importar.js";
-import { iniciarCofre, lerChave, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
+import { iniciarCofre, lerChave, liberarComputadorNovo, pedirParaEntrar, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
+import { letreiro } from "./letreiro.js";
 import { NuvemRpc } from "./nuvem/rpc.js";
 import { guardarIdentidade, lerIdentidade, rpcSupabase } from "./nuvem/supabase.js";
 import type { Nuvem } from "./nuvem/tipos.js";
@@ -106,8 +107,10 @@ Uso: reveza <comando> [opções]
   uso [--dias N] [--csv|--json]   tokens e custo equivalente por dia, conta, modelo e projeto
   doctor [--so-ver] [--json]      confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões, e conserta o que
                                   tem conserto seguro (serviço, mod, conta em uso sem login); --so-ver só confere
-  ligar [--frase "..."]           liga este computador ao cofre (ou mostra a frase para ligar outro)
-  ligar --painel ligar|desligar  libera (ou não) a frase pelo painel sem perguntar; sem isso, uma janela pede o clique
+  ligar                           no computador novo: pede para entrar e mostra um código de 8 caracteres
+  ligar XXXX-XXXX                 no computador que já usa o Reveza: libera o computador novo que mostra este código
+  ligar --mostrar-frase           emergência: 6 palavras para um computador já ligado que perdeu a chave do cofre
+  ligar --frase "..."             emergência: recebe a chave do cofre pelas 6 palavras (só computador já ligado)
   servico instalar|remover|status [--sombra]
   importar --de <pasta>           copia contas, credenciais e histórico de outro gestor (nada é apagado)
   cofre iniciar                   cria a chave do cofre no primeiro computador
@@ -466,40 +469,95 @@ async function cmdDoctor(amb: Ambiente, a: Args): Promise<number> {
   return r.depois.some((c) => c.situacao === "falha") ? 1 : 0;
 }
 
+/** Nome que vem da nuvem, antes de ir ao terminal: só letras, números, espaço e - _ ( ) (nada de sequência de controle). */
+function nomeSeguro(nome: string): string {
+  return nome.replace(/[^\p{L}\p{N} _()-]/gu, "").slice(0, 60);
+}
+
+/** O que o computador novo mostra: o código em letras grandes, a instrução e o código em texto comum. */
+export function textoDoCodigo(codigo: string, idioma: "pt-BR" | "en"): string {
+  const en = idioma === "en";
+  return [
+    "",
+    en
+      ? "On the computer that already uses Reveza, type this code in the window that opens"
+      : "No computador que já usa o Reveza, digite este código na janela que vai abrir",
+    en ? `(no screen there: reveza ligar ${codigo}):` : `(sem tela: reveza ligar ${codigo}):`,
+    "",
+    ...letreiro(codigo).map((l) => `    ${l}`),
+    "",
+    `    ${codigo}`,
+    "",
+    en
+      ? "The code is not a secret: it only lets the other computer check that it is talking to this one. Valid for 10 minutes."
+      : "O código não é segredo: ele só deixa o outro computador conferir que está falando com este. Vale 10 minutos.",
+  ].join("\n");
+}
+
 async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
   if (a.flags.painel === "ligar" || a.flags.painel === "desligar") {
-    const arq = amb.c.ligarPeloPainel;
-    if (a.flags.painel === "ligar") {
-      fs.mkdirSync(path.dirname(arq), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(arq, "liberado pelo dono deste computador\n", { mode: 0o600 });
-      amb.saida("Este computador passa a liberar a frase a pedido do painel. Quem autoriza é a nuvem: um administrador do painel, ou quem controla o projeto no Supabase.");
-    } else {
-      fs.rmSync(arq, { force: true });
-      amb.saida("Este computador volta a liberar a frase só pelo terminal (reveza ligar).");
-    }
-    return 0;
+    // a liberação sem perguntar (0.1.x) deixava a nuvem autorizar sozinha: saiu na 0.2.0
+    fs.rmSync(amb.c.ligarPeloPainel, { force: true });
+    amb.erro("A liberação pelo painel sem perguntar saiu na 0.2.0: o computador novo mostra um código de 8 caracteres; libere aqui com reveza ligar XXXX-XXXX (ou na janela que abre).");
+    return a.flags.painel === "desligar" ? 0 : 2;
   }
+  const idioma: "pt-BR" | "en" = a.flags.idioma === "en" ? "en" : "pt-BR";
   const p = await pecas(amb);
   const nuvem = await nuvemDe(amb, p.guarda, false);
   if (!nuvem) {
     amb.erro("este computador ainda não tem a nuvem configurada (reveza nuvem entrar ...)");
     return 1;
   }
-  // As funções da ligação exigem o computador registrado (o registro é idempotente).
-  await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
   const temChave = !!(await lerChave(p.guarda));
-  if (temChave && typeof a.flags.frase !== "string" && !amb.env.REVEZA_FRASE) {
-    const idioma: Idioma = a.flags.idioma === "en" ? "en" : "pt-BR";
+  const frase = typeof a.flags.frase === "string" ? a.flags.frase : amb.env.REVEZA_FRASE;
+
+  // Emergência (computador já ligado que perdeu a chave): a frase de 6 palavras, pelo terminal dos dois.
+  if (a.flags["mostrar-frase"]) {
+    if (!temChave) throw new Error("este computador não tem a chave do cofre: mostre a frase num que tenha");
+    await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
     const r = await publicarLigacao(p.guarda, nuvem, idioma);
-    amb.saida("Digite estas 6 palavras no computador novo (reveza ligar), em até 10 minutos:\n");
+    amb.saida("Emergência: digite estas 6 palavras no computador que perdeu a chave (reveza ligar --frase), em até 10 minutos:\n");
     amb.saida(`    ${r.frase}\n`);
-    amb.saida("A frase não vai à nuvem: só quem está vendo esta tela consegue ligar o computador.");
+    amb.saida("A frase abre o cofre por 10 minutos: não mande por chat nem e-mail. Computador novo não usa a frase: ele entra pelo código que aparece nele.");
     return 0;
   }
-  const frase =
-    typeof a.flags.frase === "string" ? a.flags.frase : amb.env.REVEZA_FRASE || (await amb.perguntar("As 6 palavras mostradas no outro computador: "));
-  await receberLigacao(p.guarda, nuvem, frase);
-  amb.saida("Pronto: este computador recebeu a chave do cofre.");
+  if (frase || a.flags.frase === true) {
+    // só computador já ligado: a nuvem recusa registrar identidade pendente que não recebeu a chave pelo pedido
+    await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
+    await receberLigacao(p.guarda, nuvem, frase || (await amb.perguntar("As 6 palavras mostradas no outro computador: ")));
+    amb.saida("Pronto: este computador recebeu a chave do cofre.");
+    return 0;
+  }
+
+  // Quem tem a chave libera o computador novo pelo código que aparece nele.
+  if (temChave) {
+    await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
+    const digitado = a.pos[1] ?? (await amb.perguntar("O código de 8 caracteres que aparece no computador novo: "));
+    await liberarComputadorNovo(p.guarda, nuvem, digitado);
+    amb.saida("Pronto: a chave do cofre foi entregue cifrada só para o computador novo. Ele termina sozinho.");
+    return 0;
+  }
+
+  // Computador novo: pede para entrar (a identidade pendente veio do código de acesso do painel).
+  if (a.pos[1]) throw new Error("este computador não tem a chave do cofre: o código se digita num computador que já usa o Reveza");
+  let esperando = false;
+  const r = await pedirParaEntrar(p.guarda, nuvem, {
+    aoMostrarCodigo: (codigo) => amb.saida(textoDoCodigo(codigo, idioma)),
+    aoEsperar: (aprovador) => {
+      const nome = aprovador ? nomeSeguro(aprovador) : "";
+      if (nome) amb.saida(idioma === "en" ? `\nWaiting for you to type the code on ${nome}...` : `\nEsperando você digitar o código em ${nome}...`);
+      else if (!esperando) amb.saida(idioma === "en" ? "\nWaiting for the code to be typed on the other computer..." : "\nEsperando o código ser digitado no outro computador...");
+      esperando = true;
+    },
+    dormir: (ms) => amb.relogio.dormir(ms),
+  });
+  // com a chave na mão, a identidade vira computador (a nuvem só deixa depois de ele ler a chave entregue)
+  await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
+  if (!r.impressao) {
+    const k = await lerChave(p.guarda);
+    if (k) await nuvem.cofreImpressao(impressaoDaChave(k)).catch(() => undefined);
+  }
+  amb.saida(idioma === "en" ? "Done: this computer received the vault key." : "Pronto: este computador recebeu a chave do cofre.");
   return 0;
 }
 
@@ -731,9 +789,17 @@ export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()
           // instalação que já tem chave: uma segunda dividiria o cofre (o computador novo recebe a dela com `reveza ligar`)
           const nuvem = await nuvemDe(amb, p.guarda, false).catch(() => null);
           if (nuvem && !(await lerChave(p.guarda))) {
-            await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO).catch(() => undefined);
+            const recusou = await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO).then(
+              () => null,
+              (e: Error) => (/ainda não recebeu a chave/.test(e.message) ? e : null),
+            );
+            // identidade de computador novo (a nuvem já tem chave): uma segunda dividiria o cofre
+            if (recusou) {
+              amb.erro("esta instalação já tem a chave do cofre: este computador a recebe com `reveza ligar` (o código aparece aqui e é digitado num computador que já usa o Reveza)");
+              return 1;
+            }
             if (await nuvem.cofreImpressao(null).catch(() => null)) {
-              amb.erro("esta instalação já tem a chave do cofre: receba-a com `reveza ligar` (a frase sai de um computador que já usa o Reveza)");
+              amb.erro("esta instalação já tem a chave do cofre: receba-a com `reveza ligar` (o código aparece aqui e é digitado num computador que já usa o Reveza)");
               return 1;
             }
           }

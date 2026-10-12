@@ -176,7 +176,44 @@ describe("linha de comando", () => {
     assert.equal(await executarCli(["nuvem", "entrar", "--url", "https://x.supabase.co", "--chave-publica", "k", "--email", "e@x.com"], curta), 1);
   });
 
-  test("ligar: com a chave mostra a frase; sem ela pede a frase e recebe a chave", async () => {
+  test("ligar: o computador novo mostra o código em letras grandes; reveza ligar XXXX-XXXX no que tem a chave entrega", async () => {
+    tmp = pastaTemporaria();
+    const banco = new BancoFalso();
+    const velha = new GuardaFalsa();
+    await velha.gravar(SEGREDO_COFRE, Buffer.alloc(32, 7).toString("base64"));
+    banco.pendentes.add("pc-novo");
+    const nova = new GuardaFalsa();
+    let liberar: () => void = () => undefined;
+    const podeLiberar = new Promise<void>((r) => (liberar = r));
+    const b = ambiente();
+    b.fabricas!.guarda = async () => nova;
+    b.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-novo");
+    // a espera do computador novo: a cada volta, a pessoa pode ter digitado no outro computador
+    b.relogio = { ...new RelogioFalso(), dormir: async () => { liberar(); await new Promise((r) => setImmediate(r)); } } as unknown as Ambiente["relogio"];
+    const pedindo = executarCli(["ligar"], b);
+    await podeLiberar;
+    const texto = b.saidas.join("\n");
+    const codigo = /^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto)?.[1];
+    assert.ok(codigo, texto);
+    assert.match(texto, /█/, "letras grandes");
+    assert.match(texto, new RegExp(`sem tela: reveza ligar ${codigo}`));
+    assert.equal(await nova.ler(SEGREDO_COFRE), null, "ainda não chegou");
+    const a = ambiente();
+    a.fabricas!.guarda = async () => velha;
+    a.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-velho");
+    assert.equal(await executarCli(["ligar", "AAAA-AAAA"], a), 1, "código errado não entrega");
+    assert.match(a.erros.join("\n"), /não confere/);
+    assert.equal(await executarCli(["ligar", codigo!.toLowerCase()], a), 0, a.erros.join("\n"));
+    assert.equal(await pedindo, 0, b.erros.join("\n"));
+    assert.equal(await nova.ler(SEGREDO_COFRE), await velha.ler(SEGREDO_COFRE));
+    assert.match(b.saidas.join("\n"), /recebeu a chave do cofre/);
+    assert.ok(!banco.pendentes.has("pc-novo"), "com a chave, o computador novo entrou");
+    // a liberação sem perguntar saiu
+    assert.equal(await executarCli(["ligar", "--painel", "ligar"], a), 2);
+    assert.match(a.erros.join("\n"), /saiu na 0\.2\.0/);
+  });
+
+  test("ligar --mostrar-frase / --frase: a frase de emergência ainda liga um computador já ligado que perdeu a chave", async () => {
     tmp = pastaTemporaria();
     const banco = new BancoFalso();
     const velha = new GuardaFalsa();
@@ -184,14 +221,22 @@ describe("linha de comando", () => {
     const a = ambiente();
     a.fabricas!.guarda = async () => velha;
     a.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-velho");
-    assert.equal(await executarCli(["ligar"], a), 0);
+    assert.equal(await executarCli(["ligar", "--mostrar-frase"], a), 0);
     const frase = a.saidas.find((l) => /^\s{4}\S/.test(l))!.trim();
     const nova = new GuardaFalsa();
     const b = ambiente({ perguntar: async () => frase });
     b.fabricas!.guarda = async () => nova;
-    b.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-novo");
-    assert.equal(await executarCli(["ligar"], b), 0, b.erros.join("\n"));
+    b.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-perdeu");
+    assert.equal(await executarCli(["ligar", "--frase"], b), 0, b.erros.join("\n"));
     assert.equal(await nova.ler(SEGREDO_COFRE), await velha.ler(SEGREDO_COFRE));
+    // identidade pendente (computador novo) não entra pela frase
+    banco.pendentes.add("pc-novo");
+    banco.cofreImpressao = "c".repeat(32);
+    const c = ambiente();
+    c.fabricas!.guarda = async () => new GuardaFalsa();
+    c.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-novo");
+    assert.equal(await executarCli(["ligar", "--frase", frase], c), 1);
+    assert.match(c.erros.join("\n"), /ainda não recebeu a chave/);
   });
 
   test("linha de uma conta", () => {

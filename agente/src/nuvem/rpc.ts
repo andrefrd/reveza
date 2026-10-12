@@ -4,8 +4,14 @@
 import type { Sistema } from "../config.js";
 import { deB64, paraB64 } from "./bytea.js";
 import {
+  chavePublicaValida,
   ErroNuvem,
   type Atribuicao,
+  type ChavePublica,
+  type EnvelopeChave,
+  type MotivoRecusa,
+  type PedidoLigacao,
+  type RespostaReceber,
   type ComandoNuvem,
   type CofreNuvem,
   type JanelaNuvem,
@@ -56,6 +62,37 @@ function comandoDe(v: unknown): ComandoNuvem | null {
   };
 }
 
+function pedidoDe(v: unknown): PedidoLigacao | null {
+  if (!v || typeof v !== "object") return null;
+  const p = v as Record<string, unknown>;
+  const publica = chavePublicaValida(p.publica);
+  const id = texto(p.computador_id);
+  if (!publica || !id) return null;
+  return {
+    computador_id: id,
+    publica,
+    pedido_em: texto(p.pedido_em),
+    expira_em: texto(p.expira_em),
+    para_mim: p.para_mim === true,
+    aprovador_em: texto(p.aprovador_em),
+    idioma: p.idioma === "en" ? "en" : "pt-BR",
+  };
+}
+
+function pedidosDe(v: unknown): PedidoLigacao[] {
+  return (Array.isArray(v) ? v : []).map(pedidoDe).filter((p): p is PedidoLigacao => !!p);
+}
+
+function envelopeDe(v: unknown): EnvelopeChave | null {
+  if (!v || typeof v !== "object") return null;
+  const e = v as Record<string, unknown>;
+  const efemera = chavePublicaValida(e.efemera);
+  if (!efemera || typeof e.iv !== "string" || typeof e.cifrado !== "string") return null;
+  return { efemera, iv: e.iv, cifrado: e.cifrado };
+}
+
+const ESTADOS_RECEBER = new Set(["sem_pedido", "esperando", "entregue", "recusado", "vencido", "lido"]);
+
 export class NuvemRpc implements Nuvem {
   constructor(private rpc: Rpc) {}
 
@@ -76,6 +113,7 @@ export class NuvemRpc implements Nuvem {
       config: r.config && typeof r.config === "object" ? (r.config as Record<string, unknown>) : {},
       comandos: (Array.isArray(r.comandos) ? r.comandos : []).map(comandoDe).filter((c): c is ComandoNuvem => !!c),
       ligacao_pendente: r.ligacao_pendente === true,
+      ligacoes: pedidosDe(r.ligacoes),
     };
   }
 
@@ -165,6 +203,42 @@ export class NuvemRpc implements Nuvem {
     const r = await this.chamar("agente_ligacao_buscar", {});
     if (r.ok !== true || r.embrulho == null || r.sal == null) return null;
     return { embrulho: deB64(r.embrulho), sal: deB64(r.sal) };
+  }
+
+  async ligacaoPedir(publica: ChavePublica) {
+    const r = await this.chamar("agente_ligacao_pedir", { p_publica: publica });
+    const id = texto(r.computador_id);
+    if (r.ok !== true || !id) throw new ErroNuvem("agente_ligacao_pedir: resposta fora do formato", false, "formato");
+    return { computador_id: id, expira_em: texto(r.expira_em) };
+  }
+
+  async ligacaoReceber(): Promise<RespostaReceber> {
+    const r = await this.chamar("agente_ligacao_receber", {});
+    const estado = String(r.estado ?? "");
+    if (!ESTADOS_RECEBER.has(estado)) throw new ErroNuvem("agente_ligacao_receber: resposta fora do formato", false, "formato");
+    return {
+      estado: estado as RespostaReceber["estado"],
+      envelope: envelopeDe(r.envelope),
+      impressao: texto(r.impressao),
+      motivo: texto(r.motivo),
+      expira_em: texto(r.expira_em),
+      aprovador: texto(r.aprovador),
+    };
+  }
+
+  async ligacoesAbertas() {
+    const r = await this.chamar("agente_ligacoes_abertas", {});
+    return pedidosDe(r.pedidos);
+  }
+
+  async ligacaoEntregar(computadorId: string, publica: ChavePublica, envelope: EnvelopeChave) {
+    const r = await this.chamar("agente_ligacao_entregar", { p_computador: computadorId, p_publica: publica, p_envelope: envelope });
+    return { ok: r.ok === true, erro: texto(r.erro) };
+  }
+
+  async ligacaoRecusar(computadorId: string, motivo: MotivoRecusa) {
+    const r = await this.chamar("agente_ligacao_recusar", { p_computador: computadorId, p_motivo: motivo });
+    return { ok: r.ok === true };
   }
 
   async cofreImpressao(impressao: string | null) {

@@ -49,6 +49,14 @@ describe("contrato das funções agente_*", () => {
     await n.ligacaoPublicar(b, b);
     await n.vezDeAtualizar("0.1.0", "0.1.1");
     await n.resultadoAtualizacao("0.1.1", "falhou", "voltou");
+    const chave = { kty: "EC" as const, crv: "P-256" as const, x: "a".repeat(43), y: "b".repeat(43) };
+    await n.ligacoesAbertas();
+    await n.ligacaoEntregar("pc-novo", chave, { efemera: chave, iv: "A".repeat(16), cifrado: "B".repeat(64) });
+    await n.ligacaoRecusar("pc-novo", "recusado_na_tela");
+    r.resposta = { ok: true, computador_id: "pc-novo", expira_em: null };
+    await n.ligacaoPedir(chave);
+    r.resposta = { estado: "esperando" };
+    await n.ligacaoReceber();
     r.resposta = { ok: false, erro: "nenhuma ligação aberta" };
     assert.equal(await n.ligacaoBuscar(), null);
     const assinaturas = r.chamadas.map((c) => `${c.fn}(${Object.keys(c.args).join(",")})`);
@@ -69,6 +77,11 @@ describe("contrato das funções agente_*", () => {
       "agente_ligacao_publicar(p_embrulho,p_sal)",
       "agente_vez_de_atualizar(p_de,p_para)",
       "agente_atualizacao_resultado(p_para,p_estado,p_motivo)",
+      "agente_ligacoes_abertas()",
+      "agente_ligacao_entregar(p_computador,p_publica,p_envelope)",
+      "agente_ligacao_recusar(p_computador,p_motivo)",
+      "agente_ligacao_pedir(p_publica)",
+      "agente_ligacao_receber()",
       "agente_ligacao_buscar()",
     ]);
     assert.equal(r.chamadas[3]!.args.p_cifrado, "AQID");
@@ -83,11 +96,16 @@ describe("contrato das funções agente_*", () => {
       config: { auto: false },
       comandos: [{ id: 5, acao: "atualizar", corpo: {} }, { id: "lixo" }],
       ligacao_pendente: true,
+      ligacoes: [
+        { computador_id: "pc-novo", publica: { kty: "EC", crv: "P-256", x: "a".repeat(43), y: "b".repeat(43) }, para_mim: true, idioma: "en" },
+        { computador_id: "pc-ruim", publica: { kty: "EC", crv: "P-256", x: "curta", y: "b".repeat(43) } },
+      ],
     };
     const ola = await n.ola("v", null, null);
     assert.deepEqual(ola.atribuicao, { conta_id: "c1", email: "a@exemplo.com", versao: 3, motivo: "x" });
     assert.deepEqual(ola.comandos.map((c) => c.id), [5]);
     assert.equal(ola.ligacao_pendente, true);
+    assert.deepEqual(ola.ligacoes.map((l) => [l.computador_id, l.para_mim, l.idioma]), [["pc-novo", true, "en"]], "chave fora do formato fica de fora");
     r.resposta = { ok: true, cofre: { cifrado: "AQID", nonce: "BAUG", versao: 2, expira_em: null } };
     const p = await n.pegarPosse("c", "uso", 120);
     assert.deepEqual([...p.cofre!.cifrado], [1, 2, 3]);
@@ -211,21 +229,60 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
     assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: true, motivo: null });
   });
 
-  test("ligação de computador novo pelo banco: a chave chega igual, uma vez", async () => {
+  test("computador novo pelo banco: pede, o velho libera pelo código, a chave chega igual, uma vez, e só então ele entra", async () => {
     const apoio = (await import(pathToFileURL(APOIO).href)) as { banco: () => Promise<any> };
     const db = await apoio.banco();
     const velho = await db.computador("velho");
-    const novo = await db.computador("novo");
+    const { GuardaFalsa } = await import("../src/cofre/guarda.js");
+    const { codigoDaChave, iniciarCofre, impressaoDaChave, liberarComputadorNovo, pedirParaEntrar } = await import("../src/ligar.js");
+    const gv = new GuardaFalsa();
+    await iniciarCofre(gv);
+    const nv = new NuvemRpc({ chamar: (fn, args) => db.rpc(velho, fn, args), horaDoServidor: async () => null });
+    await nv.cofreImpressao(impressaoDaChave((await lerChave(gv))!));
+    // a identidade pendente, como o painel cria
+    const [{ id: admin }] = await db.sql("insert into auth.users (email) values ('adm@exemplo.com') returning id");
+    await db.sql("insert into public.membros (user_id, papel) values ($1, 'admin')", [admin]);
+    const novo = { id: await db.usuario(null) };
+    await db.como("servico", "select public.servico_registrar_computador($1, $2)", [novo.id, admin]);
+    const nn = new NuvemRpc({ chamar: (fn, args) => db.rpc(novo, fn, args), horaDoServidor: async () => null });
+    await assert.rejects(nn.registrar("novo", "linux", "0.2.0"), /ainda não recebeu a chave/);
+    const gn = new GuardaFalsa();
+    let codigo = "";
+    let liberou = false;
+    const r = await pedirParaEntrar(gn, nn, {
+      aoMostrarCodigo: (c) => (codigo = c),
+      dormir: async () => {
+        if (liberou) return;
+        liberou = true;
+        await assert.rejects(liberarComputadorNovo(gv, nv, "AAAA-AAAA"), /não confere/);
+        await liberarComputadorNovo(gv, nv, codigo);
+      },
+      intervaloMs: 0,
+    });
+    assert.equal(r.impressao, impressaoDaChave((await lerChave(gv))!));
+    assert.deepEqual(await lerChave(gn), await lerChave(gv));
+    const [linha] = await db.sql("select envelope, lido_em from public.ligacao_pedidos");
+    assert.equal(linha.envelope, null, "a nuvem não guarda o envelope depois de lido");
+    assert.ok(linha.lido_em);
+    assert.ok((await nn.registrar("novo", "linux", "0.2.0")).computador_id);
+    assert.equal(await codigoDaChave({ kty: "EC", crv: "P-256", x: "a".repeat(43), y: "b".repeat(43) }) === codigo, false);
+  });
+
+  test("frase de emergência pelo banco (computador já ligado que perdeu a chave): a chave chega igual, uma vez", async () => {
+    const apoio = (await import(pathToFileURL(APOIO).href)) as { banco: () => Promise<any> };
+    const db = await apoio.banco();
+    const velho = await db.computador("velho");
+    const perdeu = await db.computador("perdeu");
     const { GuardaFalsa } = await import("../src/cofre/guarda.js");
     const { iniciarCofre, publicarLigacao, receberLigacao } = await import("../src/ligar.js");
     const gv = new GuardaFalsa();
     const gn = new GuardaFalsa();
     await iniciarCofre(gv);
     const nv = new NuvemRpc({ chamar: (fn, args) => db.rpc(velho, fn, args), horaDoServidor: async () => null });
-    const nn = new NuvemRpc({ chamar: (fn, args) => db.rpc(novo, fn, args), horaDoServidor: async () => null });
+    const nn = new NuvemRpc({ chamar: (fn, args) => db.rpc(perdeu, fn, args), horaDoServidor: async () => null });
     const { frase } = await publicarLigacao(gv, nv);
     await receberLigacao(gn, nn, frase);
     assert.deepEqual(await lerChave(gn), await lerChave(gv));
-    await assert.rejects(receberLigacao(new GuardaFalsa(), nn, frase), /nenhuma ligação/);
+    await assert.rejects(receberLigacao(new GuardaFalsa(), nn, frase), /nenhuma frase aberta/);
   });
 });

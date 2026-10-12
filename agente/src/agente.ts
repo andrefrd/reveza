@@ -22,9 +22,9 @@ import { CredenciaisSombra } from "./credenciais/sombra.js";
 import type { Credenciais } from "./credenciais/tipos.js";
 import { agendarRodizio, candidata, decidir, gatilhoDeTroca, pctEfetivo, sorteioReal } from "./decisao.js";
 import { carregarEstado, salvarEstado, type EstadoLocal, type Modo } from "./estado.js";
-import { cifrarParaNavegador, chavePublicaDoNavegador, codigoDeConfirmacao, impressaoDaChave, publicarLigacao } from "./ligar.js";
+import { codigoDaChave, entregarChave, impressaoDaChave, LIGACAO_DUPLA } from "./ligar.js";
 import { Logins, EMAIL_VALIDO, type Login } from "./logins.js";
-import { ErroNuvem, TIPOS_EVENTO_NUVEM, type Atribuicao, type ComandoNuvem, type JanelaNuvem, type Nuvem, type PontoNuvem } from "./nuvem/tipos.js";
+import { ErroNuvem, TIPOS_EVENTO_NUVEM, type Atribuicao, type ComandoNuvem, type JanelaNuvem, type Nuvem, type PedidoLigacao, type PontoNuvem } from "./nuvem/tipos.js";
 import { PosseCofre } from "./posse.js";
 import { chaveDaPonte, criarPonte, type Resposta } from "./ponte.js";
 import { Contador } from "./registro/contador.js";
@@ -83,12 +83,6 @@ export interface Dependencias {
 
 const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_login", "atualizar", "diagnostico", "retomar_sessao", "ligar"]);
 
-/**
- * Dois pedidos de ligação ao mesmo tempo: todos são recusados (falha fechada). Quem escreve direto no banco pode ler a
- * chave pública do pedido verdadeiro e procurar uma chave dele com o mesmo código de confirmação; com um pareamento
- * por vez, o pedido forjado que chega junto derruba os dois em vez de ser liberado pelo mesmo código (revisão de
- * segurança de 11/10/2026).
- */
 /** O registro da atualização em andamento, com o que o agente já contou dela. */
 type Pendente = AtualizacaoPendente & {
   sozinho?: boolean;
@@ -101,7 +95,19 @@ type Pendente = AtualizacaoPendente & {
 /** Quanto a conta que a nuvem mandou pode levar para chegar à principal antes de o doctor acusar falha. */
 export const ESPERA_CONTA_S = 120;
 
-export const LIGACAO_DUPLA = "dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel";
+/**
+ * Dois pedidos de computador novo ao mesmo tempo: todos são recusados (falha fechada). Quem escreve direto no banco
+ * pode ler a chave pública do pedido verdadeiro e tentar um pedido dele junto; com um pareamento por vez, o forjado
+ * derruba os dois em vez de ser liberado (revisão de segurança de 11/10/2026).
+ */
+export { LIGACAO_DUPLA };
+
+/** O pedido de ligação pelo painel (frase cifrada para o navegador) saiu na 0.2.0. */
+export const LIGAR_PELO_PAINEL_SAIU =
+  "o pedido de ligação pelo painel saiu na 0.2.0: atualize o painel; o código aparece no computador novo e é digitado neste";
+
+/** Até 3 tentativas de digitar o código na janela; na terceira errada, o pedido é recusado. */
+export const TENTATIVAS_CODIGO = 3;
 
 export class Agente {
   estado: EstadoLocal;
@@ -134,10 +140,11 @@ export class Agente {
   private diagnosticoParaMandar: Record<string, unknown> | null = null;
   private sombraAtribuicao = "";
   private ligacaoAvisada = false;
-  /** O pareamento de computador novo em curso (só um por vez); `anulada` quando outro pedido chegou junto. */
-  private ligacao: { id: number; anulada: boolean } | null = null;
-  /** Pedidos de ligação que vieram juntos no mesmo lote da nuvem: todos recusados. */
-  private ligacoesJuntas = new Set<number>();
+  /** A janela de liberar computador novo aberta agora (só uma por vez); `anulada` quando outro pedido chegou junto. */
+  private janelaLigacao: { chave: string; anulada: boolean } | null = null;
+  /** Pedidos que já abriram janela aqui (o painel escolher de novo abre de novo: muda o aprovador_em). */
+  private janelasAbertas = new Set<string>();
+  private semTelaAvisado = new Set<string>();
   private falhaAtribuicao = new Map<string, number>();
   private emFundo = new Set<Promise<unknown>>();
   private possesLimpas = false;
@@ -502,7 +509,7 @@ export class Agente {
       this.ultimaAtribuicao = r.atribuicao?.conta_id ? r.atribuicao : null;
       if (r.ligacao_pendente && !this.ligacaoAvisada) {
         this.ligacaoAvisada = true;
-        this.d.log.info("há uma ligação de computador novo aberta (frase de 6 palavras válida por 10 minutos)");
+        this.d.log.info("há uma frase de emergência aberta (6 palavras, válida por 10 minutos)");
       } else if (!r.ligacao_pendente) this.ligacaoAvisada = false;
       if (!this.d.sombra) {
         if (!this.possesLimpas) await this.limparPossesAntigas();
@@ -513,9 +520,8 @@ export class Agente {
         await this.posse.subirAtivaSePreciso();
       }
       if (r.atribuicao) await this.aplicarAtribuicao(r.atribuicao);
-      const ligacoes = r.comandos.filter((c) => c.acao === "ligar" && !this.comandosVistos.has(c.id));
-      if (ligacoes.length > 1) for (const c of ligacoes) this.ligacoesJuntas.add(c.id);
       for (const cmd of r.comandos) await this.comando(cmd.id);
+      await this.vigiarLigacoes(r.ligacoes ?? []);
       await this.relatarUso();
     } catch (e) {
       const msg = (e as Error).message;
@@ -996,7 +1002,6 @@ export class Agente {
     if (this.comandosVistos.has(id)) return;
     this.comandosVistos.add(id);
     if (this.comandosVistos.size > 500) this.comandosVistos = new Set([...this.comandosVistos].slice(-200));
-    const junto = this.ligacoesJuntas.delete(id);
     if (this.d.sombra) {
       this.d.log.faria(`reservar e responder o comando ${id}`);
       return;
@@ -1016,35 +1021,96 @@ export class Agente {
       await nuvem.responderComando(id, resposta.status, resposta.corpo as Record<string, unknown>).catch(() => undefined);
       this.d.log.info(`comando ${cmd.acao} (${id}) -> ${resposta.status}`);
     };
-    if (cmd.acao === "ligar") {
-      // um pareamento por vez: outro pedido junto (no mesmo lote, ou com uma janela ainda aberta) recusa todos
-      if (junto || this.ligacao) {
-        if (this.ligacao) this.ligacao.anulada = true;
-        this.avisarLigacaoDupla();
-        await nuvem.responderComando(id, 409, { ok: false, erro: LIGACAO_DUPLA }).catch(() => undefined);
-        this.d.log.info(`comando ligar (${id}) -> 409`);
-        return;
-      }
-      // a ligação espera a pessoa digitar o código na janela (até 90 s): roda à parte, para a busca e a troca não pararem
-      this.ligacao = { id, anulada: false };
-      this.emEspera = tratar().finally(() => {
-        this.ligacao = null;
-        this.emEspera = null;
-      });
-      return;
-    }
     await tratar();
   }
 
-  /** Comando que roda à parte (a ligação esperando o clique); os testes esperam por ele. */
+  // ------------------------------------------------------------------------------------------------ computador novo
+
+  /** A janela de liberar computador novo, que roda à parte (espera a pessoa digitar); os testes esperam por ela. */
   emEspera: Promise<void> | null = null;
+
+  /**
+   * Pedidos de computador novo abertos na instalação. Mais de um ao mesmo tempo: recusa todos (e anula a janela aberta).
+   * Um só, com a janela marcada para este computador: toca o som e abre a janela pedindo o código que aparece no
+   * computador novo. Sem tela, o pedido fica aberto para `reveza ligar XXXX-XXXX`.
+   */
+  private async vigiarLigacoes(pedidos: PedidoLigacao[]): Promise<void> {
+    if (this.d.sombra || !this.chave || this.chaveDaInstalacao === false) return;
+    const nuvem = this.d.nuvem!;
+    if (pedidos.length > 1) {
+      if (this.janelaLigacao) this.janelaLigacao.anulada = true;
+      for (const p of pedidos) await nuvem.ligacaoRecusar(p.computador_id, "dois_pedidos").catch(() => undefined);
+      this.avisarLigacaoDupla();
+      return;
+    }
+    const p = pedidos[0];
+    const chave = p ? `${p.computador_id}|${p.pedido_em}|${p.aprovador_em}` : "";
+    if (this.janelaLigacao) {
+      // a janela aberta é de um pedido que não está mais aberto (ou mudou): o que se digitar nela não libera nada
+      if (this.janelaLigacao.chave !== chave) this.janelaLigacao.anulada = true;
+      return;
+    }
+    if (!p || !p.para_mim || this.janelasAbertas.has(chave)) return;
+    this.janelasAbertas.add(chave);
+    if (this.janelasAbertas.size > 50) this.janelasAbertas = new Set([...this.janelasAbertas].slice(-20));
+    if (!this.d.exec) return this.avisarSemTela(p);
+    const janela = { chave, anulada: false };
+    this.janelaLigacao = janela;
+    this.emEspera = this.confirmarLigacao(p, janela)
+      .catch((e) => this.d.log.erro(`ligação de computador novo: ${(e as Error).message}`))
+      .finally(() => {
+        if (this.janelaLigacao === janela) this.janelaLigacao = null;
+        this.emEspera = null;
+      });
+  }
+
+  private avisarSemTela(p: PedidoLigacao): void {
+    if (this.semTelaAvisado.has(p.computador_id)) return;
+    this.semTelaAvisado.add(p.computador_id);
+    this.d.log.info("um computador novo pediu para entrar, e este computador não tem tela para a janela: rode reveza ligar com o código que aparece nele");
+  }
+
+  private async confirmarLigacao(p: PedidoLigacao, janela: { anulada: boolean }): Promise<void> {
+    const nuvem = this.d.nuvem!;
+    const codigo = await codigoDaChave(p.publica);
+    // a língua é a do painel que escolheu este computador (só "pt-BR" ou "en"; o texto da janela é fixo)
+    const idioma = p.idioma === "en" ? "en" : "pt-BR";
+    void this.somDaTroca(true);
+    for (let tentativa = 1; tentativa <= TENTATIVAS_CODIGO; tentativa++) {
+      const r = await pedirConfirmacao(this.d.exec!, this.d.sistema, codigo, idioma, process.env, tentativa > 1);
+      // outro pedido chegou enquanto a janela estava aberta: nem o código certo libera este
+      if (janela.anulada) {
+        this.d.log.info(`ligação de computador novo: ${LIGACAO_DUPLA}`);
+        return;
+      }
+      if (r === "sem_tela") return this.avisarSemTela(p);
+      if (r === "sem_resposta") {
+        this.d.log.info("ligação de computador novo: ninguém respondeu à janela; o pedido segue aberto para reveza ligar com o código");
+        return;
+      }
+      if (r === "recusou") {
+        await nuvem.ligacaoRecusar(p.computador_id, "recusado_na_tela").catch(() => undefined);
+        this.trocador.evento("info", "Pedido de computador novo recusado na tela deste computador.");
+        return;
+      }
+      if (r === "liberou") {
+        // de novo, logo antes de entregar: um pedido que chegou durante a janela anula este
+        if (janela.anulada || !this.chave) return;
+        await entregarChave(nuvem, this.chave, p);
+        this.trocador.evento("info", "Computador novo liberado aqui: a chave do cofre foi entregue cifrada só para ele.");
+        return;
+      }
+    }
+    await nuvem.ligacaoRecusar(p.computador_id, "codigo_errado").catch(() => undefined);
+    this.trocador.evento("aviso", "Pedido de computador novo recusado: o código digitado não conferiu três vezes.");
+  }
 
   private ligacaoDuplaAvisadaEm = 0;
   private avisarLigacaoDupla(): void {
     // um aviso (com som) por rodada de pedidos, não um por pedido
     if (this.d.relogio.agora() - this.ligacaoDuplaAvisadaEm < 60) return;
     this.ligacaoDuplaAvisadaEm = this.d.relogio.agora();
-    this.trocador.evento("aviso", `Pedido de ligação de computador novo: ${LIGACAO_DUPLA}.`);
+    this.trocador.evento("aviso", `Pedido de computador novo: ${LIGACAO_DUPLA}.`);
     void this.somDaTroca(true);
   }
 
@@ -1120,35 +1186,9 @@ export class Agente {
         if (this.d.diagnostico) this.diagnosticoParaMandar = diag;
         return { status: 200, corpo: { ok: true, diagnostico: diag } };
       }
-      case "ligar": {
-        // frase de computador novo pedida pelo painel: volta cifrada para a chave efêmera daquele navegador
-        const publica = chavePublicaDoNavegador(corpo.publica);
-        if (!publica) return recusa(400, "pedido de ligação inválido");
-        if (this.d.sombra) return recusa(409, "modo sombra: o agente não abre ligação");
-        if (!this.chave) return recusa(409, "este computador não tem a chave do cofre");
-        if (this.chaveDaInstalacao === false) return recusa(409, "a chave do cofre deste computador não é a da instalação");
-        // Pelo painel, quem pede é a nuvem (um administrador, ou quem controla o projeto inteiro no Supabase). Quem
-        // libera é a pessoa, aqui: uma janela com o código que o painel mostra (som junto, para chamar a atenção). Sem
-        // tela para perguntar, só com a liberação permanente deste computador (reveza ligar --painel ligar).
-        const idioma = corpo.idioma === "en" ? "en" : "pt-BR";
-        if (!fs.existsSync(this.d.c.ligarPeloPainel)) {
-          const sem = "este computador não tem tela para confirmar: rode reveza ligar no terminal dele (ou libere sem perguntar: reveza ligar --painel ligar)";
-          if (!this.d.exec) return recusa(403, sem);
-          void this.somDaTroca(true);
-          const r = await pedirConfirmacao(this.d.exec, this.d.sistema, codigoDeConfirmacao(publica), idioma);
-          if (r === "sem_tela") return recusa(403, sem);
-          if (r === "recusou") {
-            this.trocador.evento("info", "Pedido de ligação de computador novo recusado na tela deste computador.");
-            return recusa(403, "a ligação foi recusada na tela do computador");
-          }
-        }
-        // outro pedido chegou enquanto a janela estava aberta: nem o código certo libera este
-        if (this.ligacao?.anulada) return recusa(409, LIGACAO_DUPLA);
-        const r = await publicarLigacao(this.d.guarda, this.d.nuvem!, idioma);
-        const envelope = await cifrarParaNavegador(publica, { palavras: r.frase.split(" "), expiraEm: r.expiraEm });
-        this.trocador.evento("info", "Ligação de computador novo aberta pelo painel (10 minutos).");
-        return { status: 200, corpo: { ok: true, envelope } };
-      }
+      case "ligar":
+        // a frase cifrada para o navegador saiu na 0.2.0: o computador novo mostra o código e a pessoa digita aqui
+        return recusa(410, LIGAR_PELO_PAINEL_SAIU);
       case "retomar_sessao": {
         const sessao = String(corpo.sessao ?? "");
         const f = this.estado.fila.find((x) => x.sessao === sessao);

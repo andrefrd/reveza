@@ -15,7 +15,21 @@ import type { Executor, OpcoesIniciar, Processo, Resultado } from "../src/util/e
 import { LogMemoria } from "../src/util/log.js";
 import type { Relogio } from "../src/util/tempo.js";
 import { ErroNuvem } from "../src/nuvem/tipos.js";
-import type { CofreNuvem, ComandoNuvem, JanelaNuvem, LinhaTokens, MotivoPosse, Nuvem, PontoNuvem, SessaoNuvem } from "../src/nuvem/tipos.js";
+import type {
+  ChavePublica,
+  CofreNuvem,
+  ComandoNuvem,
+  EnvelopeChave,
+  JanelaNuvem,
+  LinhaTokens,
+  MotivoPosse,
+  MotivoRecusa,
+  Nuvem,
+  PedidoLigacao,
+  PontoNuvem,
+  RespostaReceber,
+  SessaoNuvem,
+} from "../src/nuvem/tipos.js";
 import { Agente } from "../src/agente.js";
 import type { Sistema } from "../src/config.js";
 import { novaChave } from "../src/cofre/cifra.js";
@@ -202,6 +216,10 @@ export class BancoFalso {
   tokens = new Map<string, LinhaTokens>();
   sessoes = new Map<string, SessaoNuvem>();
   ligacoes: { embrulho: Buffer; sal: Buffer; por: string; usada: boolean; expira: number }[] = [];
+  /** Pedidos de computador novo (0019), por computador novo. */
+  pedidos = new Map<string, PedidoFalso>();
+  /** Computadores ainda pendentes (identidade criada pelo painel, sem a chave do cofre). */
+  pendentes = new Set<string>();
   cofreImpressao: string | null = null;
   /** A vez de atualizar sozinho (config `atualizacao_vez` do banco). */
   vez: { pc: string; de: string; para: string; desde: number; estado: string } | null = null;
@@ -232,6 +250,21 @@ export class BancoFalso {
   }
 }
 
+export interface PedidoFalso {
+  publica: ChavePublica | null;
+  aprovador: string | null;
+  aprovadorEm: number | null;
+  idioma?: "pt-BR" | "en";
+  pedidoEm: number | null;
+  expira: number;
+  envelope: EnvelopeChave | null;
+  entreguePor: string | null;
+  lido: boolean;
+  recusado: MotivoRecusa | null;
+}
+
+const mesmaChave = (a: ChavePublica | null, b: ChavePublica | null) => !!a && !!b && a.x === b.x && a.y === b.y;
+
 export class NuvemFalsa implements Nuvem {
   constructor(
     public banco: BancoFalso,
@@ -245,6 +278,11 @@ export class NuvemFalsa implements Nuvem {
 
   async registrar(nome: string) {
     this.registrarChamada("registrar", nome);
+    // as regras do agente_registrar (0019): pendente só entra depois de ler a chave entregue (menos a primeira)
+    if (this.banco.pendentes.has(this.pc) && this.banco.cofreImpressao && !this.banco.pedidos.get(this.pc)?.lido) {
+      throw new ErroNuvem("agente_registrar: este computador ainda não recebeu a chave do cofre", false, "42501");
+    }
+    this.banco.pendentes.delete(this.pc);
     this.banco.computadores.set(this.pc, { nome });
     return { computador_id: this.pc };
   }
@@ -265,7 +303,93 @@ export class NuvemFalsa implements Nuvem {
       config: { ...b.config },
       comandos: b.comandos.filter((c) => c.pc === this.pc && c.estado === "pendente").map(({ id, acao, corpo }) => ({ id, acao, corpo })),
       ligacao_pendente: b.ligacoes.some((l) => !l.usada && l.expira > b.agora()),
+      ligacoes: this.abertos(),
     };
+  }
+
+  private abertos(): PedidoLigacao[] {
+    const b = this.banco;
+    return [...b.pedidos.entries()]
+      .filter(([id, p]) => id !== this.pc && b.pendentes.has(id) && p.publica && !p.entreguePor && !p.recusado && p.expira > b.agora())
+      .map(([id, p]) => ({
+        computador_id: id,
+        publica: p.publica!,
+        pedido_em: new Date(p.pedidoEm! * 1000).toISOString(),
+        expira_em: new Date(p.expira * 1000).toISOString(),
+        para_mim: p.aprovador === this.pc,
+        aprovador_em: p.aprovadorEm ? new Date(p.aprovadorEm * 1000).toISOString() : null,
+        idioma: p.idioma ?? "pt-BR",
+      }));
+  }
+
+  /** O painel escolhe onde a janela abre (painel_ligacao_aprovador). */
+  escolherAprovador(novo: string, aprovador: string, idioma: "pt-BR" | "en" = "pt-BR") {
+    const b = this.banco;
+    const p = b.pedidos.get(novo) ?? { publica: null, aprovador: null, aprovadorEm: null, pedidoEm: null, expira: 0, envelope: null, entreguePor: null, lido: false, recusado: null };
+    p.aprovador = aprovador;
+    p.aprovadorEm = b.agora();
+    p.idioma = idioma;
+    b.pedidos.set(novo, p);
+  }
+
+  async ligacaoPedir(publica: ChavePublica) {
+    this.registrarChamada("ligacaoPedir");
+    const b = this.banco;
+    if (!b.pendentes.has(this.pc)) throw new ErroNuvem("agente_ligacao_pedir: este computador já entrou na instalação", false, "42501");
+    const p = b.pedidos.get(this.pc) ?? { publica: null, aprovador: null, aprovadorEm: null, pedidoEm: null, expira: 0, envelope: null, entreguePor: null, lido: false, recusado: null };
+    if (!p.publica && !p.recusado && !p.entreguePor) Object.assign(p, { publica, pedidoEm: b.agora(), expira: b.agora() + 600 });
+    else if (!mesmaChave(p.publica, publica)) throw new ErroNuvem("agente_ligacao_pedir: este código de acesso já pediu para entrar uma vez: gere outro no painel", false, "42501");
+    b.pedidos.set(this.pc, p);
+    return { computador_id: this.pc, expira_em: new Date(p.expira * 1000).toISOString() };
+  }
+
+  async ligacaoReceber(): Promise<RespostaReceber> {
+    this.registrarChamada("ligacaoReceber");
+    const b = this.banco;
+    const p = b.pedidos.get(this.pc);
+    const r: RespostaReceber = { estado: "sem_pedido", envelope: null, impressao: null, motivo: null, expira_em: null, aprovador: null };
+    if (!p?.publica) return r;
+    if (p.recusado) return { ...r, estado: "recusado", motivo: p.recusado };
+    if (p.lido) return { ...r, estado: "lido" };
+    if (p.envelope) {
+      const envelope = p.envelope;
+      p.envelope = null;
+      p.lido = true;
+      return { ...r, estado: "entregue", envelope, impressao: b.cofreImpressao };
+    }
+    if (p.expira <= b.agora()) return { ...r, estado: "vencido" };
+    const aprovador = p.aprovador ? (b.computadores.get(p.aprovador)?.nome ?? null) : null;
+    return { ...r, estado: "esperando", expira_em: new Date(p.expira * 1000).toISOString(), aprovador };
+  }
+
+  async ligacoesAbertas() {
+    this.registrarChamada("ligacoesAbertas");
+    return this.abertos();
+  }
+
+  async ligacaoEntregar(computadorId: string, publica: ChavePublica, envelope: EnvelopeChave) {
+    this.registrarChamada("ligacaoEntregar", computadorId);
+    const b = this.banco;
+    const abertos = this.abertos();
+    if (abertos.length > 1) {
+      for (const a of abertos) b.pedidos.get(a.computador_id)!.recusado = "dois_pedidos";
+      return { ok: false, erro: "dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel" };
+    }
+    const p = b.pedidos.get(computadorId);
+    if (!p?.publica || computadorId === this.pc) return { ok: false, erro: "pedido desconhecido" };
+    if (!mesmaChave(p.publica, publica)) return { ok: false, erro: "a chave do pedido não é a que foi conferida" };
+    if (p.entreguePor || p.recusado) return { ok: false, erro: "pedido já fechado" };
+    if (p.expira <= b.agora()) return { ok: false, erro: "pedido vencido" };
+    Object.assign(p, { envelope, entreguePor: this.pc });
+    return { ok: true, erro: null };
+  }
+
+  async ligacaoRecusar(computadorId: string, motivo: MotivoRecusa) {
+    this.registrarChamada("ligacaoRecusar", computadorId, motivo);
+    const p = this.banco.pedidos.get(computadorId);
+    if (!p?.publica || p.entreguePor || p.recusado || computadorId === this.pc) return { ok: false };
+    Object.assign(p, { recusado: motivo, envelope: null });
+    return { ok: true };
   }
 
   async pegarPosse(contaId: string, motivo: MotivoPosse, segundos: number) {

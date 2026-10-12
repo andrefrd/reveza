@@ -31,7 +31,59 @@ export interface RespostaOla {
   config: Record<string, unknown>;
   comandos: ComandoNuvem[];
   ligacao_pendente: boolean;
+  /** Pedidos de computador novo abertos (0019): mais de um ao mesmo tempo, todos são recusados. */
+  ligacoes: PedidoLigacao[];
 }
+
+/** Chave pública ECDH P-256 em JWK, só o que importa. */
+export interface ChavePublica {
+  kty: "EC";
+  crv: "P-256";
+  x: string;
+  y: string;
+}
+
+/** Coordenada de P-256 em base64url: 32 bytes = 43 caracteres. */
+export function chavePublicaValida(v: unknown): ChavePublica | null {
+  if (!v || typeof v !== "object") return null;
+  const j = v as Record<string, unknown>;
+  const coord = (x: unknown) => typeof x === "string" && /^[A-Za-z0-9_-]{43}$/.test(x);
+  if (j.kty !== "EC" || j.crv !== "P-256" || !coord(j.x) || !coord(j.y)) return null;
+  return { kty: "EC", crv: "P-256", x: j.x as string, y: j.y as string };
+}
+
+/** A chave do cofre cifrada para a chave pública do computador novo (ECDH efêmero + HKDF-SHA256 + AES-256-GCM). */
+export interface EnvelopeChave {
+  efemera: ChavePublica;
+  iv: string;
+  cifrado: string;
+}
+
+/** Um computador novo pedindo para entrar, como quem tem a chave do cofre vê. */
+export interface PedidoLigacao {
+  computador_id: string;
+  publica: ChavePublica;
+  pedido_em: string | null;
+  expira_em: string | null;
+  /** A janela abre aqui (o painel escolheu este computador). */
+  para_mim: boolean;
+  /** Quando o painel escolheu (escolher de novo abre a janela de novo). */
+  aprovador_em: string | null;
+  /** A língua da janela (a do painel que escolheu). */
+  idioma: "pt-BR" | "en";
+}
+
+/** O que o computador novo vê do pedido dele. */
+export interface RespostaReceber {
+  estado: "sem_pedido" | "esperando" | "entregue" | "recusado" | "vencido" | "lido";
+  envelope: EnvelopeChave | null;
+  impressao: string | null;
+  motivo: string | null;
+  expira_em: string | null;
+  aprovador: string | null;
+}
+
+export type MotivoRecusa = "recusado_na_tela" | "dois_pedidos" | "codigo_errado";
 
 export type MotivoPosse = "uso" | "leitura" | "renovacao" | "login";
 
@@ -119,8 +171,17 @@ export interface Nuvem {
   evento(tipo: string, texto: string, dados: Record<string, unknown>): Promise<{ ok: boolean }>;
   /** Avisa a nuvem que a conta perdeu (ou recuperou) o login neste computador; só vale para conta na mão. */
   marcarLogin(contaId: string, precisa: boolean): Promise<{ ok: boolean }>;
+  /** Frase de emergência (computador já ativo que perdeu a chave): quem tem a chave publica, o outro busca. */
   ligacaoPublicar(embrulho: Buffer, sal: Buffer): Promise<{ ok: boolean; expira_em: string | null }>;
   ligacaoBuscar(): Promise<{ embrulho: Buffer; sal: Buffer } | null>;
+  /** Computador novo (identidade pendente): registra a chave pública dele, uma vez só. */
+  ligacaoPedir(publica: ChavePublica): Promise<{ computador_id: string; expira_em: string | null }>;
+  /** Computador novo: o andamento do pedido; a chave entregue vem uma vez só. */
+  ligacaoReceber(): Promise<RespostaReceber>;
+  /** Quem tem a chave do cofre: os pedidos abertos. */
+  ligacoesAbertas(): Promise<PedidoLigacao[]>;
+  ligacaoEntregar(computadorId: string, publica: ChavePublica, envelope: EnvelopeChave): Promise<{ ok: boolean; erro: string | null }>;
+  ligacaoRecusar(computadorId: string, motivo: MotivoRecusa): Promise<{ ok: boolean }>;
   /** Grava a impressão da chave do cofre se a instalação ainda não tem (null só lê); devolve a da instalação. */
   cofreImpressao(impressao: string | null): Promise<string | null>;
   /** Hora do servidor (epoch s), para o `doctor` conferir o relógio. */

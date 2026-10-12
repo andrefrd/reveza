@@ -98,7 +98,7 @@ describe("frase de ligação", () => {
     assert.throws(() => embrulhar(novaChave(), "casa mesa"));
   });
 
-  test("ligar: quem tem a chave publica, o computador novo recebe a mesma chave; a frase não vai à nuvem", async () => {
+  test("frase de emergência: quem tem a chave publica, o que perdeu recebe a mesma chave; a frase não vai à nuvem", async () => {
     const banco = new BancoFalso();
     const velho = new GuardaFalsa();
     const novo = new GuardaFalsa();
@@ -109,7 +109,7 @@ describe("frase de ligação", () => {
     for (const p of frase.split(" ")) assert.ok(!enviado.includes(` ${p} `));
     await receberLigacao(novo, new NuvemFalsa(banco, "pc-novo"), frase);
     assert.deepEqual(await lerChave(novo), await lerChave(velho));
-    await assert.rejects(receberLigacao(new GuardaFalsa(), new NuvemFalsa(banco, "pc-3"), frase), /nenhuma ligação/);
+    await assert.rejects(receberLigacao(new GuardaFalsa(), new NuvemFalsa(banco, "pc-3"), frase), /nenhuma frase aberta/);
   });
 
   test("computador novo recusa chave que não é a da instalação (a nuvem guarda a impressão da primeira)", async () => {
