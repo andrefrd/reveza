@@ -8,10 +8,10 @@
 // separado, que sobrevive à troca do agente. A cópia do estado e a volta para a versão anterior quando a nova não sobe
 // são do instalador.
 //
-// A trava de compatibilidade: a versão nova pode trazer migração da nuvem e painel novo, que só o computador principal
-// aplica (com os tokens). As migrações vêm no próprio pacote (nuvem/migracoes); antes de rodar o instalador, o agente
-// compara os nomes com os que a nuvem já aplicou (agente_migracoes, só a lista de nomes) e, faltando alguma, não se
-// atualiza: o painel pede a atualização no computador principal primeiro.
+// A trava de compatibilidade: a versão nova pode trazer migração da nuvem. As migrações vêm no próprio pacote
+// (nuvem/migracoes); antes de rodar o instalador, o agente compara os nomes com os que a nuvem já aplicou
+// (agente_migracoes, só a lista de nomes) e, faltando alguma, não se atualiza: a nuvem vem antes (desde a 0.3.0 ela se
+// atualiza sozinha, pelo Atualizar a nuvem do painel ou no jeito de atualizar sozinho; antes, pelo instalador).
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -54,9 +54,9 @@ export const CONFERIR_AGORA_S = 60;
 /** Versão nova recusada pela trava: a nuvem é conferida de novo a cada 5 minutos. */
 export const TRAVA_CONFERIR_S = 5 * 60;
 
-/** O que o painel mostra quando a versão nova precisa da nuvem e do painel atualizados (só o computador principal faz). */
+/** O que o painel mostra quando a versão nova precisa da nuvem atualizada primeiro. */
 export function textoPrecisaNuvem(versao: string): string {
-  return `a versão ${versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal`;
+  return `a versão ${versao} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, no painel (Computadores)`;
 }
 
 /** Atualizar sozinho só de madrugada: das 3h às 5h no fuso da instalação. */

@@ -872,7 +872,7 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
   }
   const restos = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("reveza-atualizar-"));
 
-  test("faltando migração, o botão recusa com o aviso do computador principal, sem rodar nada e sem deixar o pacote", async () => {
+  test("faltando migração, o botão recusa com o aviso de atualizar a nuvem, sem rodar nada e sem deixar o pacote", async () => {
     const v = await preparar();
     const antes = new Set(restos());
     const cmd = await pedir({ versao: MAIS_NOVA });
@@ -880,7 +880,7 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
     assert.equal(cmd.http, 409);
     assert.deepEqual(cmd.resposta, {
       ok: false,
-      erro: `a versão ${NOVA} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal`,
+      erro: `a versão ${NOVA} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, no painel (Computadores)`,
       precisa_nuvem: true,
       para: NOVA,
       faltam: [NOVA_MIGRACAO],
@@ -889,7 +889,7 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
     assert.equal(fs.existsSync(path.join(m!.c.base, "atualizacao.json")), false);
     assert.deepEqual(restos().filter((n) => !antes.has(n)), [], "a pasta do pacote sai");
     const [ev] = doTipo(banco, "precisa_nuvem");
-    assert.match(ev!.texto, /precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal/);
+    assert.match(ev!.texto, /precisa da nuvem atualizada primeiro: use Atualizar a nuvem, no painel/);
     assert.deepEqual((ev!.dados as { faltam: string[] }).faltam, [NOVA_MIGRACAO]);
     assert.equal(m!.agente.travaNuvem?.para, NOVA);
     // de novo: confere a nuvem antes de baixar outra vez, e o aviso não se repete
@@ -903,7 +903,7 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
     assert.equal(conferida.resposta?.precisa_nuvem, true);
   });
 
-  test("o computador principal atualizou a nuvem: o mesmo pedido agora atualiza", async () => {
+  test("a nuvem foi atualizada: o mesmo pedido agora atualiza", async () => {
     await preparar();
     assert.equal((await pedir({ versao: MAIS_NOVA })).resposta?.precisa_nuvem, true);
     banco.migracoes!.push(NOVA_MIGRACAO);
@@ -982,7 +982,7 @@ describe("a trava de compatibilidade: sem as migrações da versão nova na nuve
       }
       assert.equal(vezes(), pedidas);
       assert.deepEqual(v.baixadas, [NOVA]);
-      // o computador principal atualizou a nuvem: na conferência seguinte, pede a vez e atualiza
+      // a nuvem foi atualizada: na conferência seguinte, pede a vez e atualiza
       banco.migracoes!.push(NOVA_MIGRACAO);
       await m.relogio.avancar(301_000);
       await m.agente.busca();

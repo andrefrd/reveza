@@ -870,7 +870,7 @@ export class Agente {
       this.registrarEvento("erro", `A atualização para a ${para} não começou: ${motivo}.`, { ...dados, motivo });
       return { ok: false, status: 502, erro: `a atualização não começou: ${motivo}` };
     }
-    // a trava de compatibilidade: a nuvem já tem as migrações que a versão nova traz? (só o computador principal aplica)
+    // a trava de compatibilidade: a nuvem já tem as migrações que a versão nova traz? (a nuvem vem antes)
     if (this.d.nuvem) {
       const c = await this.conferirMigracoes(precisa);
       if (!c.ok) {
@@ -883,7 +883,7 @@ export class Agente {
         this.travaNuvem = trava;
         if (this.travaAvisada !== para) {
           this.travaAvisada = para;
-          this.registrarEvento("info", `A versão ${para} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.`, {
+          this.registrarEvento("info", `A versão ${para} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, no painel (Computadores).`, {
             ...dados,
             atualizacao: "precisa_nuvem",
             faltam: c.faltam?.slice(0, 20) ?? null,
@@ -909,7 +909,7 @@ export class Agente {
         instalador,
         log,
         resultado,
-        // sem token nenhum: só este computador (a nuvem e o painel são do instalador no computador principal)
+        // sem token nenhum: só este computador (a nuvem se atualiza sozinha; funções e painel, pela atualização completa)
         args: ["--atualizar", "--sim", ...(instalacao?.semServico ? ["--sem-servico"] : [])],
       });
     } catch (e) {
