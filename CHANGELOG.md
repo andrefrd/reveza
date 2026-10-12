@@ -7,6 +7,15 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.1 · 11/10/2026
+
+Correção: computador novo instalado pelo `npx github:dantaspaulo/reveza` parava em "agente/package-lock.json ausente".
+Pelo npx, o repositório chega dentro de uma pasta `node_modules`, e o filtro que deixa de fora as dependências olhava o
+caminho inteiro e jogava fora tudo. Agora olha só o caminho dentro do programa, e o teste de ponta a ponta roda a
+instalação de dentro de um `node_modules`, do mesmo jeito que o npx deixa.
+
+**Para quem parou nesse erro:** rode de novo `npx github:dantaspaulo/reveza#v0.1.1 --ligar`.
+
 ## 0.1.0 · 11/10/2026
 
 Primeira versão aberta. Várias contas do Claude Code, revezando sozinhas: o Reveza troca de conta antes do limite e a

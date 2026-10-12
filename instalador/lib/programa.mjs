@@ -50,18 +50,30 @@ const FORA = ["node_modules", "dist", path.join("mod", ".claude-plugin", "types"
  * Copia o programa para `<app>.novo`, compila o agente e só então troca de lugar com o `<app>` atual (que fica como
  * `<app>.anterior` até a próxima atualização). Instalação que falha no meio não estraga a que estava rodando.
  */
+/**
+ * Copia as peças do programa. O filtro olha o caminho DENTRO de cada peça: pelo `npx github:...` o repositório chega
+ * dentro de `~/.npm/_npx/<...>/node_modules/reveza`, e um filtro pelo caminho inteiro jogava tudo fora (o primeiro
+ * computador novo de verdade parou em "agente/package-lock.json ausente", 11/10/2026).
+ */
+export function copiarPrograma(raiz, destino) {
+  for (const p of PECAS) {
+    const origem = path.join(raiz, p);
+    if (!existsSync(origem)) continue;
+    cpSync(origem, path.join(destino, p), {
+      recursive: true,
+      filter: (f) => {
+        const rel = path.join(p, path.relative(origem, f));
+        return !FORA.some((x) => rel.split(path.sep).includes(x) || rel === x || rel.startsWith(x + path.sep));
+      },
+    });
+  }
+}
+
 export function instalarPrograma(raiz, app, { log = () => {} } = {}) {
   const novo = `${app}.novo`;
   rmSync(novo, { recursive: true, force: true });
   mkdirSync(novo, { recursive: true });
-  for (const p of PECAS) {
-    const origem = path.join(raiz, p);
-    if (!existsSync(origem)) continue;
-    cpSync(origem, path.join(novo, p), {
-      recursive: true,
-      filter: (f) => !FORA.some((x) => f.split(path.sep).includes(x) || f.endsWith(path.sep + x)),
-    });
-  }
+  copiarPrograma(raiz, novo);
   const agente = path.join(novo, "agente");
   // Só as versões travadas no package-lock.json (com o resumo de cada pacote) e sem script de instalação de terceiros:
   // o agente guarda a chave do cofre e os logins (auditoria de segurança de 11/10/2026).

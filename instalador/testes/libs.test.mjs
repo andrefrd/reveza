@@ -283,3 +283,24 @@ test("dependências só pelas versões travadas: npm ci, sem script de terceiros
     for (const m of fonte.matchAll(/rodar\(npm, \["ci"([^\]]*)\]/g)) assert.match(m[1], /--ignore-scripts/, `${f}: npm ci sem --ignore-scripts`);
   }
 });
+
+test("programa: copia mesmo quando o repositório vem de dentro de node_modules (npx github:...), sem levar node_modules e dist", async () => {
+  const { copiarPrograma } = await import("../lib/programa.mjs");
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } = await import("node:fs");
+  const os = await import("node:os");
+  const base = mkdtempSync(path.join(os.tmpdir(), "reveza-copia-"));
+  try {
+    // como o npx deixa: ~/.npm/_npx/<hash>/node_modules/reveza
+    const raiz = path.join(base, "_npx", "abc", "node_modules", "reveza");
+    for (const f of ["agente/package.json", "agente/package-lock.json", "agente/src/cli.ts", "agente/node_modules/x/index.js", "agente/dist/src/cli.js", "mod/hooks/register.ts", "LICENSE"]) {
+      mkdirSync(path.dirname(path.join(raiz, f)), { recursive: true });
+      writeFileSync(path.join(raiz, f), "x");
+    }
+    const destino = path.join(base, "app.novo");
+    copiarPrograma(raiz, destino);
+    for (const f of ["agente/package.json", "agente/package-lock.json", "agente/src/cli.ts", "mod/hooks/register.ts", "LICENSE"]) assert.ok(existsSync(path.join(destino, f)), f);
+    for (const f of ["agente/node_modules", "agente/dist"]) assert.ok(!existsSync(path.join(destino, f)), f);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
