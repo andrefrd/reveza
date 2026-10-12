@@ -20,7 +20,15 @@ export function podeCorrigir(d: Diagnostico | null | undefined): boolean {
 export type AndamentoConserto =
   | { fase: "pedido" }
   | { fase: "consertando" }
-  | { fase: "feito"; itens: ItemDiagnostico[]; corrigidos: number; naoDeu: number }
+  | {
+      fase: "feito"
+      /** Os problemas de antes: corrigido, não deu, ou o que fazer. */
+      itens: ItemDiagnostico[]
+      corrigidos: number
+      naoDeu: number
+      /** A conferência de depois do conserto, inteira (a tela usa até o computador mandar a próxima). */
+      diagnostico: Diagnostico | null
+    }
   | { fase: "falhou"; motivo: string }
 
 /** Em que pé está o pedido de conserto, lendo o comando (e a resposta que o computador deu). */
@@ -41,5 +49,17 @@ export function andamentoDoConserto(cmd: Comando | null, versao = ""): Andamento
     itens,
     corrigidos: itens.filter((i) => i.consertado?.resultado === "corrigido").length,
     naoDeu: itens.filter((i) => i.consertado?.resultado === "nao_deu").length,
+    diagnostico: d,
   }
+}
+
+/**
+ * O diagnóstico a mostrar: o da resposta do conserto enquanto ele for o mais novo (o painel relê os computadores no
+ * máximo a cada 15 s, e o agente manda a conferência nova só na busca seguinte); depois, o que o computador mandou.
+ */
+export function diagnosticoAtual(guardado: Diagnostico | null, andamento: AndamentoConserto | null): Diagnostico | null {
+  const novo = andamento?.fase === "feito" ? andamento.diagnostico : null
+  if (!novo) return guardado
+  if (!guardado) return novo
+  return Date.parse(novo.em) >= Date.parse(guardado.em) ? novo : guardado
 }

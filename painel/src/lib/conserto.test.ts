@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { paraDiagnostico } from "@/dados/supabase"
 import type { Comando } from "@/dados/tipos"
-import { andamentoDoConserto, consertaveis, PEDIDO_CORRIGIR, podeCorrigir } from "./conserto"
+import { andamentoDoConserto, consertaveis, diagnosticoAtual, PEDIDO_CORRIGIR, podeCorrigir } from "./conserto"
 
 const cmd = (estado: Comando["estado"], resposta: Record<string, unknown> | null = null): Comando => ({
   id: 1,
@@ -90,6 +90,13 @@ describe("Corrigir na tela Saúde", () => {
       ["relogio", "fazer"],
     ])
     expect(a.itens[1].consertado!.texto).toBe("a nuvem ainda não mandou conta para este computador")
+    // a tela mostra a conferência de depois até o computador mandar uma mais nova
+    const guardado = paraDiagnostico({ ...diagnosticoDoAgente, em: "2026-10-12T09:59:00.000Z" }, "0.1.5")
+    expect(diagnosticoAtual(guardado, a)!.itens.find((i) => i.id === "mod")!.ok).toBe(true)
+    const maisNovo = paraDiagnostico({ ...diagnosticoDoAgente, em: "2026-10-12T10:05:00.000Z" }, "0.1.5")
+    expect(diagnosticoAtual(maisNovo, a)).toBe(maisNovo)
+    expect(diagnosticoAtual(guardado, { fase: "consertando" })).toBe(guardado)
+    expect(diagnosticoAtual(null, a)).toBe(a.diagnostico)
   })
 
   it("resposta de um computador comprometido não derruba a tela nem passa lixo adiante", () => {

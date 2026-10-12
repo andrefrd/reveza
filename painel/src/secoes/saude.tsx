@@ -49,10 +49,10 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
   const rodando = cmdId !== null && (!cmd || cmd.estado === "pendente" || cmd.estado === "reservado")
   const situacao = estadoComputador(pc, agora)
   const Sistema = ICONE_SISTEMA[pc.sistema]
-  const d = pc.diagnostico
+  const corrigir = useCorrigir(pc)
+  const d = corrigir.diagnostico
   const atrasada = nova && compararVersao(pc.versao, nova) < 0
   const atraso = d?.atrasoBuscaMs ?? null
-  const corrigir = useCorrigir(pc)
   return (
     <Card>
       <CardHeader>

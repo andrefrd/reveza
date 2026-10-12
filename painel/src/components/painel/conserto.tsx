@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useAcao, useDados, usePermissao } from "@/dados/contexto"
 import type { Computador, ItemDiagnostico } from "@/dados/tipos"
 import { useT } from "@/i18n"
-import { andamentoDoConserto, consertaveis, PEDIDO_CORRIGIR, podeCorrigir, type AndamentoConserto } from "@/lib/conserto"
+import { andamentoDoConserto, consertaveis, diagnosticoAtual, PEDIDO_CORRIGIR, type AndamentoConserto } from "@/lib/conserto"
 import { comDemo } from "@/lib/demo"
 import { Link } from "@/lib/rota"
 import { cn } from "@/lib/utils"
@@ -32,6 +32,7 @@ export function useCorrigir(pc: Computador) {
   const cmd = useComando(cmdId)
   const andamento: AndamentoConserto | null = cmdId === null ? null : andamentoDoConserto(cmd, pc.versao)
   const rodando = andamento?.fase === "pedido" || andamento?.fase === "consertando"
+  const diagnostico = diagnosticoAtual(pc.diagnostico, andamento)
   const pedir = async () => {
     const [ok, c] = await acao(
       () => fonte.comando(pc.id, "diagnostico", { ...PEDIDO_CORRIGIR }),
@@ -44,8 +45,10 @@ export function useCorrigir(pc: Computador) {
     pedir,
     andamento,
     rodando,
+    /** O diagnóstico a mostrar (o da resposta do conserto, enquanto for o mais novo). */
+    diagnostico,
     /** Quantos problemas têm conserto automático agora (sem nenhum, sem botão). */
-    quantos: podeCorrigir(pc.diagnostico) ? consertaveis(pc.diagnostico).length : 0,
+    quantos: consertaveis(diagnostico).length,
   }
 }
 

@@ -136,9 +136,9 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
   const outras = estado.contas.filter((c) => c.posse?.computadorId === pc.id && c.id !== conta?.id)
   const nova = versaoMaisNova(estado.computadores.filter((c) => !c.revogado).map((c) => c.versao))
   const desatualizado = !!nova && compararVersao(pc.versao, nova) < 0
-  const itens = pc.diagnostico?.itens ?? []
-  const okItens = itens.filter((i) => i.ok === true).length
   const corrigir = useCorrigir(pc)
+  const itens = corrigir.diagnostico?.itens ?? []
+  const okItens = itens.filter((i) => i.ok === true).length
   return (
     <Card>
       <CardHeader>
