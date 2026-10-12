@@ -48,8 +48,8 @@ Regras herdadas do roteador (provadas em 10 e 11/10, com teste):
 ## 4. Cofre cifrado
 
 - Chave do cofre `K`: 32 bytes aleatórios, criada no primeiro computador, guardada no chaveiro do sistema
-  (macOS: Keychain; Windows: Credential Manager via `cmdkey`/DPAPI; Linux: `secret-tool` quando houver, senão
-  arquivo 600 com aviso).
+  (macOS: Keychain; Windows: DPAPI do usuário, num arquivo em `~\.reveza\segredos`; Linux: `secret-tool` quando houver,
+  senão arquivo 600 com aviso).
 - Cada login guardado: `AES-256-GCM(K, nonce aleatório de 12 bytes, JSON só com claudeAiOauth e organizationUuid)`,
   com dado associado `conta_id|versao` (impede trocar o cifrado de uma conta pelo de outra).
 - Computador novo recebe `K` por uma **frase de ligação**: o computador que já tem `K` gera 6 palavras, deriva uma
@@ -139,8 +139,11 @@ migração nova); as permissões (0099) fecham qualquer aplicação. As chaves d
   banco (`rvz_exigir_admin` = admin e `rvz_aal2`) e as Edge Functions (`servico_aal_ok`); não há servidor do painel.
 - Computador novo: pelo painel, em um passo. O painel cria o acesso do computador novo e manda o comando `ligar`
   (com a chave pública efêmera do navegador) a um computador que tem a chave do cofre. Esse computador abre uma janela
-  (macOS `osascript`, Windows `InputBox`, Linux `zenity --entry`) que PEDE um código de 4 caracteres tirado do SHA-256
-  da chave pública do navegador; só o painel que fez o pedido mostra esse código. Só com o código certo e o clique em
+  (macOS `osascript`, Windows `InputBox`, Linux `zenity --entry`) que PEDE um código de 6 caracteres (30 bits) tirado do
+  SHA-256 da chave pública do navegador; só o painel que fez o pedido mostra esse código. Um pareamento por vez: se
+  chegam dois pedidos `ligar` juntos (no mesmo lote, ou um com a janela do outro ainda aberta), o computador recusa os
+  dois, porque quem escreve direto no banco pode ler a chave pública do pedido verdadeiro e procurar uma chave com o
+  mesmo código (com 4 caracteres, ~37 s de CPU; revisão de segurança de 11/10/2026). Só com o código certo e o clique em
   Liberar ele publica a ligação e devolve a frase cifrada para o navegador, que junta acesso e frase num código só
   (`rvzl_`). Um pedido forjado direto no banco não tem código na tela de ninguém. (No primeiro teste real, uma janela
   que só pedia o clique foi liberada em 8 s, sem olhar o código; por isso ela pede para digitar.) A janela espera até 90 s, à parte

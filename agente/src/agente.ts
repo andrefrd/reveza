@@ -55,6 +55,14 @@ export interface Dependencias {
 
 const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_login", "atualizar", "diagnostico", "retomar_sessao", "ligar"]);
 
+/**
+ * Dois pedidos de ligação ao mesmo tempo: todos são recusados (falha fechada). Quem escreve direto no banco pode ler a
+ * chave pública do pedido verdadeiro e procurar uma chave dele com o mesmo código de confirmação; com um pareamento
+ * por vez, o pedido forjado que chega junto derruba os dois em vez de ser liberado pelo mesmo código (revisão de
+ * segurança de 11/10/2026).
+ */
+export const LIGACAO_DUPLA = "dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel";
+
 export class Agente {
   estado: EstadoLocal;
   trocador: Trocador;
@@ -81,6 +89,10 @@ export class Agente {
   private diagnosticoEm = 0;
   private sombraAtribuicao = "";
   private ligacaoAvisada = false;
+  /** O pareamento de computador novo em curso (só um por vez); `anulada` quando outro pedido chegou junto. */
+  private ligacao: { id: number; anulada: boolean } | null = null;
+  /** Pedidos de ligação que vieram juntos no mesmo lote da nuvem: todos recusados. */
+  private ligacoesJuntas = new Set<number>();
   private falhaAtribuicao = new Map<string, number>();
   private emFundo = new Set<Promise<unknown>>();
   private possesLimpas = false;
@@ -432,6 +444,8 @@ export class Agente {
         await this.posse.subirAtivaSePreciso();
       }
       if (r.atribuicao) await this.aplicarAtribuicao(r.atribuicao);
+      const ligacoes = r.comandos.filter((c) => c.acao === "ligar" && !this.comandosVistos.has(c.id));
+      if (ligacoes.length > 1) for (const c of ligacoes) this.ligacoesJuntas.add(c.id);
       for (const cmd of r.comandos) await this.comando(cmd.id);
       await this.relatarUso();
     } catch (e) {
@@ -605,6 +619,7 @@ export class Agente {
     if (this.comandosVistos.has(id)) return;
     this.comandosVistos.add(id);
     if (this.comandosVistos.size > 500) this.comandosVistos = new Set([...this.comandosVistos].slice(-200));
+    const junto = this.ligacoesJuntas.delete(id);
     if (this.d.sombra) {
       this.d.log.faria(`reservar e responder o comando ${id}`);
       return;
@@ -624,9 +639,21 @@ export class Agente {
       await nuvem.responderComando(id, resposta.status, resposta.corpo as Record<string, unknown>).catch(() => undefined);
       this.d.log.info(`comando ${cmd.acao} (${id}) -> ${resposta.status}`);
     };
-    // a ligação espera a pessoa clicar na janela (até 90 s): roda à parte, para a busca e a troca não pararem
     if (cmd.acao === "ligar") {
-      this.emEspera = tratar().finally(() => (this.emEspera = null));
+      // um pareamento por vez: outro pedido junto (no mesmo lote, ou com uma janela ainda aberta) recusa todos
+      if (junto || this.ligacao) {
+        if (this.ligacao) this.ligacao.anulada = true;
+        this.avisarLigacaoDupla();
+        await nuvem.responderComando(id, 409, { ok: false, erro: LIGACAO_DUPLA }).catch(() => undefined);
+        this.d.log.info(`comando ligar (${id}) -> 409`);
+        return;
+      }
+      // a ligação espera a pessoa digitar o código na janela (até 90 s): roda à parte, para a busca e a troca não pararem
+      this.ligacao = { id, anulada: false };
+      this.emEspera = tratar().finally(() => {
+        this.ligacao = null;
+        this.emEspera = null;
+      });
       return;
     }
     await tratar();
@@ -634,6 +661,15 @@ export class Agente {
 
   /** Comando que roda à parte (a ligação esperando o clique); os testes esperam por ele. */
   emEspera: Promise<void> | null = null;
+
+  private ligacaoDuplaAvisadaEm = 0;
+  private avisarLigacaoDupla(): void {
+    // um aviso (com som) por rodada de pedidos, não um por pedido
+    if (this.d.relogio.agora() - this.ligacaoDuplaAvisadaEm < 60) return;
+    this.ligacaoDuplaAvisadaEm = this.d.relogio.agora();
+    this.trocador.evento("aviso", `Pedido de ligação de computador novo: ${LIGACAO_DUPLA}.`);
+    void this.somDaTroca(true);
+  }
 
   permitidas(): Set<string> | null {
     try {
@@ -704,6 +740,8 @@ export class Agente {
             return recusa(403, "a ligação foi recusada na tela do computador");
           }
         }
+        // outro pedido chegou enquanto a janela estava aberta: nem o código certo libera este
+        if (this.ligacao?.anulada) return recusa(409, LIGACAO_DUPLA);
         const r = await publicarLigacao(this.d.guarda, this.d.nuvem!, idioma);
         const envelope = await cifrarParaNavegador(publica, { palavras: r.frase.split(" "), expiraEm: r.expiraEm });
         this.trocador.evento("info", "Ligação de computador novo aberta pelo painel (10 minutos).");

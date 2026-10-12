@@ -129,7 +129,7 @@ final check. The Supabase and Vercel tokens are **not stored** anywhere.
 ## ➕ A new computer, with one code
 
 1. In the dashboard: **Computers → Link new computer → Generate the link code**.
-2. The computer that already uses Reveza plays a sound and opens a window. Type in it the 4-character code the dashboard shows and click **Release**.
+2. The computer that already uses Reveza plays a sound and opens a window. Type in it the 6-character code the dashboard shows and click **Release**.
 3. On the new computer, run `npx github:dantaspaulo/reveza --ligar` and paste the code the dashboard showed. Done: it joins on its own, accounts included.
 
 The code is valid for 10 minutes, once. The cloud alone cannot release the vault key: whoever releases types, on the

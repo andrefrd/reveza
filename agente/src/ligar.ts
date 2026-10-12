@@ -94,15 +94,20 @@ async function chaveSimetrica(privada: webcrypto.CryptoKey, publica: JsonWebKey)
   ]);
 }
 
+/** Tamanho do código de confirmação: 6 símbolos de 32 (30 bits). Com 4 (20 bits), achar uma chave com o mesmo código levava ~37 s. */
+export const TAMANHO_CODIGO = 6;
+
 /**
- * Código curto que o painel mostra e o computador repete na janela de confirmação: sai da chave pública efêmera do
- * navegador que pediu a ligação. Um pedido forjado direto no banco vem com outra chave, e então com outro código.
+ * Código curto que o painel mostra e a pessoa digita na janela de confirmação: sai da chave pública efêmera do
+ * navegador que pediu a ligação. Um pedido forjado direto no banco vem com outra chave, e então com outro código; quem
+ * lê a chave do pedido verdadeiro no banco e procura uma chave com o mesmo código precisa de ~2^30 tentativas (horas
+ * de CPU, para um pedido que vence em 2 minutos), e um pedido junto com outro derruba os dois (agente.ts).
  */
 export function codigoDeConfirmacao(publica: JsonWebKey): string {
   const h = createHash("sha256").update(`reveza-ligar-v1.${publica.x}.${publica.y}`).digest();
   const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O e 1/I, que se confundem na tela
   let r = "";
-  for (let i = 0; i < 4; i++) r += ALFABETO[h[i]! % ALFABETO.length];
+  for (let i = 0; i < TAMANHO_CODIGO; i++) r += ALFABETO[h[i]! % ALFABETO.length];
   return r;
 }
 

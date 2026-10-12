@@ -209,6 +209,8 @@ export default secao({
       computador_nao_respondeu: "O computador não respondeu a tempo. Ele está ligado?",
       ligacao_recusada: "O computador recusou o pedido de ligação.",
       ligacao_recusada_na_tela: "O pedido foi recusado (ou ninguém clicou em Liberar) na tela do computador.",
+      ligacao_dupla:
+        "Chegaram dois pedidos de ligação ao mesmo tempo, e o computador recusou os dois, por segurança. Feche a janela dele e gere de novo aqui.",
       ligacao_so_terminal:
         "Este computador não tem tela para confirmar: rode `reveza ligar` nele e use as 6 palavras. Para liberar sem perguntar, rode lá `reveza ligar --painel ligar`.",
       credenciais: "E-mail ou senha não conferem.",
@@ -440,6 +442,8 @@ export default secao({
       computador_nao_respondeu: "The computer didn't answer in time. Is it on?",
       ligacao_recusada: "The computer refused the link request.",
       ligacao_recusada_na_tela: "The request was refused (or nobody clicked Release) on the computer's screen.",
+      ligacao_dupla:
+        "Two link requests arrived at the same time, and the computer refused both, for safety. Close its window and generate again here.",
       ligacao_so_terminal:
         "This computer has no screen to confirm: run `reveza ligar` there and use the 6 words. To release without asking, run `reveza ligar --painel ligar` there.",
       credenciais: "Email or password don't match.",

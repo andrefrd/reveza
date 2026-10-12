@@ -129,7 +129,7 @@ Os tokens do Supabase e da Vercel **não ficam guardados** em lugar nenhum.
 ## ➕ Computador novo, com um código só
 
 1. No painel: **Computadores → Ligar computador novo → Gerar o código de ligação**.
-2. O computador que já usa o Reveza toca um som e abre uma janela. Digite nela o código de 4 caracteres que o painel mostra e clique em **Liberar**.
+2. O computador que já usa o Reveza toca um som e abre uma janela. Digite nela o código de 6 caracteres que o painel mostra e clique em **Liberar**.
 3. No computador novo, rode `npx github:dantaspaulo/reveza --ligar` e cole o código que o painel mostrou. Pronto: ele entra sozinho, já com as contas.
 
 O código vale 10 minutos e uma vez só. A nuvem sozinha não consegue liberar a chave do cofre: quem libera digita, na

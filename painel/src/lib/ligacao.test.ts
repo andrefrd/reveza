@@ -46,7 +46,7 @@ describe("ligação em um passo", () => {
   it("o código de confirmação é o mesmo que o agente mostra na janela (mesma chave, mesmo código)", async () => {
     const publica = { kty: "EC", crv: "P-256", x: "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU", y: "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0" }
     // valor calculado pelo agente (agente/src/ligar.ts, codigoDeConfirmacao) para esta mesma chave
-    expect(await codigoDeConfirmacao(publica)).toBe("A4X3")
+    expect(await codigoDeConfirmacao(publica)).toBe("A4X338")
   })
 
   it("o código de ligação junta o acesso e as 6 palavras, e o leitor do acesso não o confunde com o antigo", () => {

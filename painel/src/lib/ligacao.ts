@@ -129,13 +129,14 @@ export function codigoDeLigacao(a: AcessoComputador, palavras: string[]): string
 }
 
 /**
- * O código curto que o computador mostra na janela de confirmação: sai da chave pública deste navegador. É o mesmo
- * cálculo do agente (agente/src/ligar.ts, codigoDeConfirmacao); pedido forjado vem com outra chave e outro código.
+ * O código curto (6 caracteres, 30 bits) que o painel mostra e a pessoa digita na janela do computador: sai da chave
+ * pública deste navegador. É o mesmo cálculo do agente (agente/src/ligar.ts, codigoDeConfirmacao); pedido forjado vem
+ * com outra chave e outro código.
  */
 export async function codigoDeConfirmacao(publica: JsonWebKey): Promise<string> {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`reveza-ligar-v1.${publica.x}.${publica.y}`)))
   const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   let r = ""
-  for (let i = 0; i < 4; i++) r += ALFABETO[h[i]! % ALFABETO.length]
+  for (let i = 0; i < 6; i++) r += ALFABETO[h[i]! % ALFABETO.length]
   return r
 }

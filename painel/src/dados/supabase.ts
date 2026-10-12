@@ -90,6 +90,7 @@ const TABELAS_AO_VIVO = ["contas", "uso_janelas", "computadores", "atribuicao", 
 const MENSAGENS: [RegExp, string][] = [
   [/só libera a frase pelo terminal|não tem tela para confirmar/i, "ligacao_so_terminal"],
   [/recusada na tela do computador/i, "ligacao_recusada_na_tela"],
+  [/dois pedidos de ligação ao mesmo tempo/i, "ligacao_dupla"],
   [/verificação em duas etapas/i, "precisa_aal2"],
   [/só administrador|só membro|permission denied/i, "sem_permissao"],
   [/aviso precisa ser menor/i, "aviso_maior_que_troca"],

@@ -14,6 +14,11 @@ export interface OpcoesRodar {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
   timeoutMs?: number;
+  /**
+   * O programa mostra uma janela de verdade (a confirmação de computador novo): não esconder. No Windows, esconder o
+   * processo (o padrão aqui, para não piscar console) esconde também a primeira janela que ele abre.
+   */
+  janela?: boolean;
 }
 
 export interface Processo {
@@ -56,7 +61,7 @@ export const executorReal: Executor = {
       let erro = "";
       let filho;
       try {
-        filho = spawn(bin, args, { env: op.env ?? process.env, cwd: op.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+        filho = spawn(bin, args, { env: op.env ?? process.env, cwd: op.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: !op.janela });
       } catch (e) {
         return resolve({ codigo: 127, saida: "", erro: String(e) });
       }

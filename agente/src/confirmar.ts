@@ -1,5 +1,5 @@
 // Confirmação na tela do computador que tem a chave do cofre, antes de liberar a frase de um computador novo pedida
-// pelo painel (auditoria de 11/10/2026: a nuvem sozinha não pode autorizar). A janela pede o código de 4 caracteres
+// pelo painel (auditoria de 11/10/2026: a nuvem sozinha não pode autorizar). A janela pede o código de 6 caracteres
 // que o painel mostra, e não o mostra: só quem está com o painel aberto, fazendo o pedido, sabe o código. No primeiro
 // teste de verdade a janela que só pedia um clique foi liberada em 8 s sem ninguém olhar o código; digitar resolve.
 // Sem tela (servidor, VPS), devolve "sem_tela" e a frase sai só pelo terminal.
@@ -14,16 +14,28 @@ function textos(idioma: "pt-BR" | "en") {
   return idioma === "en"
     ? {
         titulo: "Reveza AI",
-        texto: "A new computer wants to join your Reveza AI.\n\nTo release it, type the 4-character code shown in the dashboard. If you did not ask for this, click Refuse.",
+        texto: "A new computer wants to join your Reveza AI.\n\nTo release it, type the 6-character code shown in the dashboard. If you did not ask for this, click Refuse.",
+        // a InputBox do Windows não troca o nome dos botões: são OK e Cancelar, na língua do Windows
+        textoWindows: "A new computer wants to join your Reveza AI.\n\nTo release it, type the 6-character code shown in the dashboard and click OK. If you did not ask for this, click Cancel.",
         sim: "Release",
         nao: "Refuse",
       }
     : {
         titulo: "Reveza AI",
-        texto: "Um computador novo quer entrar no seu Reveza AI.\n\nPara liberar, digite o código de 4 caracteres que aparece no painel. Se não foi você que pediu, clique em Recusar.",
+        texto: "Um computador novo quer entrar no seu Reveza AI.\n\nPara liberar, digite o código de 6 caracteres que aparece no painel. Se não foi você que pediu, clique em Recusar.",
+        textoWindows: "Um computador novo quer entrar no seu Reveza AI.\n\nPara liberar, digite o código de 6 caracteres que aparece no painel e clique em OK. Se não foi você que pediu, clique em Cancelar.",
         sim: "Liberar",
         nao: "Recusar",
       };
+}
+
+/**
+ * Texto literal do PowerShell, entre aspas simples (nada dentro é interpretado: nem `$`, nem crase, nem aspas duplas).
+ * O PowerShell também fecha a string nas aspas tipográficas (‘ ’ ‚ ‛), então todas são dobradas, não só a `'`: uma
+ * tradução com "don’t" fecharia a string no meio e o resto viraria comando.
+ */
+export function aspasPs(texto: string): string {
+  return `'${texto.replace(/['\u2018\u2019\u201A\u201B]/g, "$&$&")}'`;
 }
 
 /**
@@ -40,9 +52,9 @@ export function comandoDaJanela(sistema: Sistema, idioma: "pt-BR" | "en", env: N
   }
   if (sistema === "windows") {
     // texto em aspas simples do PowerShell (nada é interpretado); as quebras de linha entram como [char]10
-    const texto = t.texto.split("\n").map((l) => `'${l.replace(/'/g, "''")}'`).join(" + [char]10 + ");
+    const texto = t.textoWindows.split("\n").map(aspasPs).join(" + [char]10 + ");
     return ["powershell", "-NoProfile", "-NonInteractive", "-Command",
-      `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::InputBox((${texto}), '${t.titulo}', '')`];
+      `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::InputBox((${texto}), ${aspasPs(t.titulo)}, '')`];
   }
   if (!env.DISPLAY && !env.WAYLAND_DISPLAY) return null;
   return ["zenity", "--entry", `--title=${t.titulo}`, `--text=${t.texto}`, `--ok-label=${t.sim}`, `--cancel-label=${t.nao}`, `--timeout=${ESPERA_CONFIRMACAO_S}`];
@@ -61,9 +73,11 @@ const normal = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 export async function pedirConfirmacao(exec: Executor, sistema: Sistema, codigo: string, idioma: "pt-BR" | "en" = "pt-BR", env: NodeJS.ProcessEnv = process.env): Promise<Confirmacao> {
   const argv = comandoDaJanela(sistema, idioma, env);
-  if (!argv || !/^[A-Z0-9]{4}$/.test(codigo)) return "sem_tela";
+  if (!argv || !/^[A-Z0-9]{6}$/.test(codigo)) return "sem_tela";
   const t = textos(idioma);
-  const r = await exec.rodar(argv, { timeoutMs: (ESPERA_CONFIRMACAO_S + 10) * 1000 });
+  // `janela`: sem esconder o programa. No Windows, esconder o PowerShell (o padrão do executor) esconde também a
+  // primeira janela que ele abre, a própria InputBox: provado no Windows de verdade (a janela nunca apareceu).
+  const r = await exec.rodar(argv, { timeoutMs: (ESPERA_CONFIRMACAO_S + 10) * 1000, janela: true });
   // programa que não existe (127) ou não abriu a janela: sem tela; janela que abriu e não liberou: recusou
   if (r.codigo === 127 || (r.codigo !== 0 && r.codigo !== 1 && r.codigo !== 5 && /not found|ENOENT|cannot open display/i.test(r.erro))) return "sem_tela";
   if (r.codigo !== 0) return "recusou";

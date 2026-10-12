@@ -452,7 +452,7 @@ describe("comandos do painel", () => {
     const jwk = await webcrypto.subtle.exportKey("jwk", par.publicKey);
     const publica = { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y };
     const codigo = codigoDeConfirmacao(publica);
-    assert.match(codigo, /^[A-HJ-NP-Z2-9]{4}$/);
+    assert.match(codigo, /^[A-HJ-NP-Z2-9]{6}$/, "6 caracteres de 32: 30 bits");
     for (const [clique, http, ligacoes] of [["Recusar", 403, 0], ["Liberar", 200, 1]] as const) {
       const exec = new ExecutorFalso();
       let soltar: () => void = () => undefined;
@@ -481,6 +481,111 @@ describe("comandos do painel", () => {
       assert.equal(banco.ligacoes.length, ligacoes, clique);
       m.limpar();
     }
+  });
+
+  // Revisão de segurança de 11/10/2026: quem escreve direto no banco lê a chave pública do pedido verdadeiro, procura
+  // uma chave dele com o mesmo código de confirmação e injeta um segundo pedido. Um pareamento por vez, e falha fechada.
+  async function chaveDoNavegador() {
+    const { webcrypto } = await import("node:crypto");
+    const par = (await webcrypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as import("node:crypto").webcrypto.CryptoKeyPair;
+    const jwk = await webcrypto.subtle.exportKey("jwk", par.publicKey);
+    return { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y };
+  }
+
+  test("dois pedidos de ligação no mesmo lote: os dois são recusados, nenhuma janela abre e nenhuma frase sai", async () => {
+    const { codigoDeConfirmacao } = await import("../src/ligar.js");
+    const { LIGACAO_DUPLA } = await import("../src/agente.js");
+    const { ExecutorFalso } = await import("./falsos.js");
+    for (const liberadoSemPerguntar of [false, true]) {
+      const verdadeiro = await chaveDoNavegador();
+      const forjado = await chaveDoNavegador();
+      const exec = new ExecutorFalso();
+      // a pessoa digitaria o código certo em qualquer janela que abrisse
+      exec.responder = (argv) =>
+        argv[0] === "osascript" ? { codigo: 0, saida: `button returned:Liberar, text returned:${codigoDeConfirmacao(verdadeiro)}, gave up:false`, erro: "" } : { codigo: 0, saida: "", erro: "" };
+      await preparar({ exec });
+      await ativaEm(m, "A", 10);
+      await m.agente.esperar();
+      if (liberadoSemPerguntar) fs.writeFileSync(m.c.ligarPeloPainel, "");
+      else fs.rmSync(m.c.ligarPeloPainel, { force: true });
+      banco.comandos.push({ id: 1, acao: "ligar", corpo: { publica: verdadeiro, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+      banco.comandos.push({ id: 2, acao: "ligar", corpo: { publica: forjado, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+      await m.agente.busca();
+      await m.agente.emEspera;
+      for (const id of [1, 2]) {
+        const c = banco.comandos.find((x) => x.id === id)!;
+        assert.equal(c.http, 409, `pedido ${id}`);
+        assert.equal((c.resposta as { erro?: string }).erro, LIGACAO_DUPLA);
+      }
+      assert.equal(banco.ligacoes.length, 0, "nenhuma ligação publicada");
+      assert.ok(!exec.chamadas.some((c) => c.argv[0] === "osascript"), "nenhuma janela abriu");
+      assert.ok(exec.chamadas.some((c) => c.argv[0] === "afplay"), "toca o som para chamar a atenção");
+      assert.ok(m.agente.estado.eventos.some((e) => e.texto.includes(LIGACAO_DUPLA)), "o aviso fica nos eventos");
+      m.limpar();
+    }
+  });
+
+  test("pedido que chega com a janela aberta derruba os dois, mesmo com o código certo digitado; depois, um pedido só volta a valer", async () => {
+    const { codigoDeConfirmacao } = await import("../src/ligar.js");
+    const { LIGACAO_DUPLA } = await import("../src/agente.js");
+    const { ExecutorFalso } = await import("./falsos.js");
+    const verdadeiro = await chaveDoNavegador();
+    const forjado = await chaveDoNavegador();
+    const exec = new ExecutorFalso();
+    let soltar: () => void = () => undefined;
+    let clicou = new Promise<void>((r) => (soltar = r));
+    let codigoDigitado = codigoDeConfirmacao(verdadeiro);
+    exec.rodar = async (argv: string[]) => {
+      exec.chamadas.push({ argv });
+      if (argv[0] !== "osascript") return { codigo: 0, saida: "", erro: "" };
+      await clicou;
+      return { codigo: 0, saida: `button returned:Liberar, text returned:${codigoDigitado}, gave up:false`, erro: "" };
+    };
+    await preparar({ exec });
+    await ativaEm(m, "A", 10);
+    await m.agente.esperar();
+    fs.rmSync(m.c.ligarPeloPainel, { force: true });
+    banco.comandos.push({ id: 1, acao: "ligar", corpo: { publica: verdadeiro, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+    await m.agente.busca();
+    assert.equal(banco.comandos.find((x) => x.id === 1)!.estado, "reservado", "a janela do primeiro está aberta");
+    banco.comandos.push({ id: 2, acao: "ligar", corpo: { publica: forjado, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+    await m.agente.busca();
+    assert.equal(banco.comandos.find((x) => x.id === 2)!.http, 409, "o segundo é recusado na hora");
+    assert.equal(exec.chamadas.filter((c) => c.argv[0] === "osascript").length, 1, "o segundo não abre janela");
+    soltar();
+    await m.agente.emEspera;
+    const primeiro = banco.comandos.find((x) => x.id === 1)!;
+    assert.equal(primeiro.http, 409, "o código certo não libera o primeiro");
+    assert.equal((primeiro.resposta as { erro?: string }).erro, LIGACAO_DUPLA);
+    assert.equal(banco.ligacoes.length, 0, "nenhuma ligação publicada");
+
+    // um pedido só, depois: o código certo de 6 caracteres libera
+    const novo = await chaveDoNavegador();
+    codigoDigitado = codigoDeConfirmacao(novo);
+    clicou = Promise.resolve();
+    banco.comandos.push({ id: 3, acao: "ligar", corpo: { publica: novo, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+    await m.agente.busca();
+    await m.agente.emEspera;
+    assert.equal(banco.comandos.find((x) => x.id === 3)!.http, 200);
+    assert.equal(banco.ligacoes.length, 1);
+  });
+
+  test("código de 4 caracteres (o antigo) não libera mais", async () => {
+    const { codigoDeConfirmacao } = await import("../src/ligar.js");
+    const { ExecutorFalso } = await import("./falsos.js");
+    const publica = await chaveDoNavegador();
+    const exec = new ExecutorFalso();
+    exec.responder = (argv) =>
+      argv[0] === "osascript" ? { codigo: 0, saida: `button returned:Liberar, text returned:${codigoDeConfirmacao(publica).slice(0, 4)}, gave up:false`, erro: "" } : { codigo: 0, saida: "", erro: "" };
+    await preparar({ exec });
+    await ativaEm(m, "A", 10);
+    await m.agente.esperar();
+    fs.rmSync(m.c.ligarPeloPainel, { force: true });
+    banco.comandos.push({ id: 1, acao: "ligar", corpo: { publica, idioma: "pt-BR" }, pc: "pc-1", estado: "pendente" });
+    await m.agente.busca();
+    await m.agente.emEspera;
+    assert.equal(banco.comandos.find((x) => x.id === 1)!.http, 403);
+    assert.equal(banco.ligacoes.length, 0);
   });
 
   test("computador com chave de outra instalação não responde ao pedido de ligação", async () => {
