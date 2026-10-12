@@ -165,7 +165,7 @@ create table config (
 
 create table alertas (
   id uuid primary key default gen_random_uuid(),
-  canal text not null check (canal in ('telegram', 'ntfy', 'email', 'webhook', 'push')),
+  canal text not null check (canal in ('telegram', 'email', 'webhook', 'push')),
   destino jsonb not null,                    -- sem segredo em claro: segredos ficam no Vault do Supabase (vault_id)
   eventos text[] not null,                   -- 'sem_livre', 'precisa_login', 'computador_parado', 'login_vence', 'resumo_dia', 'troca'
   ativo boolean not null default true,

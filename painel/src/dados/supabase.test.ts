@@ -44,7 +44,8 @@ describe("FonteSupabase (partes puras)", () => {
 
   it("o rótulo do destino de um alerta nunca mostra segredo", () => {
     expect(rotuloDestino("telegram", { chat_id: "123", bot_token: "segredo" })).toBe("chat 123")
-    expect(rotuloDestino("ntfy", { servidor: "https://ntfy.sh", vault_id: "x" })).toBe("ntfy.sh")
+    // canal que saiu (ntfy, 12/10/2026) ou desconhecido: sem rótulo, nunca o destino cru
+    expect(rotuloDestino("ntfy", { servidor: "https://ntfy.sh", vault_id: "x" })).toBe("")
     expect(rotuloDestino("webhook", { url: "https://n8n.exemplo.com/webhook/x?token=segredo", segredo: "s" })).toBe(
       "n8n.exemplo.com/webhook/x"
     )

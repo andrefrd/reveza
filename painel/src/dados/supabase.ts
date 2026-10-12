@@ -110,7 +110,7 @@ const MENSAGENS: [RegExp, string][] = [
   [/duplicate key|already exists|unique/i, "ja_existe"],
   [/failed to fetch|network/i, "sem_conexao"],
   [
-    /chat do Telegram inválido|https e público|servidor do ntfy|destino inválido|canal desconhecido/i,
+    /chat do Telegram inválido|https e público|destino inválido|canal desconhecido/i,
     "destino_invalido",
   ],
   [/agenda inválida/i, "agenda_invalida"],

@@ -1,4 +1,4 @@
-// Alertas: canais (Telegram, ntfy, e-mail, webhook, push do celular), os eventos de cada um e o botão de teste.
+// Alertas: canais (Telegram, e-mail, webhook, notificação no celular), os eventos de cada um e o botão de teste.
 
 import * as React from "react"
 import { BellIcon, MailIcon, PlusIcon, SendIcon, SmartphoneIcon, Trash2Icon, WebhookIcon } from "lucide-react"
@@ -44,13 +44,12 @@ import { inscreverPush } from "@/pwa/registrar"
 
 export const ICONE_CANAL: Record<CanalAlerta, typeof BellIcon> = {
   telegram: SendIcon,
-  ntfy: BellIcon,
   email: MailIcon,
   webhook: WebhookIcon,
   push: SmartphoneIcon,
 }
 
-const CANAIS: CanalAlerta[] = ["telegram", "ntfy", "email", "webhook", "push"]
+const CANAIS: CanalAlerta[] = ["push", "telegram", "email", "webhook"]
 export const EVENTOS: EventoAlerta[] = [
   "sem_livre",
   "precisa_login",
@@ -70,10 +69,6 @@ const CAMPOS: Record<
   telegram: [
     { nome: "chat_id", obrigatorio: true },
     { nome: "bot_token", tipo: "password", obrigatorio: true, segredo: true },
-  ],
-  ntfy: [
-    { nome: "servidor", tipo: "url", padrao: "https://ntfy.sh" },
-    { nome: "topico", tipo: "password", obrigatorio: true, segredo: true },
   ],
   email: [
     { nome: "para", tipo: "email", obrigatorio: true },
@@ -149,14 +144,28 @@ export default function Alertas() {
   )
 }
 
+/** Nome do canal para a tela; canal que a tela não conhece (o ntfy, que saiu) aparece como veio do banco. */
+function useNomeCanal() {
+  const { tx } = useT()
+  return (canal: string) => {
+    const chave = `alertas.canais.${canal}`
+    const nome = tx(chave)
+    return nome === chave ? canal : nome
+  }
+}
+
 function CartaoAlerta({ alerta }: { alerta: Alerta }) {
   const { t } = useT()
+  const nomeCanal = useNomeCanal()
   const { fonte } = useDados()
   const acao = useAcao()
-  const { pode } = usePermissao()
+  const { pode: podeMudar } = usePermissao()
   const [remover, setRemover] = React.useState(false)
-  const Icone = ICONE_CANAL[alerta.canal]
-  const destino = alerta.destino || t(`alertas.canais.${alerta.canal}`)
+  // canal que saiu ou que a tela não conhece: só dá para remover
+  const conhecido = Object.hasOwn(ICONE_CANAL, alerta.canal)
+  const pode = podeMudar && conhecido
+  const Icone = conhecido ? ICONE_CANAL[alerta.canal] : BellIcon
+  const destino = alerta.destino || nomeCanal(alerta.canal)
   return (
     <Card className={alerta.ativo ? undefined : "opacity-70"}>
       <CardHeader>
@@ -164,7 +173,7 @@ function CartaoAlerta({ alerta }: { alerta: Alerta }) {
           <span className="inline-flex size-8 items-center justify-center rounded-lg bg-muted">
             <Icone className="size-4" aria-hidden />
           </span>
-          {t(`alertas.canais.${alerta.canal}`)}
+          {nomeCanal(alerta.canal)}
         </CardTitle>
         <CardDescription className="truncate">{destino}</CardDescription>
         <CardAction>
@@ -210,7 +219,7 @@ function CartaoAlerta({ alerta }: { alerta: Alerta }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          disabled={!pode}
+          disabled={!podeMudar}
           onClick={() => setRemover(true)}
           aria-label={t("comum.remover")}
         >
@@ -220,7 +229,7 @@ function CartaoAlerta({ alerta }: { alerta: Alerta }) {
       <Confirmar
         aberto={remover}
         aoFechar={() => setRemover(false)}
-        titulo={t("alertas.remover.titulo", { canal: t(`alertas.canais.${alerta.canal}`) })}
+        titulo={t("alertas.remover.titulo", { canal: nomeCanal(alerta.canal) })}
         texto={t("alertas.remover.texto")}
         botao={t("alertas.remover.botao")}
         botaoSegurar={t("alertas.remover.botaoSegurar")}

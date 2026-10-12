@@ -162,7 +162,7 @@ export interface PontoHistorico {
   p7: number | null
 }
 
-export type CanalAlerta = "telegram" | "ntfy" | "email" | "webhook" | "push"
+export type CanalAlerta = "telegram" | "email" | "webhook" | "push"
 export type EventoAlerta =
   "sem_livre" | "precisa_login" | "computador_parado" | "login_vence" | "resumo_dia" | "troca" | "limite"
 
@@ -181,8 +181,8 @@ export interface Alerta {
 }
 
 /**
- * O que a pessoa digita ao criar um alerta. `destino` vai para a tabela (sem segredo); `segredo` (token do bot, tópico
- * do ntfy, chave do serviço de e-mail, assinatura do webhook) vai só para o Vault do Supabase (painel_alerta_segredo).
+ * O que a pessoa digita ao criar um alerta. `destino` vai para a tabela (sem segredo); `segredo` (token do bot, chave
+ * do serviço de e-mail, assinatura do webhook) vai só para o Vault do Supabase (painel_alerta_segredo).
  */
 export interface NovoAlerta {
   canal: CanalAlerta

@@ -572,10 +572,10 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     },
     {
       id: "al-2",
-      canal: "ntfy",
-      destino: "ntfy.sh",
-      destinoBruto: { servidor: "https://ntfy.sh", vault_id: "vault-2" },
-      eventos: ["troca", "resumo_dia"],
+      canal: "push",
+      destino: "",
+      destinoBruto: {},
+      eventos: ["sem_livre", "precisa_login", "computador_parado"],
       ativo: true,
     },
     {
@@ -1036,7 +1036,6 @@ export class FonteDemo implements Fonte {
       const httpsPublico = (u?: string) => !!u && /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(:443)?(\/|$)/i.test(u)
       const valido =
         (a.canal === "telegram" && /^(-?\d+|@\w{3,})$/.test(d.chat_id ?? "")) ||
-        (a.canal === "ntfy" && httpsPublico(d.servidor ?? "https://ntfy.sh")) ||
         (a.canal === "email" &&
           /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.para ?? "") &&
           /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.de ?? "")) ||

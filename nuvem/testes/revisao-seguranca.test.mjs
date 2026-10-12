@@ -19,12 +19,12 @@ test("alerta: vault_id vindo de fora é descartado; o segredo de um canal não v
   await b.rpc(admin, "painel_alerta_segredo", { p_id: tg.id, p_segredo: "123456:TOKEN-DO-BOT" });
   const [{ destino }] = await b.como(admin, "select destino from public.alertas where id = $1", [tg.id]);
   const outro = await b.rpc(admin, "painel_alerta", {
-    p_canal: "ntfy", p_destino: { servidor: "https://ntfy.exemplo.com", vault_id: destino.vault_id }, p_eventos: ["sem_livre"],
+    p_canal: "email", p_destino: { de: "a@exemplo.com", para: "b@exemplo.com", vault_id: destino.vault_id }, p_eventos: ["sem_livre"],
   });
   const [{ destino: d2 }] = await b.como(admin, "select destino from public.alertas where id = $1", [outro.id]);
   assert.equal(d2.vault_id, undefined, "o vault_id de outro canal não entra");
   assert.equal(await b.rpc("servico", "servico_segredo_alerta", { p_alerta: outro.id }), null);
-  await b.rpc(admin, "painel_alerta_segredo", { p_id: outro.id, p_segredo: "topico-novo" });
+  await b.rpc(admin, "painel_alerta_segredo", { p_id: outro.id, p_segredo: "chave-do-resend" });
   assert.equal(await b.rpc("servico", "servico_segredo_alerta", { p_alerta: tg.id }), "123456:TOKEN-DO-BOT");
   // editar o mesmo canal mantém o segredo dele; trocar de canal descarta
   await b.rpc(admin, "painel_alerta", { p_id: tg.id, p_canal: "telegram", p_destino: { chat_id: "2" }, p_eventos: ["troca"] });
@@ -45,7 +45,8 @@ test("alerta e webhook: destino precisa ser https público; chaves estranhas nã
     ["webhook", { url: "https://banco.internal/x" }],
     ["webhook", { url: "https://hook.exemplo.com:5432/x" }],
     ["webhook", { url: "https://user@hook.exemplo.com/x" }],
-    ["ntfy", { servidor: "http://ntfy.sh" }],
+    // o canal ntfy saiu (0017): nem com servidor https ele entra mais
+    ["ntfy", { servidor: "https://ntfy.sh" }],
     ["telegram", { chat_id: "1; drop" }],
     ["email", { de: "a@b.com", para: "x" }],
     ["sms", {}],

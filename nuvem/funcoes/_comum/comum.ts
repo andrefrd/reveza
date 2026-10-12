@@ -119,7 +119,7 @@ export function ambiente(): Ambiente {
 }
 
 /**
- * Endereço que a nuvem vai chamar (webhook, servidor do ntfy): https, nome público, sem porta estranha, sem usuário
+ * Endereço que a nuvem vai chamar (webhook, serviço de push): https, nome público, sem porta estranha, sem usuário
  * na URL e sem IP escrito (127.0.0.1, 169.254.169.254, 0x7f.1, 2130706433...). Mesma regra de rvz_url_externa no banco.
  */
 export function urlExterna(endereco: string): boolean {

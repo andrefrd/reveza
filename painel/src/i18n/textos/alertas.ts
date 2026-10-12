@@ -5,7 +5,7 @@ export default secao({
     alertas: {
       descricao: "Para onde a nuvem avisa quando algo pede atenção. Cada canal escolhe os seus eventos.",
       novo: "Novo alerta",
-      canais: { telegram: "Telegram", ntfy: "ntfy", email: "E-mail", webhook: "Webhook", push: "Push do celular" },
+      canais: { telegram: "Telegram", email: "E-mail", webhook: "Webhook", push: "Notificação no celular" },
       eventos: {
         sem_livre: "Nenhuma conta livre",
         precisa_login: "Conta precisa entrar de novo",
@@ -51,11 +51,6 @@ export default secao({
         bot_tokenDica: "Crie um bot pelo BotFather e cole o token aqui. Ele fica no cofre.",
         chat_id: "ID do chat",
         chat_idDica: "O número do chat ou grupo que recebe as mensagens (ou o @nome do canal).",
-        servidor: "Servidor",
-        servidorDica: "O público é https://ntfy.sh; pode ser o seu.",
-        topico: "Tópico",
-        topicoDica:
-          "Funciona como senha (quem souber o tópico lê as mensagens): use um nome difícil de adivinhar. Ele fica no cofre.",
         para: "Mandar para",
         de: "Remetente",
         deDica: "Um endereço do domínio verificado no seu serviço de envio (Resend).",
@@ -74,7 +69,7 @@ export default secao({
     alertas: {
       descricao: "Where the cloud notifies you when something needs attention. Each channel picks its events.",
       novo: "New alert",
-      canais: { telegram: "Telegram", ntfy: "ntfy", email: "Email", webhook: "Webhook", push: "Phone push" },
+      canais: { telegram: "Telegram", email: "Email", webhook: "Webhook", push: "Phone notification" },
       eventos: {
         sem_livre: "No free account",
         precisa_login: "Account needs to sign in again",
@@ -120,11 +115,6 @@ export default secao({
         bot_tokenDica: "Create a bot with BotFather and paste the token here. It stays in the vault.",
         chat_id: "Chat ID",
         chat_idDica: "The number of the chat or group that receives the messages (or the channel's @name).",
-        servidor: "Server",
-        servidorDica: "The public one is https://ntfy.sh; it can be your own.",
-        topico: "Topic",
-        topicoDica:
-          "It works like a password (whoever knows the topic reads the messages): use a hard-to-guess name. It stays in the vault.",
         para: "Send to",
         de: "Sender",
         deDica: "An address on the domain verified in your sending service (Resend).",
