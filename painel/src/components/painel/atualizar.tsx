@@ -41,7 +41,7 @@ export function useAtualizar(pc: Computador) {
   const acao = useAcao()
   const agora = useAgora(5000)
   const { pode } = usePermissao()
-  const cmdId = React.useSyncExternalStore(assinarPedidos, () => pedidoDe(pc.id))
+  const cmdId = React.useSyncExternalStore(assinarPedidos, () => pedidoDe(pc.id), () => pedidoDe(pc.id))
   const cmd = useComando(cmdId)
   const outros = versaoMaisNova(estado.computadores.filter((c) => !c.revogado).map((c) => c.versao))
   const andamento = andamentoDaAtualizacao(pc, cmd, estado.eventos, agora)
@@ -111,7 +111,7 @@ export function CartaoAtualizacoes() {
   const acao = useAcao()
   const { pode } = usePermissao()
   const [enviando, setEnviando] = React.useState(false)
-  React.useSyncExternalStore(assinarPedidos, mudancasDosPedidos)
+  React.useSyncExternalStore(assinarPedidos, mudancasDosPedidos, mudancasDosPedidos)
   const ativos = estado.computadores.filter((c) => !c.revogado)
   const outros = versaoMaisNova(ativos.map((c) => c.versao))
   // quem já está atualizando (pedido desta aba, ou o computador contou que está) não entra de novo

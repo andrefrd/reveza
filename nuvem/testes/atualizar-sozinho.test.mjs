@@ -81,7 +81,7 @@ test("o pacote nem baixou: a vez fica livre, sem alerta; versão fora do formato
 
 test("o alerta da atualização sozinha pode ser escolhido nos canais", async () => {
   const { b, admin } = await preparar();
-  const ins = (eventos) => b.sql("insert into public.alertas (canal, destino, eventos, criado_por) values ('ntfy', '{}', $1, $2)", [eventos, admin.id]);
+  const ins = (eventos) => b.sql(`insert into public.alertas (canal, destino, eventos, criado_por) values ('telegram', '{"chat_id": "42"}', $1, $2)`, [eventos, admin.id]);
   await ins(["atualizacao_falhou"]);
   await assert.rejects(ins(["qualquer"]));
 });
