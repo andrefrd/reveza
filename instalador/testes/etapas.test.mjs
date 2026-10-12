@@ -56,8 +56,8 @@ const casos = [
   {
     nome: "computador novo com o código de ligação (a etapa de ligar ganha número sem mexer na função dela)",
     env: {
-      REVEZA_CODIGO: "rvzl_" + Buffer.from(JSON.stringify({ u: NUVEM.url, k: "chave-publica", e: "pc-teste@computadores.reveza.invalid", s: "x".repeat(24),
-        f: "uma duas tres quatro cinco seis" })).toString("base64url"),
+      // o código de acesso da 0.2.0 (rvzc_): não leva a frase do cofre
+      REVEZA_CODIGO: "rvzc_" + Buffer.from(JSON.stringify({ u: NUVEM.url, k: "chave-publica", e: "pc-teste@computadores.reveza.invalid", s: "x".repeat(24) })).toString("base64url"),
     },
     // o nome da etapa de ligar é da função ligar (refeita noutra frente): aqui só o número importa
     etapas: ["1/5 Conferência do computador", "2/5 Agente e mod", /^3\/5 \S/, "4/5 Serviço", "5/5 Prova final"],
