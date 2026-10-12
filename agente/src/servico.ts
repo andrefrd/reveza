@@ -52,6 +52,9 @@ function xml(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Texto escapado para XML (plist e tarefas do Windows). */
+export const xmlTexto = xml;
+
 export function arquivoPlist(o: OpcoesServico): string {
   return path.join(o.home, "Library", "LaunchAgents", `${ROTULO}.plist`);
 }
@@ -221,7 +224,7 @@ export function xmlTarefa(o: OpcoesServico, usuario: string): string {
 }
 
 /** O SID de quem roda (o gatilho de entrada é só dele); sem o `whoami`, o nome DOMINIO\usuario. */
-async function usuarioWindows(o: OpcoesServico): Promise<string> {
+export async function usuarioWindows(o: { exec: Executor }): Promise<string> {
   const r = await o.exec.rodar(["whoami", "/user", "/fo", "csv", "/nh"]);
   const sid = /"(S-1-[0-9-]+)"/.exec(r.saida)?.[1];
   if (sid) return sid;

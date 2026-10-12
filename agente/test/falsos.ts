@@ -11,7 +11,7 @@ import { caminhos, type Caminhos } from "../src/config.js";
 import type { Blob } from "../src/credenciais/blob.js";
 import { CredenciaisFalsas } from "../src/credenciais/falsa.js";
 import { GuardaFalsa } from "../src/cofre/guarda.js";
-import type { Executor, Processo, Resultado } from "../src/util/executor.js";
+import type { Executor, OpcoesIniciar, Processo, Resultado } from "../src/util/executor.js";
 import { LogMemoria } from "../src/util/log.js";
 import type { Relogio } from "../src/util/tempo.js";
 import { ErroNuvem } from "../src/nuvem/tipos.js";
@@ -160,12 +160,15 @@ export class CliFalsa implements Cli {
 
 export class ExecutorFalso implements Executor {
   chamadas: { argv: string[]; entrada?: string }[] = [];
+  /** Processos iniciados (soltos ou não), com as opções: nada roda de verdade. */
+  iniciados: { argv: string[]; op: OpcoesIniciar }[] = [];
   responder: (argv: string[], entrada?: string) => Resultado = () => ({ codigo: 0, saida: "", erro: "" });
   async rodar(argv: string[], op: { entrada?: string } = {}) {
     this.chamadas.push({ argv, entrada: op.entrada });
     return this.responder(argv, op.entrada);
   }
-  iniciar(): Processo {
+  iniciar(argv: string[] = [], op: OpcoesIniciar = {}): Processo {
+    this.iniciados.push({ argv, op });
     return new ProcessoFalso();
   }
 }
@@ -411,6 +414,7 @@ export async function montar(
     exec?: Executor;
     diagnostico?: () => Promise<Record<string, unknown>>;
     consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string; corrigidos?: number; naoDeu?: number }>;
+    versoes?: import("../src/atualizar.js").FonteVersoes;
   } = {},
 ): Promise<Montado> {
   const tmp = pastaTemporaria();
@@ -439,6 +443,9 @@ export async function montar(
     exec: opcoes.exec,
     diagnostico: opcoes.diagnostico,
     consertar: opcoes.consertar,
+    versoes: opcoes.versoes,
+    node: "/falso/node",
+    ambienteDoInstalador: { PATH: "/falso/bin" },
   });
   await agente.iniciar({ laços: false, ponte: false });
   const limpar = () => {

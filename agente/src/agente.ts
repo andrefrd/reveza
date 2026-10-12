@@ -34,6 +34,21 @@ import type { Log } from "./util/log.js";
 import type { Guarda } from "./cofre/guarda.js";
 import { SEGREDO_COFRE } from "./cofre/guarda.js";
 import type { Server } from "node:http";
+import {
+  acharInstalador,
+  ATUALIZACAO_VALIDA_S,
+  CONFERIR_VERSAO_S,
+  escolherVersao,
+  extrairTarGz,
+  lerPedido,
+  rodarSeparado,
+  TAREFA_ATUALIZAR,
+  ultimaLinha,
+  type AtualizacaoPendente,
+  type FonteVersoes,
+} from "./atualizar.js";
+import { compararVersao } from "./doctor.js";
+import { gravarJson, lerJson } from "./util/arquivos.js";
 
 export interface Dependencias {
   c: Caminhos;
@@ -57,6 +72,12 @@ export interface Dependencias {
   consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string; corrigidos?: number; naoDeu?: number }>;
   /** Para tocar o som da troca (sem ele, não toca). */
   exec?: Executor;
+  /** As versões publicadas e o pacote de cada uma (o GitHub oficial; os testes trocam). Sem isto, não se atualiza. */
+  versoes?: FonteVersoes;
+  /** O Node que roda o instalador da versão nova (o mesmo do agente). */
+  node?: string;
+  /** O ambiente do instalador da versão nova: sem segredo nem token (sem token, só este computador é atualizado). */
+  ambienteDoInstalador?: NodeJS.ProcessEnv;
 }
 
 const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_login", "atualizar", "diagnostico", "retomar_sessao", "ligar"]);
@@ -120,6 +141,9 @@ export class Agente {
   ultimaAtribuicao: Atribuicao | null = null;
   /** Quando o agente subiu (a conta que a nuvem manda chega na primeira busca). */
   private iniciadoEm = 0;
+  /** A versão mais nova publicada (lida no máximo a cada 6 h) e quando foi lida. */
+  versaoNova: string | null = null;
+  private versaoNovaLidaEm = 0;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -453,6 +477,8 @@ export class Agente {
       if (this.online === false) this.d.log.info("nuvem de volta");
       this.online = true;
       this.ultimaFalhaNuvem = null;
+      await this.vigiarAtualizacao();
+      this.fundo(this.conferirVersaoNova());
       if (!this.d.sombra) this.aplicarConfig(r.config);
       await this.conferirImpressao(nuvem, r.config);
       this.estado.nuvem.atribuicaoConta = r.atribuicao?.conta_id ?? null;
@@ -647,6 +673,158 @@ export class Agente {
     this.retomarHeadless();
     this.salvar();
     return { ok: true };
+  }
+
+  // ------------------------------------------------------------------------------------------------ atualização
+
+  private arquivoAtualizacao(): string {
+    return path.join(this.d.c.base, "atualizacao.json");
+  }
+
+  /** Evento local e na nuvem (o "info" não sobe sozinho pelo aoEvento: aqui sobe de propósito). */
+  private registrarEvento(tipo: "info" | "erro", texto: string, dados: Record<string, unknown>): void {
+    this.trocador.evento(tipo, texto, dados);
+    if (tipo === "info" && this.d.nuvem && !this.d.sombra) void this.d.nuvem.evento("info", texto, dados).catch(() => undefined);
+  }
+
+  /** A versão mais nova publicada, lida do GitHub oficial no máximo a cada 6 h (guardada para sobreviver ao reinício). */
+  async conferirVersaoNova(): Promise<void> {
+    if (!this.d.versoes) return;
+    const arq = path.join(this.d.c.base, "versoes.json");
+    if (!this.versaoNovaLidaEm) {
+      const c = lerJson<{ lidoEm?: number; maisNova?: string | null }>(arq);
+      if (c && typeof c.lidoEm === "number") {
+        this.versaoNovaLidaEm = c.lidoEm;
+        this.versaoNova = typeof c.maisNova === "string" ? c.maisNova : null;
+      }
+    }
+    const t = this.d.relogio.agora();
+    if (t - this.versaoNovaLidaEm < CONFERIR_VERSAO_S) return;
+    this.versaoNovaLidaEm = t; // antes de pedir: falha não vira um pedido por busca
+    try {
+      this.versaoNova = (await this.d.versoes.publicadas())[0] ?? null;
+      gravarJson(arq, { lidoEm: t, maisNova: this.versaoNova });
+    } catch (e) {
+      this.d.log.erro(`versões publicadas: ${(e as Error).message}`);
+    }
+  }
+
+  /** A atualização em andamento, se houver (o arquivo é do próprio agente). */
+  atualizacaoPendente(): (AtualizacaoPendente & { sozinho?: boolean; relatado?: boolean }) | null {
+    const p = lerJson<AtualizacaoPendente & { sozinho?: boolean; relatado?: boolean }>(this.arquivoAtualizacao());
+    return p && typeof p.para === "string" && typeof p.em === "number" ? p : null;
+  }
+
+  /**
+   * Atualiza o programa deste computador para `pedida` (X.Y.Z ou "mais_nova"): só versão publicada do repositório
+   * oficial e maior que esta, pelo instalador da própria versão nova, num processo separado (atualizar.ts).
+   */
+  async atualizarPrograma(
+    pedida: string,
+    origem: { comando: number | null; sozinho: boolean },
+  ): Promise<{ ok: true; de: string; para: string } | { ok: false; status: number; erro: string }> {
+    if (this.d.sombra) return { ok: false, status: 409, erro: "modo sombra: o agente não se atualiza" };
+    if (!this.d.versoes || !this.d.exec) return { ok: false, status: 501, erro: "este agente não se atualiza pelo painel" };
+    const pendente = this.atualizacaoPendente();
+    if (pendente) return { ok: false, status: 409, erro: `já há uma atualização em andamento (para a ${pendente.para})` };
+    let publicadas: string[];
+    try {
+      publicadas = await this.d.versoes.publicadas();
+    } catch (e) {
+      return { ok: false, status: 502, erro: `não consegui ler as versões publicadas (${(e as Error).message})` };
+    }
+    this.versaoNova = publicadas[0] ?? this.versaoNova;
+    const escolha = escolherVersao(pedida, VERSAO, publicadas);
+    if (!escolha.ok) return { ok: false, status: 409, erro: escolha.erro };
+    const para = escolha.versao;
+    const dados = { atualizacao: "falhou", de: VERSAO, para, comando: origem.comando, sozinho: origem.sozinho };
+    let pasta: string | null = null;
+    let instalador: string;
+    try {
+      pasta = fs.mkdtempSync(path.join(os.tmpdir(), "reveza-atualizar-"));
+      const pacote = path.join(pasta, `reveza-${para}.tar.gz`);
+      await this.d.versoes.baixar(para, pacote);
+      extrairTarGz(pacote, path.join(pasta, "pacote"));
+      instalador = acharInstalador(path.join(pasta, "pacote"), para);
+    } catch (e) {
+      if (pasta) fs.rmSync(pasta, { recursive: true, force: true });
+      const motivo = (e as Error).message;
+      this.registrarEvento("erro", `A atualização para a ${para} não começou: ${motivo}.`, { ...dados, motivo });
+      return { ok: false, status: 502, erro: `a atualização não começou: ${motivo}` };
+    }
+    fs.mkdirSync(this.d.c.logs, { recursive: true, mode: 0o700 });
+    const log = path.join(this.d.c.logs, `atualizacao-${para}.log`);
+    const resultado = path.join(pasta, "resultado.json");
+    const instalacao = lerJson<{ semServico?: boolean }>(path.join(this.d.c.base, "instalacao.json"));
+    const registro = { de: VERSAO, para, comando: origem.comando, em: this.d.relogio.agora(), pasta, log, resultado, sozinho: origem.sozinho };
+    gravarJson(this.arquivoAtualizacao(), registro);
+    try {
+      await rodarSeparado({
+        sistema: this.d.sistema,
+        exec: this.d.exec,
+        node: this.d.node ?? process.execPath,
+        env: this.d.ambienteDoInstalador ?? {},
+        pasta,
+        instalador,
+        log,
+        resultado,
+        // sem token nenhum: só este computador (a nuvem e o painel são do instalador no computador principal)
+        args: ["--atualizar", "--sim", ...(instalacao?.semServico ? ["--sem-servico"] : [])],
+      });
+    } catch (e) {
+      fs.rmSync(this.arquivoAtualizacao(), { force: true });
+      fs.rmSync(pasta, { recursive: true, force: true });
+      const motivo = (e as Error).message;
+      this.registrarEvento("erro", `A atualização para a ${para} não começou: ${motivo}.`, { ...dados, motivo });
+      return { ok: false, status: 500, erro: `a atualização não começou: ${motivo}` };
+    }
+    this.registrarEvento(
+      "info",
+      `Atualizando de ${VERSAO} para ${para} (${origem.sozinho ? "sozinho, de madrugada" : "pedido pelo painel"}). Log: ${log}`,
+      { ...dados, atualizacao: "pedida" },
+    );
+    return { ok: true, de: VERSAO, para };
+  }
+
+  /**
+   * Quem estiver rodando depois de uma atualização conta como ela terminou: o agente novo (subiu na versão pedida) ou o
+   * antigo (o instalador falhou, ou voltou para a anterior). A pasta temporária só sai quando o instalador terminou.
+   */
+  async vigiarAtualizacao(): Promise<void> {
+    const p = this.atualizacaoPendente();
+    if (!p) return;
+    const t = this.d.relogio.agora();
+    const r = lerJson<{ codigo?: number; erro?: string }>(p.resultado);
+    const terminou = !!r || t - p.em > ATUALIZACAO_VALIDA_S;
+    if (!p.relatado) {
+      let fim: "concluida" | "falhou" | null = null;
+      let motivo = "";
+      if (VERSAO === p.para) fim = "concluida";
+      else if (r) {
+        fim = "falhou";
+        motivo = r.erro ?? ultimaLinha(p.log) ?? `o instalador saiu com o código ${r.codigo}`;
+      } else if (terminou) {
+        fim = "falhou";
+        motivo = "a atualização não terminou em 30 minutos";
+      }
+      if (!fim) return;
+      const dados = { atualizacao: fim, de: p.de, para: p.para, comando: p.comando ?? null, sozinho: !!p.sozinho };
+      if (fim === "concluida") this.registrarEvento("info", `Atualizado de ${p.de} para ${p.para}.`, dados);
+      else {
+        this.registrarEvento("erro", `A atualização de ${p.de} para ${p.para} não deu certo: ${motivo}. Este computador segue na ${VERSAO}.`, {
+          ...dados,
+          motivo: motivo.slice(0, 200),
+        });
+      }
+      gravarJson(this.arquivoAtualizacao(), { ...p, relatado: true });
+    }
+    if (!terminou) return;
+    fs.rmSync(this.arquivoAtualizacao(), { force: true });
+    // só a pasta temporária que o próprio agente criou
+    if (path.basename(p.pasta).startsWith("reveza-atualizar-") && path.dirname(path.resolve(p.pasta)) === path.resolve(os.tmpdir())) {
+      fs.rmSync(p.pasta, { recursive: true, force: true });
+    }
+    if (this.d.sistema === "windows" && this.d.exec) await this.d.exec.rodar(["schtasks", "/Delete", "/F", "/TN", TAREFA_ATUALIZAR]).catch(() => undefined);
   }
 
   // ------------------------------------------------------------------------------------------------ conserto
@@ -844,9 +1022,18 @@ export class Agente {
         const r = this.logins.cancelar(String(corpo.login_id ?? ""));
         return { status: r.ok ? 200 : 400, corpo: r };
       }
-      case "atualizar":
+      case "atualizar": {
+        // com a versão no corpo, é atualizar o PROGRAMA (só X.Y.Z ou "mais_nova"); sem nada, é reler as contas
+        if (Object.keys(corpo).length) {
+          const p = lerPedido(corpo);
+          if (!p.ok) return recusa(400, p.erro);
+          const r = await this.atualizarPrograma(p.versao, { comando: cmd.id ?? null, sozinho: false });
+          if (!r.ok) return recusa(r.status, r.erro);
+          return { status: 200, corpo: { ok: true, atualizando: true, de: r.de, para: r.para } };
+        }
         await this.atualizarTudo();
         return { status: 200, corpo: { ok: true } };
+      }
       case "diagnostico": {
         // Corrigir pelo painel: só o sim/não vem da nuvem; o que roda é a lista fechada de conserto.ts
         if (corpo.corrigir === true) {

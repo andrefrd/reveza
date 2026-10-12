@@ -70,6 +70,15 @@ const MUTANTES = [
   ["conserto: a conta que já consta em uso não está 'a caminho' (a busca não a põe de volta)", "src/agente.ts", "return !destino || destino !== this.estado.ativa;", "return true;", ["conserto"]],
   ["conserto: a espera pela conta da nuvem tem prazo", "src/agente.ts", "(tr.principalSemLoginDesde ?? this.iniciadoEm) > ESPERA_CONTA_S) return false;", "(tr.principalSemLoginDesde ?? this.iniciadoEm) > ESPERA_CONTA_S * 1000) return false;", ["conserto"]],
   ["conserto: sem login com a conta a caminho é aviso, não falha", "src/doctor.ts", "if (!o.accessToken && esperando) {", "if (!o.accessToken && esperando && false) {", ["conserto"]],
+  ["atualizar: o pedido da nuvem só leva a versão", "src/atualizar.ts", "if (Object.keys(corpo).some((k) => k !== \"versao\"))", "if (false)", ["atualizar"]],
+  ["atualizar: só versão maior que a atual", "src/atualizar.ts", "if (compararVersao(alvo, atual) <= 0) {", "if (compararVersao(alvo, atual) < 0) {", ["atualizar"]],
+  ["atualizar: só versão publicada", "src/atualizar.ts", "if (pedida !== MAIS_NOVA && !publicadas.includes(pedida))", "if (false)", ["atualizar"]],
+  ["atualizar: o download não sai do GitHub", "src/atualizar.ts", "!HOSTS_DO_PACOTE.has(proximo.hostname)", "false", ["atualizar"]],
+  ["atualizar: nada de '..' no pacote", "src/atualizar.ts", "rel.split(\"/\").includes(\"..\")", "false", ["atualizar"]],
+  ["atualizar: link no pacote é recusado", "src/atualizar.ts", "if (tipo === \"1\" || tipo === \"2\") throw", "if (false) throw", ["atualizar"]],
+  ["atualizar: a versão de dentro do pacote é conferida", "src/atualizar.ts", "pacote.version !== versao", "false", ["atualizar"]],
+  ["atualizar: no Linux com systemd, escopo próprio", "src/atualizar.ts", "final = [\"systemd-run\", \"--user\", \"--scope\", \"--quiet\", ...argv];", "final = argv;", ["atualizar"]],
+  ["atualizar: uma atualização por vez", "src/agente.ts", "if (pendente) return { ok: false, status: 409, erro: `já há uma atualização em andamento", "if (pendente && Date.now() < 0) return { ok: false, status: 409, erro: `já há uma atualização em andamento", ["atualizar"]],
   ["~/.claude.json: não regravar arquivo ilegível", "src/claudejson.ts", "        const v = JSON.parse(bruto);", "        let v; try { v = JSON.parse(bruto); } catch { v = {}; }", ["doctor-cli"]],
 ];
 

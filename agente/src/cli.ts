@@ -15,6 +15,7 @@ import type { Credenciais } from "./credenciais/tipos.js";
 import { guardaDoSistema, type Guarda } from "./cofre/guarda.js";
 import { doctor, textoDoctor, type DepsDoctor } from "./doctor.js";
 import { ambienteDoUsuario, consertar, instalarMod, pastaDoPrograma, resumoConserto } from "./conserto.js";
+import { GithubOficial } from "./atualizar.js";
 import { carregarEstado, type EstadoLocal } from "./estado.js";
 import { importar } from "./importar.js";
 import { iniciarCofre, lerChave, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
@@ -598,6 +599,10 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     sombra,
     porta,
     exec: amb.exec,
+    // atualizar o programa a pedido do painel: versões e pacote só do repositório oficial (atualizar.ts)
+    versoes: new GithubOficial(VERSAO),
+    node: process.execPath,
+    ambienteDoInstalador: ambienteDoUsuario(amb.env),
     diagnostico: async (): Promise<Record<string, unknown>> => {
       // a conferência periódica (agente_ola) só lê: nunca conserta sozinha
       const r = await doctor(depsDentro());
@@ -637,12 +642,18 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     semServico: instalacao?.semServico === true,
   });
   // o formato que o painel lê: hora em ISO, versão e o tempo da última conversa com a nuvem
-  const paraPainel = (r: Awaited<ReturnType<typeof doctor>>): Record<string, unknown> => ({
-    conferencias: r,
-    em: new Date(amb.relogio.agora() * 1000).toISOString(),
-    versao: VERSAO,
-    atrasoBuscaMs: agente.ultimaBuscaMs,
-  });
+  const paraPainel = (r: Awaited<ReturnType<typeof doctor>>): Record<string, unknown> => {
+    const pendente = agente.atualizacaoPendente();
+    return {
+      conferencias: r,
+      em: new Date(amb.relogio.agora() * 1000).toISOString(),
+      versao: VERSAO,
+      atrasoBuscaMs: agente.ultimaBuscaMs,
+      // a versão mais nova publicada (o painel mostra "Versão X disponível") e a atualização em andamento
+      versaoNova: agente.versaoNova,
+      atualizacao: pendente && !pendente.relatado ? { para: pendente.para, desde: new Date(pendente.em * 1000).toISOString() } : null,
+    };
+  };
   await agente.iniciar();
   gravarJson(arquivoPonte(amb.c), { porta, pid: process.pid, sombra });
   amb.saida(`agente rodando${sombra ? " em modo sombra" : ""} na porta ${porta}; log em ${amb.c.log}`);
