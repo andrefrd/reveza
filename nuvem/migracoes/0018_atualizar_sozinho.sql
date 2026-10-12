@@ -1,4 +1,4 @@
--- Reveza AI · 0017 · atualizar sozinho de madrugada (pedido do Paulo, 12/10/2026).
+-- Reveza AI · 0018 · atualizar sozinho de madrugada (pedido do Paulo, 12/10/2026).
 -- reaplicável: restrições recriadas e funções (create or replace).
 --
 -- A opção `atualizar_sozinho` (desligada de fábrica) faz cada agente, ao ver versão nova publicada, se atualizar sozinho
