@@ -206,13 +206,13 @@ security reviews and new versions.
 <div align="center">
 
 <a href="https://www.asaas.com/000/c/fymw4xl2f5b3n05b"><img src="https://img.shields.io/badge/Support%20with%20R%24%20100-D97757?style=for-the-badge&logo=githubsponsors&logoColor=1F1E1D" alt="Support with R$ 100" /></a>
-<a href="https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//github.com/dantaspaulo/reveza"><img src="https://img.shields.io/badge/Share%20on%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Share on WhatsApp" /></a>
+<a href="https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//reveza.ia.br/en"><img src="https://img.shields.io/badge/Share%20on%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Share on WhatsApp" /></a>
 
 </div>
 
 - **R$ 100 through Asaas**, by Pix, card or boleto (Brazilian reais): [support the project](https://www.asaas.com/000/c/fymw4xl2f5b3n05b).
 - **Larger amounts, straight by Pix**, any amount you like. Key (phone): `84988942848`.
-- **Know someone who keeps hitting the limit?** [Send them Reveza on WhatsApp](https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//github.com/dantaspaulo/reveza).
+- **Know someone who keeps hitting the limit?** [Send them Reveza on WhatsApp](https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//reveza.ia.br/en).
 
 <sub>Contributions go to PSD Software, which maintains the project. Supporting is optional: Reveza stays free and open for everyone.</sub>
 

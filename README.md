@@ -206,13 +206,13 @@ desenvolvimento, a revisão de segurança e as versões novas.
 <div align="center">
 
 <a href="https://www.asaas.com/000/c/fymw4xl2f5b3n05b"><img src="https://img.shields.io/badge/Apoiar%20com%20R%24%20100-D97757?style=for-the-badge&logo=githubsponsors&logoColor=1F1E1D" alt="Apoiar com R$ 100" /></a>
-<a href="https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//github.com/dantaspaulo/reveza"><img src="https://img.shields.io/badge/Compartilhar%20no%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Compartilhar no WhatsApp" /></a>
+<a href="https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//reveza.ia.br"><img src="https://img.shields.io/badge/Compartilhar%20no%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Compartilhar no WhatsApp" /></a>
 
 </div>
 
 - **R$ 100 pelo Asaas**, no Pix, no cartão ou no boleto: [apoiar o projeto](https://www.asaas.com/000/c/fymw4xl2f5b3n05b).
 - **Valores maiores, direto no Pix**, com o valor que quiser. Chave (celular): `84988942848`.
-- **Conhece alguém que vive batendo no limite?** [Mande o Reveza no WhatsApp](https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//github.com/dantaspaulo/reveza).
+- **Conhece alguém que vive batendo no limite?** [Mande o Reveza no WhatsApp](https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//reveza.ia.br).
 
 <sub>As contribuições vão para a PSD Software, que mantém o projeto. Apoiar é opcional: o Reveza segue grátis e aberto para todo mundo.</sub>
 

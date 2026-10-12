@@ -33,7 +33,9 @@ jobs:
       - name: Instalador, de dentro de um node_modules (como o npx deixa)
         shell: bash
         run: |
-          D="$RUNNER_TEMP/npx/node_modules/reveza"
+          # no Windows, o RUNNER_TEMP vem como D:\a\_temp, que o tar entende como "máquina:caminho"; o caminho do bash não
+          T=$(cd "$RUNNER_TEMP" && pwd)
+          D="$T/npx/node_modules/reveza"
           mkdir -p "$D"
           git archive HEAD | tar -x -C "$D"
           export HOME="$RUNNER_TEMP/casa" USERPROFILE="$RUNNER_TEMP/casa"
