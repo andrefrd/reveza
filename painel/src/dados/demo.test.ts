@@ -4,8 +4,7 @@ import { coresPorWorkspace } from "@/lib/cores"
 import { versaoMaisNova } from "@/dados/derivados"
 import { andamentoDaAtualizacao, PEDIDO_ATUALIZAR, versaoDisponivel } from "@/lib/atualizar"
 import { andamentoDoConserto, diagnosticoDoComando, podeCorrigir } from "@/lib/conserto"
-import { fraseValida } from "@/lib/ligacao"
-import { FonteDemo, PALAVRAS, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
+import { FonteDemo, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
 import { faixasDeAlerta } from "./derivados"
 import { ErroPainel } from "./fonte"
 import PACOTE from "../../package.json"
@@ -104,12 +103,23 @@ describe("FonteDemo", () => {
     expect(e.contas.find((c) => c.id === "conta-pessoal")?.posse).toBeNull()
   })
 
-  it("frase de ligação: 6 palavras da lista, cifradas para o navegador no caminho", async () => {
-    const f = nova()
-    const l = await f.pedirLigacao("pc-notebook")
-    expect(fraseValida(l.palavras)).toBe(true)
-    expect(l.palavras.every((p) => PALAVRAS.includes(p))).toBe(true)
-    expect(new Date(l.expiraEm).getTime() - AGORA.getTime()).toBe(10 * 60_000)
+  it("computador novo: aparece pendente, pede, a pessoa digita o código no escolhido e ele entra", async () => {
+    let agora = AGORA.getTime()
+    const f = new FonteDemo({ agora: () => new Date(agora), atrasoMs: 0, relogio: false })
+    const { codigo, computadorId } = await f.criarAcessoComputador()
+    expect(codigo).toMatch(/^rvzc_/)
+    expect((await f.carregar()).computadores.find((c) => c.id === computadorId)?.sistema).toBe("pendente")
+    await f.escolherAprovador(computadorId!, "pc-notebook")
+    expect((await f.estadoLigacao(computadorId!)).fase).toBe("esperando_pedido")
+    agora += 6_000
+    const pedindo = await f.estadoLigacao(computadorId!)
+    expect(pedindo.fase).toBe("esperando_codigo")
+    expect(pedindo.aprovadorId).toBe("pc-notebook")
+    agora += 10_000
+    expect((await f.estadoLigacao(computadorId!)).fase).toBe("entregue")
+    agora += 2_000
+    expect((await f.estadoLigacao(computadorId!)).fase).toBe("ligado")
+    expect((await f.carregar()).computadores.find((c) => c.id === computadorId)?.sistema).toBe("macos")
   })
 
   it("em inglês, os textos de exemplo saem em inglês (nomes, organizações, projetos, e-mails)", async () => {

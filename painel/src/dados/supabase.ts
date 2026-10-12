@@ -7,7 +7,7 @@ import type { PostgrestError, RealtimeChannel } from "@supabase/supabase-js"
 
 import { supabase } from "./cliente"
 import { rotuloDestino } from "./rotulos"
-import { abrirEnvelope, codigoDeAcesso, codigoDeConfirmacao, criarPedido, fraseValida, type Envelope } from "../lib/ligacao"
+import { codigoDeAcesso } from "../lib/ligacao"
 import { ErroPainel, type CamposConta, type Fonte, type Recursos } from "./fonte"
 import type {
   AcaoComando,
@@ -26,9 +26,10 @@ import type {
   Instantaneo,
   Intervalo,
   ItemDiagnostico,
+  EstadoLigacao,
   Janela,
-  Ligacao,
   LinhaUso,
+  MotivoRecusaLigacao,
   Membro,
   NovoAlerta,
   Papel,
@@ -91,8 +92,6 @@ const TABELAS_AO_VIVO = ["contas", "uso_janelas", "computadores", "atribuicao", 
 
 /** Mensagens das funções do banco (0001 a 0004) → códigos que a tela traduz. */
 const MENSAGENS: [RegExp, string][] = [
-  [/só libera a frase pelo terminal|não tem tela para confirmar/i, "ligacao_so_terminal"],
-  [/recusada na tela do computador/i, "ligacao_recusada_na_tela"],
   [/dois pedidos de ligação ao mesmo tempo/i, "ligacao_dupla"],
   [/verificação em duas etapas/i, "precisa_aal2"],
   [/só administrador|só membro|permission denied/i, "sem_permissao"],
@@ -108,7 +107,7 @@ const MENSAGENS: [RegExp, string][] = [
   [/escopo só para administrador/i, "escopo_admin"],
   [/em uso em outro computador|conta com outro computador/i, "conta_ocupada"],
   [/sem login guardado/i, "conta_precisa_login"],
-  [/computador desconhecido/i, "computador_revogado"],
+  [/computador novo desconhecido|computador desconhecido/i, "computador_revogado"],
   [/conta desconhecida/i, "nao_encontrado"],
   [/duplicate key|already exists|unique/i, "ja_existe"],
   [/failed to fetch|network/i, "sem_conexao"],
@@ -118,7 +117,6 @@ const MENSAGENS: [RegExp, string][] = [
   ],
   [/agenda inválida/i, "agenda_invalida"],
   [/ative as suas duas etapas antes/i, "exigir_sem_as_suas"],
-  [/pedido de ligação inválido|não tem a chave do cofre|modo sombra/i, "ligacao_recusada"],
   [/convite desconhecido, usado ou vencido/i, "convite_invalido"],
 ]
 
@@ -281,10 +279,20 @@ function paraComando(c: Linha): Comando {
   }
 }
 
+/** O andamento da ligação a partir da linha do pedido (0019) e da do computador novo. */
+export function faseDaLigacao(p: Linha | null, c: Linha | null, agora: Date): EstadoLigacao {
+  const base = { aprovadorId: texto(p?.aprovador), expiraEm: texto(p?.expira_em), motivo: null }
+  if (c && c.sistema !== "pendente" && !c.revogado) return { ...base, fase: "ligado" }
+  if (p?.recusado) return { ...base, fase: "recusado", motivo: String(p.recusado) as MotivoRecusaLigacao }
+  if (p?.lido_em || p?.entregue_em) return { ...base, fase: "entregue" }
+  if (!p?.pedido_em) return { ...base, fase: "esperando_pedido" }
+  if (p.expira_em && new Date(String(p.expira_em)).getTime() <= agora.getTime()) return { ...base, fase: "vencido" }
+  return { ...base, fase: "esperando_codigo" }
+}
+
 export class FonteSupabase implements Fonte {
   readonly demo = false
   readonly recursos: Recursos = {
-    ligacaoNoPainel: true,
     testarAlerta: true,
     testarWebhook: true,
     cancelarConvite: true,
@@ -642,32 +650,6 @@ export class FonteSupabase implements Fonte {
     return data ? paraComando(data) : null
   }
 
-  async pedirLigacao(computadorId: string, aoPedir?: (codigoDeConfirmacao: string) => void): Promise<Ligacao> {
-    // Este navegador cria um par de chaves efêmero; o computador que tem a chave do cofre pergunta na tela dele (com o
-    // código que sai da chave pública daqui), publica a ligação e devolve as 6 palavras cifradas para este navegador.
-    // A nuvem só guarda texto cifrado.
-    const pedido = await criarPedido()
-    const idioma = document.documentElement.lang === "en" ? "en" : "pt-BR"
-    const c = await this.comando(computadorId, "ligar", { publica: pedido.publica, idioma })
-    aoPedir?.(await codigoDeConfirmacao(pedido.publica))
-    // a janela do computador espera o clique por até 90 s
-    for (let i = 0; i < 120; i++) {
-      await new Promise((r) => setTimeout(r, 1000))
-      const atual = await this.lerComando(c.id)
-      if (!atual || atual.estado === "pendente" || atual.estado === "reservado") continue
-      if (atual.estado !== "feito") {
-        const msg = String((atual.resposta as Linha | null)?.erro ?? "")
-        throw new ErroPainel(msg ? codigoDoErro(msg) : "ligacao_recusada", msg)
-      }
-      const envelope = (atual.resposta as { envelope?: Envelope } | null)?.envelope
-      if (!envelope) throw new ErroPainel("ligacao_recusada")
-      const lig = await abrirEnvelope<{ palavras: string[]; expiraEm: string | null }>(pedido.privada, envelope)
-      if (!fraseValida(lig.palavras)) throw new ErroPainel("ligacao_recusada")
-      return { palavras: lig.palavras, expiraEm: lig.expiraEm ?? new Date(Date.now() + 10 * 60_000).toISOString() }
-    }
-    throw new ErroPainel("computador_nao_respondeu")
-  }
-
   async criarAcessoComputador(): Promise<{ codigo: string; computadorId: string | null }> {
     const { data, error } = await supabase().functions.invoke<{
       ok?: boolean
@@ -689,6 +671,28 @@ export class FonteSupabase implements Fonte {
       }),
       computadorId: data.computador_id ?? null,
     }
+  }
+
+  async escolherAprovador(computadorNovoId: string, aprovadorId: string) {
+    // a janela abre na língua deste painel (o texto dela é fixo no agente)
+    const idioma = document.documentElement.lang === "en" ? "en" : "pt-BR"
+    await rpc("painel_ligacao_aprovador", { p_computador: computadorNovoId, p_aprovador: aprovadorId, p_idioma: idioma })
+  }
+
+  async estadoLigacao(computadorNovoId: string): Promise<EstadoLigacao> {
+    // o painel lê o andamento, sem a chave pública e sem o envelope (a nuvem nem deixa ler essas colunas)
+    const sb = supabase()
+    const [p, c] = await Promise.all([
+      sb
+        .from("ligacao_pedidos")
+        .select("aprovador,pedido_em,expira_em,entregue_em,lido_em,recusado")
+        .eq("computador_id", computadorNovoId)
+        .maybeSingle(),
+      sb.from("computadores").select("sistema,revogado").eq("id", computadorNovoId).maybeSingle(),
+    ])
+    if (p.error) erro(p.error)
+    if (c.error) erro(c.error)
+    return faseDaLigacao(p.data as Linha | null, c.data as Linha | null, new Date())
   }
 
   async revogarComputador(id: string) {

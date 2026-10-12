@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest"
 
 import { rotuloDestino } from "./rotulos"
-import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, paraDiagnostico } from "./supabase"
+import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, faseDaLigacao, paraDiagnostico } from "./supabase"
 
 describe("FonteSupabase (partes puras)", () => {
   it("mensagens das funções do banco viram códigos traduzíveis", () => {
@@ -72,5 +72,26 @@ describe("diagnóstico do agente", () => {
       { id: "a", ok: true, detalhe: undefined },
     ])
     expect(paraDiagnostico(null, "1")).toBeNull()
+  })
+})
+
+describe("andamento da ligação de computador novo (ligacao_pedidos, 0019)", () => {
+  const agora = new Date("2026-10-12T12:00:00Z")
+  const pendente = { sistema: "pendente", revogado: false }
+  it("cada fase pelo que a nuvem gravou", () => {
+    const fase = (p: Record<string, unknown> | null, c: Record<string, unknown> | null = pendente) => faseDaLigacao(p, c, agora).fase
+    expect(fase(null)).toBe("esperando_pedido")
+    expect(fase({ aprovador: "pc-1" })).toBe("esperando_pedido")
+    expect(fase({ pedido_em: "2026-10-12T11:58:00Z", expira_em: "2026-10-12T12:08:00Z" })).toBe("esperando_codigo")
+    expect(fase({ pedido_em: "2026-10-12T11:48:00Z", expira_em: "2026-10-12T11:58:00Z" })).toBe("vencido")
+    expect(fase({ pedido_em: "2026-10-12T11:58:00Z", expira_em: "2026-10-12T12:08:00Z", entregue_em: "2026-10-12T11:59:00Z" })).toBe("entregue")
+    expect(fase({ pedido_em: "x", entregue_em: "x", lido_em: "x" }, { sistema: "linux", revogado: false })).toBe("ligado")
+    const r = faseDaLigacao({ pedido_em: "x", recusado: "dois_pedidos", aprovador: "pc-1" }, pendente, agora)
+    expect(r).toEqual({ fase: "recusado", motivo: "dois_pedidos", aprovadorId: "pc-1", expiraEm: null })
+  })
+
+  it("as mensagens novas da nuvem viram códigos traduzíveis", () => {
+    expect(codigoDoErro("dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel")).toBe("ligacao_dupla")
+    expect(codigoDoErro("computador novo desconhecido ou revogado")).toBe("computador_revogado")
   })
 })

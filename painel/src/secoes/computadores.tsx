@@ -1,10 +1,14 @@
 // Computadores: cada um com estado, versão, conta em uso e ações (trocar agora, diagnóstico, atualizar, revogar), e o
-// passo a passo de ligar um computador novo pela frase de 6 palavras (ou QR).
+// passo a passo de ligar um computador novo (o código aparece nele e é digitado num computador que já usa o Reveza).
 
 import * as React from "react"
 import {
   ActivityIcon,
+  CheckIcon,
   ChevronDownIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  KeyRoundIcon,
   LaptopIcon,
   PlusIcon,
   ShieldOffIcon,
@@ -37,13 +41,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
 import { compararVersao, estadoComputador, estadoConta, p5, p7, versaoMaisNova } from "@/dados/derivados"
-import type { Computador, Instantaneo } from "@/dados/tipos"
+import type { Computador, EstadoLigacao, FaseLigacao, Instantaneo } from "@/dados/tipos"
 import { useDialogo } from "@/hooks/use-dialogo"
 import { useT } from "@/i18n"
 import { fmtDuracao, fmtPct, fmtRelativo } from "@/lib/formato"
 import { comDemo } from "@/lib/demo"
 import { comandoInstalador, sistemaDoNavegador, type SistemaDoNavegador } from "@/lib/instalador"
-import { codigoDeLigacao, lerCodigoDeAcesso } from "@/lib/ligacao"
+import { VERSAO_MINIMA_PARA_LIBERAR } from "@/lib/ligacao"
 import { Link } from "@/lib/rota"
 import { cn } from "@/lib/utils"
 import { ICONE_SISTEMA } from "./visao-geral"
@@ -340,31 +344,14 @@ function DialogoTrocar({ pc, aberto, aoFechar }: { pc: Computador; aberto: boole
 
 function DialogoLigar({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => void }) {
   const { t } = useT()
-  const { fonte } = useDados()
-  const estado = useEstado()
-  // quem abre passa key={chave da abertura}: conta os computadores no momento em que a caixa abriu
-  const [quantosAntes] = React.useState(() => estado.computadores.filter((c) => c.sistema !== "pendente").length)
-  const registrados = estado.computadores.filter((c) => c.sistema !== "pendente")
-  const novo = registrados.length > quantosAntes ? registrados[registrados.length - 1] : null
-
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && aoFechar()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("computadores.ligacao.titulo")}</DialogTitle>
-          <DialogDescription>{t("computadores.ligacao.umPasso.descricao")}</DialogDescription>
+          <DialogDescription>{t("computadores.ligacao.descricao")}</DialogDescription>
         </DialogHeader>
-        {fonte.recursos.ligacaoNoPainel ? <LigarEmUmPasso /> : <LigarPeloTerminal />}
-        <div className="flex items-center gap-2 rounded-lg bg-muted/60 p-3 text-sm" role="status" aria-live="polite">
-          {novo ? (
-            <span className="text-ok">{t("computadores.ligacao.apareceu", { computador: novo.nome })}</span>
-          ) : (
-            <>
-              <Spinner className="text-muted-foreground" />
-              <span className="text-muted-foreground">{t("computadores.ligacao.esperando")}</span>
-            </>
-          )}
-        </div>
+        <LigarComputadorNovo />
         <DialogFooter>
           <Button variant="outline" onClick={aoFechar}>
             {t("comum.fechar")}
@@ -375,179 +362,221 @@ function DialogoLigar({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => v
   )
 }
 
-/** O caminho sem o painel: a frase sai no terminal do computador que já tem a chave. */
-function LigarPeloTerminal({ codigoAcesso }: { codigoAcesso?: string | null }) {
-  const { t } = useT()
-  return (
-    <ol className="flex flex-col gap-4 text-sm">
-      <li className="flex flex-col gap-2">
-        <span>
-          <strong className="mr-1">1.</strong>
-          {t("computadores.ligacao.passo1")}
-        </span>
-        <Codigo texto="reveza ligar" />
-        <span className="text-xs text-muted-foreground">{t("computadores.ligacao.passo1Dica")}</span>
-      </li>
-      <li className="flex flex-col gap-2">
-        <span>
-          <strong className="mr-1">2.</strong>
-          {t("computadores.ligacao.passo2")}
-        </span>
-        <ComandoPorSistema extra="--ligar" />
-        {codigoAcesso ? (
-          <>
-            <span className="text-xs text-muted-foreground">{t("computadores.ligacao.codigo")}</span>
-            <Codigo texto={codigoAcesso} className="[&_pre]:break-all [&_pre]:whitespace-pre-wrap" />
-          </>
-        ) : null}
-      </li>
-      <li>
-        <strong className="mr-1">3.</strong>
-        {t("computadores.ligacao.passo3")}
-      </li>
-    </ol>
-  )
-}
-
 type EtapaLigar =
   | { tipo: "inicio" }
   | { tipo: "criando" }
-  | { tipo: "confirmar"; codigo: string; computador: string }
-  | { tipo: "pronto"; codigo: string; expiraEm: string }
-  | { tipo: "falhou"; acesso: string | null }
+  | { tipo: "acompanhar"; codigo: string; computadorId: string }
+
+/** As fases em que o painel ainda espera alguma coisa (as outras são o fim: ligado, recusado, vencido). */
+const FASES_EM_CURSO = new Set<FaseLigacao>(["esperando_pedido", "esperando_codigo", "entregue"])
 
 /**
- * Ligar um computador novo em um passo: o painel cria o acesso do computador novo, pede a frase a um computador que
- * já tem a chave do cofre (que pergunta na tela dele, com o código que aparece aqui) e junta tudo num código só. No
- * computador novo, o instalador pede só esse código.
+ * Ligar um computador novo (0.2.0): o painel cria a identidade pendente e mostra o código de acesso, que só deixa o
+ * computador novo pedir para entrar. O computador novo mostra um código de 8 caracteres; a pessoa digita esse código
+ * na janela que abre no computador escolhido aqui (ou `reveza ligar XXXX-XXXX` nele, sem tela). O painel só acompanha.
  */
-function LigarEmUmPasso() {
+function LigarComputadorNovo() {
   const { t, idioma } = useT()
   const { fonte } = useDados()
   const estado = useEstado()
   const agora = useAgora(1000)
   const acao = useAcao()
-  const ligados = estado.computadores.filter((c) => !c.revogado && c.sistema !== "pendente" && estadoComputador(c, agora) === "online")
-  const [pc, setPc] = React.useState(ligados[0]?.id ?? "")
+  const ativos = estado.computadores.filter((c) => !c.revogado && c.sistema !== "pendente")
+  const liberam = ativos.filter((c) => compararVersao(c.versao, VERSAO_MINIMA_PARA_LIBERAR) >= 0)
+  const online = (c: Computador) => estadoComputador(c, agora) === "online"
+  const [pc, setPc] = React.useState(() => (liberam.find(online) ?? liberam[0])?.id ?? "")
   const [etapa, setEtapa] = React.useState<EtapaLigar>({ tipo: "inicio" })
+  const [lig, setLig] = React.useState<EstadoLigacao | null>(null)
   const pendente = React.useRef<string | null>(null)
+  const escolhido = liberam.find((c) => c.id === pc) ?? null
+  const novoId = etapa.tipo === "acompanhar" ? etapa.computadorId : null
+  const emCurso = !lig || FASES_EM_CURSO.has(lig.fase)
+
+  // o andamento: de 2 em 2 segundos enquanto falta alguma coisa
+  React.useEffect(() => {
+    if (!novoId || !emCurso) return
+    let vivo = true
+    const ler = async () => {
+      try {
+        const e = await fonte.estadoLigacao(novoId)
+        if (!vivo) return
+        setLig(e)
+        // entrou: o próximo código não revoga este computador
+        if (e.fase === "ligado") pendente.current = null
+      } catch {
+        // sem conexão por um instante: tenta na próxima volta
+      }
+    }
+    void ler()
+    const id = setInterval(() => void ler(), 2000)
+    return () => {
+      vivo = false
+      clearInterval(id)
+    }
+  }, [fonte, novoId, emCurso])
 
   const gerar = async () => {
     setEtapa({ tipo: "criando" })
+    setLig(null)
     // um código novo invalida o anterior que não chegou a ser usado
     if (pendente.current) await acao(() => fonte.revogarComputador(pendente.current!))
-    const [okAcesso, acesso] = await acao(() => fonte.criarAcessoComputador())
-    if (!okAcesso) return setEtapa({ tipo: "inicio" })
+    pendente.current = null
+    const [ok, acesso] = await acao(() => fonte.criarAcessoComputador())
+    if (!ok || !acesso.computadorId) return setEtapa({ tipo: "inicio" })
     pendente.current = acesso.computadorId
-    const escolhido = ligados.find((c) => c.id === pc) ?? ligados[0]
-    if (!escolhido) return setEtapa({ tipo: "falhou", acesso: acesso.codigo })
-    const [ok, lig] = await acao(() =>
-      fonte.pedirLigacao(escolhido.id, (codigo) => setEtapa({ tipo: "confirmar", codigo, computador: escolhido.nome }))
-    )
-    const dados = lerCodigoDeAcesso(acesso.codigo)
-    if (!ok || !dados) return setEtapa({ tipo: "falhou", acesso: acesso.codigo })
-    setEtapa({ tipo: "pronto", codigo: codigoDeLigacao(dados, lig.palavras), expiraEm: lig.expiraEm })
+    if (escolhido) await acao(() => fonte.escolherAprovador(acesso.computadorId!, escolhido.id))
+    setEtapa({ tipo: "acompanhar", codigo: acesso.codigo, computadorId: acesso.computadorId })
   }
 
-  if (etapa.tipo === "inicio" || etapa.tipo === "criando")
+  const abrirJanela = async (id: string) => {
+    setPc(id)
+    if (!novoId) return
+    const c = liberam.find((x) => x.id === id)
+    await acao(() => fonte.escolherAprovador(novoId, id), t("computadores.ligacao.janelaPedida", { computador: c?.nome ?? "" }))
+  }
+
+  const nomeDe = (c: Computador) => (online(c) ? c.nome : t("computadores.ligacao.foraDoAr", { computador: c.nome }))
+  const seletor = liberam.length > 1 && (
+    <Select value={pc} onValueChange={(v) => void (etapa.tipo === "acompanhar" ? abrirJanela(v) : setPc(v))}>
+      <SelectTrigger id="ligar-pc" className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {liberam.map((c) => (
+          <SelectItem key={c.id} value={c.id}>
+            {nomeDe(c)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  if (etapa.tipo !== "acompanhar") {
+    const atrasado = ativos.find((c) => compararVersao(c.versao, VERSAO_MINIMA_PARA_LIBERAR) < 0)
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm">
-          {ligados.length
-            ? t("computadores.ligacao.umPasso.inicio", { computador: (ligados.find((c) => c.id === pc) ?? ligados[0])!.nome })
-            : t("computadores.ligacao.semLigado")}
-        </p>
-        {ligados.length > 1 ? (
-          <Field>
-            <FieldLabel htmlFor="ligar-pc">{t("computadores.ligacao.pedirA")}</FieldLabel>
-            <Select value={pc} onValueChange={setPc}>
-              <SelectTrigger id="ligar-pc" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ligados.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        ) : null}
-        <Button onClick={() => void gerar()} disabled={etapa.tipo === "criando"} className="self-start">
-          {etapa.tipo === "criando" ? <Spinner /> : null}
-          {t("computadores.ligacao.umPasso.gerar")}
-        </Button>
-        <OutroJeito />
+        {!ativos.length ? (
+          <Alert>
+            <AlertDescription>{t("computadores.ligacao.semLigado")}</AlertDescription>
+          </Alert>
+        ) : !liberam.length ? (
+          <Alert className="border-atencao-borda bg-atencao-fundo">
+            <AlertDescription>
+              {t("computadores.ligacao.atualizeAntes", { versao: VERSAO_MINIMA_PARA_LIBERAR, computador: atrasado?.nome ?? "" })}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            {seletor ? (
+              <Field>
+                <FieldLabel htmlFor="ligar-pc">{t("computadores.ligacao.ondeDigitar")}</FieldLabel>
+                {seletor}
+              </Field>
+            ) : (
+              <p className="text-sm">{t("computadores.ligacao.inicio", { computador: escolhido?.nome ?? "" })}</p>
+            )}
+            <Button onClick={() => void gerar()} disabled={etapa.tipo === "criando"} className="self-start">
+              {etapa.tipo === "criando" ? <Spinner /> : <KeyRoundIcon />}
+              {t("computadores.ligacao.gerar")}
+            </Button>
+          </>
+        )}
       </div>
     )
+  }
 
-  if (etapa.tipo === "confirmar")
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border p-4 text-center" aria-live="polite">
-        <Spinner />
-        <p className="text-sm">{t("computadores.ligacao.umPasso.confirme", { computador: etapa.computador })}</p>
-        <p className="font-mono text-3xl font-semibold tracking-[0.3em]" aria-label={etapa.codigo.split("").join(" ")}>
-          {etapa.codigo}
-        </p>
-        <p className="text-xs text-muted-foreground">{t("computadores.ligacao.umPasso.confirmeDica")}</p>
-      </div>
-    )
-
-  if (etapa.tipo === "falhou")
-    return (
-      <div className="flex flex-col gap-3">
-        <Alert>
-          <AlertDescription>{t("computadores.ligacao.umPasso.falhou")}</AlertDescription>
-        </Alert>
-        <LigarPeloTerminal codigoAcesso={etapa.acesso} />
-        <Button variant="outline" onClick={() => void gerar()} className="self-start">
-          {t("computadores.ligacao.umPasso.tentarDeNovo")}
-        </Button>
-      </div>
-    )
-
-  const restante = (new Date(etapa.expiraEm).getTime() - agora.getTime()) / 1000
-  const venceu = restante <= 0
+  const novo = estado.computadores.find((c) => c.id === etapa.computadorId)
+  const restante = lig?.expiraEm ? (new Date(lig.expiraEm).getTime() - agora.getTime()) / 1000 : null
+  const fase = lig?.fase ?? "esperando_pedido"
+  const fim = fase === "recusado" || fase === "vencido"
+  const nomeAprovador = escolhido?.nome ?? ""
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm">
-        <strong className="mr-1">1.</strong>
-        {t("computadores.ligacao.umPasso.rode")}
-      </p>
-      <ComandoPorSistema extra="--ligar" />
-      <p className="text-sm">
-        <strong className="mr-1">2.</strong>
-        {t("computadores.ligacao.umPasso.cole")}
-      </p>
-      <Codigo texto={etapa.codigo} className={cn("[&_pre]:break-all [&_pre]:whitespace-pre-wrap", venceu && "opacity-40")} />
-      <span className={cn("text-xs tabular-nums", venceu ? "text-erro" : "text-muted-foreground")} aria-live="polite">
-        {venceu
-          ? t("computadores.ligacao.expirou")
-          : t("computadores.ligacao.expira", { tempo: fmtDuracao(restante, idioma) })}
-      </span>
-      <p className="text-xs text-muted-foreground">{t("computadores.ligacao.umPasso.segredo")}</p>
-      {venceu ? (
-        <Button variant="outline" onClick={() => void gerar()} className="self-start">
-          {t("computadores.ligacao.umPasso.tentarDeNovo")}
-        </Button>
-      ) : null}
+    <div className="flex flex-col gap-4">
+      <ol className="flex flex-col gap-4 text-sm">
+        <Passo n={1} feito={fase !== "esperando_pedido"}>
+          <span>{t("computadores.ligacao.passoRodar")}</span>
+          <ComandoPorSistema extra="--ligar" />
+        </Passo>
+        <Passo n={2} feito={fase !== "esperando_pedido"}>
+          <span>{t("computadores.ligacao.passoColar")}</span>
+          <Codigo texto={etapa.codigo} className="[&_pre]:break-all [&_pre]:whitespace-pre-wrap" />
+          <span className="text-xs text-muted-foreground">{t("computadores.ligacao.acessoAviso")}</span>
+        </Passo>
+        <Passo n={3} feito={fase === "entregue" || fase === "ligado"}>
+          <span>{t("computadores.ligacao.passoDigitar", { computador: nomeAprovador })}</span>
+          <span className="text-xs text-muted-foreground">{t("computadores.ligacao.semTela")}</span>
+          <Codigo texto="reveza ligar XXXX-XXXX" />
+          {seletor ? (
+            <Field>
+              <FieldLabel htmlFor="ligar-pc" className="text-xs text-muted-foreground">
+                {t("computadores.ligacao.outroComputador")}
+              </FieldLabel>
+              {seletor}
+            </Field>
+          ) : null}
+        </Passo>
+      </ol>
+      <div
+        className={cn(
+          "flex flex-col gap-2 rounded-lg p-3 text-sm",
+          fim ? "border border-atencao-borda bg-atencao-fundo" : "bg-muted/60"
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex items-start gap-2">
+          {fase === "ligado" ? (
+            <CircleCheckIcon className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />
+          ) : fim ? (
+            <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-atencao" aria-hidden />
+          ) : (
+            <Spinner className="mt-0.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className={cn(fase === "ligado" ? "text-ok" : fim ? "text-foreground" : "text-muted-foreground")}>
+            {fase === "ligado"
+              ? t("computadores.ligacao.fase.ligado", { computador: novo?.nome ?? "" })
+              : fase === "recusado"
+                ? t(`computadores.ligacao.fase.${lig?.motivo ?? "recusado_na_tela"}`)
+                : t(`computadores.ligacao.fase.${fase}`, { computador: nomeAprovador })}
+          </span>
+        </div>
+        {fase === "esperando_codigo" && restante !== null && restante > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 pl-6">
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {t("computadores.ligacao.expira", { tempo: fmtDuracao(restante, idioma) })}
+            </span>
+            {escolhido ? (
+              <Button variant="outline" size="sm" onClick={() => void abrirJanela(escolhido.id)}>
+                {t("computadores.ligacao.janelaDeNovo")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+        {fim ? (
+          <Button variant="outline" size="sm" onClick={() => void gerar()} className="ml-6 self-start">
+            {t("computadores.ligacao.tentarDeNovo")}
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }
 
-/** O jeito antigo, para quem prefere (ou não tem o outro computador ligado agora). */
-function OutroJeito() {
-  const { t } = useT()
+/** Um passo numerado (o número vira um visto quando o passo já foi). */
+function Passo({ n, feito, children }: { n: number; feito: boolean; children: React.ReactNode }) {
   return (
-    <Collapsible>
-      <CollapsibleTrigger className="text-xs text-muted-foreground underline underline-offset-4">
-        {t("computadores.ligacao.umPasso.outroJeito")}
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pt-3">
-        <LigarPeloTerminal />
-      </CollapsibleContent>
-    </Collapsible>
+    <li className="flex gap-3">
+      <span
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums",
+          feito ? "border-ok/40 bg-ok/10 text-ok" : "bg-background"
+        )}
+        aria-hidden
+      >
+        {feito ? <CheckIcon className="size-3.5" /> : n}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
+    </li>
   )
 }
 

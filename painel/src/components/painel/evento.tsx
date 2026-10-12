@@ -80,6 +80,13 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
     const motivo = d.atualizacao === "falhou" && typeof d.motivo === "string" ? d.motivo.slice(0, 200) : null
     return { titulo: t(chave, v), detalhe: motivo ?? (d.sozinho === true ? t("evento.atualizacaoSozinho") : null) }
   }
+  // computador novo (0.2.0): o pedido, a entrega da chave e a recusa vêm da nuvem com os dados de cada um
+  if (d.ligacao === "pedido") return { titulo: t("evento.ligacaoPedido"), detalhe: null }
+  if (d.ligacao === "entregue") return { titulo: t("evento.ligacaoEntregue", { por: pc(d.por) }), detalhe: null }
+  if (d.ligacao === "recusado") {
+    const motivo = d.motivo === "dois_pedidos" || d.motivo === "codigo_errado" ? d.motivo : "recusado_na_tela"
+    return { titulo: t("evento.ligacaoRecusada"), detalhe: t(`evento.ligacaoMotivo.${motivo}`, { por: pc(d.por) }) }
+  }
   let titulo: string
   let detalhe: string | null = null
   switch (e.tipo) {

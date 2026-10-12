@@ -289,9 +289,21 @@ export interface Comando {
   resposta: Record<string, unknown> | null
 }
 
-export interface Ligacao {
-  palavras: string[]
-  expiraEm: string
+/**
+ * O andamento da ligação de um computador novo (0.2.0), como o painel acompanha: esperando ele pedir, esperando a
+ * pessoa digitar o código dele no computador escolhido, chave entregue, ligado; ou recusado / vencido.
+ */
+export type FaseLigacao = "esperando_pedido" | "esperando_codigo" | "entregue" | "ligado" | "recusado" | "vencido"
+
+export type MotivoRecusaLigacao = "recusado_na_tela" | "dois_pedidos" | "codigo_errado"
+
+export interface EstadoLigacao {
+  fase: FaseLigacao
+  /** O computador onde a janela abre (o que o painel escolheu). */
+  aprovadorId: string | null
+  /** Quando o pedido vence (10 minutos depois de o computador novo pedir). */
+  expiraEm: string | null
+  motivo: MotivoRecusaLigacao | null
 }
 
 /** Tudo o que as telas leem de uma vez (o resto vem sob demanda: uso, sessões, histórico, auditoria). */

@@ -3,7 +3,7 @@
 // na versão do pacote (um deles uma atrás, para o aviso de atualização), 30 dias de uso, sessões, eventos e o resto.
 // O gerador é determinístico pela semente: a mesma semente e o mesmo "agora" dão os mesmos dados (os testes contam com isso).
 
-import { abrirEnvelope, cifrarParaNavegador, codigoDeAcesso, codigoDeConfirmacao, criarPedido } from "@/lib/ligacao"
+import { codigoDeAcesso } from "@/lib/ligacao"
 import { proximaCorLivre } from "@/lib/cores"
 import { versao as versaoDoInstalador } from "@/lib/instalador"
 import { localizarDemo } from "./demo-idioma"
@@ -26,7 +26,7 @@ import type {
   Idioma,
   Instantaneo,
   Intervalo,
-  Ligacao,
+  EstadoLigacao,
   LinhaUso,
   Membro,
   NovoAlerta,
@@ -53,16 +53,6 @@ export function criarSorteio(semente: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
-
-export const PALAVRAS = (
-  "abacate agulha alface amora anel areia arroz astro balde banco barco batata bicho bolo bota brisa cabra cadeira " +
-  "caju calor cama canela canoa caqui carro casa cebola cenoura cesta chave chuva cidade cinema circo coco colher " +
-  "copo coruja couve cravo dado dente doce escada espelho estrela faca farol feijao festa figo flor fogo folha fonte " +
-  "forno fruta gato gelo girafa goiaba grama horta ilha janela jardim lago lapis laranja leite limao livro lobo lua " +
-  "macaco manga mapa mesa milho morango mundo navio neve ninho nuvem olho onda palha panela pato peixe pera pipa " +
-  "planeta ponte porta praia queijo rato rede relogio roda rosa sapo seda sino sopa tambor tapete teia telha tigre " +
-  "trem trigo uva vaca vela vento vidro viola zebra"
-).split(" ")
 
 /** Preço por milhão de tokens de cada modelo de exemplo: entrada, saída, gravação e leitura de cache. */
 export const PRECOS: Record<string, [number, number, number, number]> = {
@@ -716,7 +706,6 @@ export interface OpcoesDemo {
 export class FonteDemo implements Fonte {
   readonly demo = true
   readonly recursos: Recursos = {
-    ligacaoNoPainel: true,
     testarAlerta: true,
     testarWebhook: true,
     cancelarConvite: true,
@@ -730,6 +719,8 @@ export class FonteDemo implements Fonte {
   private relogio: ReturnType<typeof setInterval> | null = null
   private comRelogio: boolean
   private idioma: Idioma = "pt-BR"
+  /** Ligações de computador novo encenadas: quando o código foi criado e onde a janela abre. */
+  private ligacoesDemo = new Map<string, { criadoEm: number; aprovador: string | null }>()
 
   constructor(opcoes: OpcoesDemo = {}) {
     this.agora = opcoes.agora ?? (() => new Date())
@@ -1059,7 +1050,22 @@ export class FonteDemo implements Fonte {
 
   async criarAcessoComputador(): Promise<{ codigo: string; computadorId: string | null }> {
     await esperar(this.atrasoMs)
+    // como na nuvem: a identidade pendente aparece na lista desde já, e pode ser revogada
+    const id = `pc-novo-${this.d.computadores.length + 1}`
+    this.d.computadores.push({
+      id,
+      nome: "Computador novo",
+      sistema: "pendente",
+      versao: "",
+      vistoEm: null,
+      revogado: false,
+      criadoEm: this.agora().toISOString(),
+      diagnostico: null,
+      atribuicao: null,
+    })
+    this.ligacoesDemo.set(id, { criadoEm: this.agora().getTime(), aprovador: null })
     this.auditar("computador_novo", "acesso criado")
+    this.emitir()
     return {
       codigo: codigoDeAcesso({
         u: "https://exemplo.supabase.co",
@@ -1067,25 +1073,40 @@ export class FonteDemo implements Fonte {
         e: "pc-exemplo@computadores.reveza.invalid",
         s: "senha-de-exemplo",
       }),
-      computadorId: null,
+      computadorId: id,
     }
   }
 
-  async pedirLigacao(computadorId: string, aoPedir?: (codigoDeConfirmacao: string) => void): Promise<Ligacao> {
-    const pc = this.computador(computadorId)
-    if (pc.revogado) throw new ErroPainel("computador_revogado")
-    // O caminho real, encenado aqui: este navegador cria o par de chaves; o "computador" pergunta na tela dele (o
-    // clique é de mentira, depois de um instante) e cifra a frase para este navegador.
-    const pedido = await criarPedido()
-    aoPedir?.(await codigoDeConfirmacao(pedido.publica))
-    await esperar(this.atrasoMs * 3)
-    const bytes = crypto.getRandomValues(new Uint32Array(6))
-    const palavras = [...bytes].map((n) => PALAVRAS[n % PALAVRAS.length])
-    const expiraEm = new Date(this.agora().getTime() + 10 * MIN).toISOString()
-    const envelope = await cifrarParaNavegador(pedido.publica, { palavras, expiraEm })
-    this.auditar("comando", `${pc.nome} · ligar`)
+  async escolherAprovador(computadorNovoId: string, aprovadorId: string) {
+    await esperar(this.atrasoMs)
+    const lig = this.ligacoesDemo.get(computadorNovoId)
+    if (!lig || this.computador(computadorNovoId).revogado) throw new ErroPainel("computador_revogado")
+    if (this.computador(aprovadorId).revogado) throw new ErroPainel("computador_revogado")
+    lig.aprovador = aprovadorId
+  }
+
+  /**
+   * O caminho real, encenado: o computador novo "pede" 5 s depois do código, a pessoa "digita" o código dele 10 s
+   * depois no computador escolhido, e ele entra 2 s depois disso.
+   */
+  async estadoLigacao(computadorNovoId: string): Promise<EstadoLigacao> {
+    const lig = this.ligacoesDemo.get(computadorNovoId)
+    const pc = this.d.computadores.find((c) => c.id === computadorNovoId)
+    const base = { aprovadorId: lig?.aprovador ?? null, expiraEm: null, motivo: null }
+    if (!lig || !pc || pc.revogado) return { ...base, fase: "esperando_pedido" }
+    if (pc.sistema !== "pendente") return { ...base, fase: "ligado" }
+    const passou = this.agora().getTime() - lig.criadoEm
+    const expiraEm = new Date(lig.criadoEm + 5_000 + 10 * MIN).toISOString()
+    if (passou < 5_000) return { ...base, fase: "esperando_pedido" }
+    if (passou < 15_000 || !lig.aprovador) return { ...base, expiraEm, fase: "esperando_codigo" }
+    if (passou < 17_000) return { ...base, expiraEm, fase: "entregue" }
+    pc.nome = this.idioma === "en" ? "New laptop" : "Notebook novo"
+    pc.sistema = "macos"
+    pc.versao = this.d.computadores[0]?.versao ?? ""
+    pc.vistoEm = this.agora().toISOString()
+    this.evento("info", "Computador novo liberado: a chave do cofre foi entregue cifrada só para ele.", { computador: pc.id })
     this.emitir()
-    return abrirEnvelope<Ligacao>(pedido.privada, envelope)
+    return { ...base, expiraEm, fase: "ligado" }
   }
 
   revogarComputador(id: string) {

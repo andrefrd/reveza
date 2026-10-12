@@ -53,3 +53,20 @@ describe("textoEvento da atualização", () => {
     expect(lixo.titulo).toContain('"de":"?","para":"?"')
   })
 })
+
+describe("textoEvento da ligação de computador novo", () => {
+  const t = ((k: string, v?: Record<string, unknown>) => `[${k}${v ? ` ${JSON.stringify(v)}` : ""}]`) as never
+  const estado = { contas: [], computadores: [{ id: "pc-1", nome: "MacBook" } as never, { id: "pc-n", nome: "Computador novo" } as never] }
+  const evento = (tipo: "info" | "aviso", dados: Record<string, unknown>) => ({ id: 1, em: "2026-10-12T10:00:00.000Z", tipo, texto: "x", dados })
+  it("pedido, entrega (por quem) e recusa (com o motivo), sem ler o texto do banco", async () => {
+    const { textoEvento } = await import("./evento")
+    const i = { t, tx: t, idioma: "pt-BR" } as never
+    expect(textoEvento(evento("info", { computador: "pc-n", ligacao: "pedido" }), estado, i).titulo).toBe("[evento.ligacaoPedido]")
+    expect(textoEvento(evento("info", { computador: "pc-n", por: "pc-1", ligacao: "entregue" }), estado, i).titulo).toBe('[evento.ligacaoEntregue {"por":"MacBook"}]')
+    const r = textoEvento(evento("aviso", { computador: "pc-n", por: "pc-1", ligacao: "recusado", motivo: "codigo_errado" }), estado, i)
+    expect(r.titulo).toBe("[evento.ligacaoRecusada]")
+    expect(r.detalhe).toBe('[evento.ligacaoMotivo.codigo_errado {"por":"MacBook"}]')
+    const lixo = textoEvento(evento("aviso", { por: "pc-1", ligacao: "recusado", motivo: "constructor" }), estado, i)
+    expect(lixo.detalhe).toContain("evento.ligacaoMotivo.recusado_na_tela")
+  })
+})

@@ -79,8 +79,8 @@ const INTERACOES = [
         .getByRole("button", { name: L("Ligar computador novo", "Link new computer") })
         .first()
         .click()
-      await p.getByRole("button", { name: L("Pedir a frase", "Request the phrase") }).click()
-      await p.getByText(L("Frase de ligação", "Link phrase")).waitFor()
+      await p.getByRole("button", { name: L("Gerar o código de acesso", "Generate the access code") }).click()
+      await p.getByText(L("Quando ele pedir, cole este código de acesso:", "When it asks, paste this access code:")).waitFor()
     },
   ],
   [

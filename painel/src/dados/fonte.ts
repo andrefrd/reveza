@@ -13,7 +13,7 @@ import type {
   Idioma,
   Instantaneo,
   Intervalo,
-  Ligacao,
+  EstadoLigacao,
   LinhaUso,
   NovoAlerta,
   Papel,
@@ -28,8 +28,6 @@ export type CamposConta = Partial<Pick<Conta, "cor" | "prioridade" | "reserva" |
 
 /** O que cada fonte sabe fazer. A tela esconde ou desliga o que a nuvem ainda não oferece. */
 export interface Recursos {
-  /** A frase de ligação aparece no próprio painel (cifrada para o navegador). Sem isso, ela sai no terminal. */
-  ligacaoNoPainel: boolean
   testarAlerta: boolean
   testarWebhook: boolean
   cancelarConvite: boolean
@@ -61,14 +59,16 @@ export interface Fonte {
   trocarAgora(computadorId: string, contaId: string): Promise<void>
   comando(computadorId: string, acao: AcaoComando, corpo?: Record<string, unknown>): Promise<Comando>
   lerComando(id: number): Promise<Comando | null>
-  /** Só quando recursos.ligacaoNoPainel: pede a frase a um computador que já tem a chave do cofre. */
-  pedirLigacao(computadorId: string, aoPedir?: (codigoDeConfirmacao: string) => void): Promise<Ligacao>
   /**
-   * Cria a identidade de um computador novo (administrador com duas etapas) e devolve o código de acesso que o
-   * instalador pede (--ligar). O código leva a senha do computador: aparece uma vez só.
+   * Cria a identidade pendente de um computador novo (administrador com duas etapas) e devolve o código de acesso que
+   * o instalador pede (--ligar, rvzc_). O código só deixa o computador novo pedir para entrar: não abre o cofre.
+   * `computadorId` é a linha pendente (revogável) que ele criou.
    */
-  /** O código de acesso de um computador novo; `computadorId` é a linha pendente (revogável) que ele criou. */
   criarAcessoComputador(): Promise<{ codigo: string; computadorId: string | null }>
+  /** O computador (que já tem a chave do cofre) onde a janela de liberar abre, na língua do painel. De novo: abre de novo. */
+  escolherAprovador(computadorNovoId: string, aprovadorId: string): Promise<void>
+  /** O andamento da ligação de um computador novo (o painel pergunta de tempos em tempos). */
+  estadoLigacao(computadorNovoId: string): Promise<EstadoLigacao>
   revogarComputador(id: string): Promise<void>
 
   criarAlerta(alerta: NovoAlerta): Promise<void>
