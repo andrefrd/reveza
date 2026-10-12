@@ -64,10 +64,16 @@ export function refDaNuvem(url: string | null | undefined): string | null {
 }
 
 /**
- * Os tokens alcançam o que a publicação precisa? O do Supabase, o projeto desta instalação; o da Vercel, a conta.
- * Recusado volta com o que fazer (sem nada do token).
+ * Os tokens alcançam o que a publicação precisa? O do Supabase, o projeto desta instalação; o da Vercel, o projeto do
+ * painel (na equipe dele), quando a nuvem já sabe qual é, ou a conta. Recusado volta com o que fazer (sem nada do token).
+ * Pelo projeto, e não pela conta, porque o token de escopo só no time (o recomendado) pode não ler a conta.
  */
-export async function conferirTokens(t: Tokens, ref: string, f: typeof fetch = fetch): Promise<{ ok: true } | { ok: false; erro: string }> {
+export async function conferirTokens(
+  t: Tokens,
+  ref: string,
+  f: typeof fetch = fetch,
+  painel: { projeto: string; equipe: string | null } | null = null,
+): Promise<{ ok: true } | { ok: false; erro: string }> {
   const pedir = async (url: string, token: string) => {
     try {
       const r = await f(url, { headers: { Authorization: `Bearer ${token}` }, redirect: "error", signal: AbortSignal.timeout(20_000) });
@@ -79,9 +85,19 @@ export async function conferirTokens(t: Tokens, ref: string, f: typeof fetch = f
   const s = await pedir(`https://api.supabase.com/v1/projects/${ref}`, t.supabase);
   if (s === 0) return { ok: false, erro: "não consegui falar com o Supabase agora (rede?)" };
   if (s !== 200) return { ok: false, erro: `o token do Supabase não alcança o projeto ${ref} (resposta ${s}): confira se é um token pessoal da conta dona da organização do projeto` };
-  const v = await pedir("https://api.vercel.com/v2/user", t.vercel);
+  const urlVercel = painel
+    ? `https://api.vercel.com/v9/projects/${encodeURIComponent(painel.projeto)}${painel.equipe ? `?teamId=${encodeURIComponent(painel.equipe)}` : ""}`
+    : "https://api.vercel.com/v2/user";
+  const v = await pedir(urlVercel, t.vercel);
   if (v === 0) return { ok: false, erro: "não consegui falar com a Vercel agora (rede?)" };
-  if (v !== 200) return { ok: false, erro: `o token da Vercel foi recusado (resposta ${v})` };
+  if (v !== 200) {
+    return {
+      ok: false,
+      erro: painel
+        ? `o token da Vercel não alcança o projeto ${painel.projeto} do painel (resposta ${v}): crie o token com escopo no time dele`
+        : `o token da Vercel foi recusado (resposta ${v})`,
+    };
+  }
   return { ok: true };
 }
 

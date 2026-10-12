@@ -200,6 +200,8 @@ export interface Nuvem {
   /** Os tokens cifrados (só computador ativo lê; sem a chave do cofre, não abre). */
   credenciaisLer(): Promise<{ supabase: (TokenNuvem & { gravadoEm: string | null }) | null; vercel: (TokenNuvem & { gravadoEm: string | null }) | null }>;
   credenciaisApagar(): Promise<{ ok: boolean }>;
+  /** Os dados do painel na Vercel (projeto e equipe), para conferir o token da Vercel. Null: a nuvem ainda não sabe. */
+  painelPublicacao(): Promise<{ projeto: string; equipe: string | null } | null>;
   /** A vez de publicar as funções e o painel da versão em que a nuvem está (um computador por vez). */
   vezDePublicar(para: string): Promise<{ pode: boolean; motivo: string | null; funcoes: boolean; painel: boolean }>;
   /** Como terminou a publicação (concluída marca o que está no ar; falhou vira alerta e segura os computadores). */

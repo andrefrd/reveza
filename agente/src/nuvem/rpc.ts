@@ -291,6 +291,14 @@ export class NuvemRpc implements Nuvem {
     return { supabase: um(r.supabase), vercel: um(r.vercel) };
   }
 
+  async painelPublicacao() {
+    const r = await this.chamar("agente_painel_publicacao", {});
+    const p = r.painel && typeof r.painel === "object" ? (r.painel as Record<string, unknown>) : null;
+    if (!p || typeof p.projeto !== "string" || !/^[a-z0-9][a-z0-9-]{0,98}$/.test(p.projeto)) return null;
+    const equipe = typeof p.equipe === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(p.equipe) ? p.equipe : null;
+    return { projeto: p.projeto, equipe };
+  }
+
   async credenciaisApagar() {
     const r = await this.chamar("agente_credenciais_apagar", {});
     return { ok: r.ok === true };

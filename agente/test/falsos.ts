@@ -575,6 +575,12 @@ export class NuvemFalsa implements Nuvem {
     return { supabase: c.supabase ? { ...c.supabase } : null, vercel: c.vercel ? { ...c.vercel } : null };
   }
 
+  async painelPublicacao() {
+    this.registrarChamada("painelPublicacao");
+    const p = this.banco.config.painel_publicacao as { projeto?: string; equipe?: string | null } | undefined;
+    return p?.projeto ? { projeto: p.projeto, equipe: p.equipe ?? null } : null;
+  }
+
   async credenciaisApagar() {
     this.registrarChamada("credenciaisApagar");
     this.banco.credenciais = {};

@@ -25,6 +25,7 @@ grant execute on function
   public.agente_vez_de_atualizar(text, text), public.agente_atualizacao_resultado(text, text, text), public.agente_migracoes(),
   public.agente_credenciais_guardar(text, text, text, text, text), public.agente_credenciais_atualizacao(),
   public.agente_credenciais_apagar(), public.agente_vez_de_publicar(text), public.agente_publicacao_resultado(text, text, text),
+  public.agente_painel_publicacao(),
   public.agente_ligacao_pedir(jsonb), public.agente_ligacao_receber(), public.agente_ligacoes_abertas(),
   public.agente_ligacao_entregar(uuid, jsonb, jsonb), public.agente_ligacao_recusar(uuid, text),
   public.painel_ligacao_aprovador(uuid, uuid, text),

@@ -877,7 +877,10 @@ async function cmdCompleta(amb: Ambiente, a: Args): Promise<number> {
     amb.erro("faltam os dois tokens (o do Supabase e o da Vercel), cada um numa linha só");
     return 2;
   }
-  const conferido = await conferirTokens(tokens, ref, amb.fetch ?? fetch);
+  // o computador da instalação nova pode ainda não ter feito a primeira busca: registra (o mesmo que o agente faz)
+  await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO).catch(() => undefined);
+  const painel = await nuvem.painelPublicacao().catch(() => null);
+  const conferido = await conferirTokens(tokens, ref, amb.fetch ?? fetch, painel);
   if (!conferido.ok) {
     amb.erro(`não liguei: ${conferido.erro}`);
     return 1;

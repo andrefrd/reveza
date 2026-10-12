@@ -97,6 +97,12 @@ describe("os tokens cifrados com a chave do cofre", () => {
     assert.equal(pedidos[0]!.url, `https://api.supabase.com/v1/projects/${REF}`);
     assert.equal(pedidos[0]!.auth, `Bearer ${TOKENS.supabase}`);
     assert.equal(pedidos[1]!.auth, `Bearer ${TOKENS.vercel}`);
+    // com a nuvem sabendo o projeto do painel: confere o projeto na equipe (o token de escopo no time pode não ler a conta)
+    pedidos.length = 0;
+    assert.deepEqual(await conferirTokens(TOKENS, REF, f({ "api.supabase.com": 200, "/v9/projects/reveza?teamId=team_x": 200 }), { projeto: "reveza", equipe: "team_x" }), { ok: true });
+    assert.equal(pedidos[1]!.url, "https://api.vercel.com/v9/projects/reveza?teamId=team_x");
+    const semProjeto = await conferirTokens(TOKENS, REF, f({ "api.supabase.com": 200, "api.vercel.com": 403 }), { projeto: "reveza", equipe: null });
+    assert.match((semProjeto as { erro: string }).erro, /não alcança o projeto reveza do painel/);
     const ruim = await conferirTokens(TOKENS, REF, f({ "api.supabase.com": 403 }));
     assert.equal(ruim.ok, false);
     assert.match((ruim as { erro: string }).erro, /não alcança o projeto abcdefghijklmnopqrst/);
@@ -167,7 +173,9 @@ describe("reveza atualizacao-completa", () => {
 
   test("ligar: pede os dois sem eco, avisa o que custa, confere, cifra e guarda; nada em claro na saída, no disco ou na nuvem", async () => {
     const a = await ambiente();
+    a.banco.config.painel_publicacao = { projeto: "reveza", equipe: "team_x", url: "https://reveza.vercel.app" };
     assert.equal(await executarCli(["atualizacao-completa", "ligar"], a.amb), 0, a.erros.join("\n"));
+    assert.ok(a.banco.chamadas.some((c) => c.fn === "registrar"), "registra o computador antes (instalação nova)");
     assert.deepEqual(a.perguntas.map((q) => q.split(" (")[0]), ["Token do Supabase", "Token da Vercel"]);
     const texto = a.saidas.join("\n");
     assert.match(texto, /CIFRADOS com a chave do cofre/);

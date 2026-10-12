@@ -226,6 +226,15 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- Os dados do painel na Vercel (projeto, equipe, domínio, endereços; nada de token), para o computador conferir que o
+-- token da Vercel alcança o projeto antes de guardar e para publicar.
+create or replace function public.agente_painel_publicacao() returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  perform public.rvz_exigir_computador();
+  return jsonb_build_object('painel', public.rvz_cfg('painel_publicacao', 'null'));
+end $$;
+
 -- Os tokens cifrados, para o computador que vai publicar (só computador ativo; quem não tem a chave não abre).
 create or replace function public.agente_credenciais_atualizacao() returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$

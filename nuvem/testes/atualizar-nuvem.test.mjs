@@ -213,7 +213,11 @@ test("as funções da nuvem não estão liberadas para ninguém de fora; as nova
   }
   const liberadas = await b.sql(`select p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace
     and p.proname in ('agente_credenciais_guardar', 'agente_credenciais_atualizacao', 'agente_credenciais_apagar',
-                      'agente_vez_de_publicar', 'agente_publicacao_resultado', 'painel_credenciais_apagar')
+                      'agente_vez_de_publicar', 'agente_publicacao_resultado', 'painel_credenciais_apagar', 'agente_painel_publicacao')
     and has_function_privilege('authenticated', p.oid, 'execute')`);
-  assert.equal(liberadas.length, 6);
+  assert.equal(liberadas.length, 7);
+  // os dados do painel: só para computador, sem token
+  await b.config("painel_publicacao", { projeto: "reveza", equipe: "team_x", url: "https://reveza.vercel.app" });
+  assert.deepEqual((await b.rpc(pc1, "agente_painel_publicacao")).painel.projeto, "reveza");
+  await assert.rejects(b.rpc(admin, "agente_painel_publicacao"), /só computador/);
 });
