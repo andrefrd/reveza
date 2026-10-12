@@ -125,58 +125,73 @@ try {
       if (c && c.estado !== "pendente" && c.estado !== "reservado") { estadoCmd = c; break; }
     }
     conferir("comando do painel chega ao computador e volta feito", estadoCmd && estadoCmd.estado === "feito", JSON.stringify(estadoCmd));
-    // ligar computador novo pelo painel: sem a permissão do computador, recusa; com ela, a frase volta cifrada
-    // para a chave efêmera deste "navegador"
-    const { spawnSync } = await import("node:child_process");
-    spawnSync(process.execPath, [cli, "ligar", "--painel", "ligar"], { env });
-    const { webcrypto } = await import("node:crypto");
-    const par = await webcrypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
-    const jwk = await webcrypto.subtle.exportKey("jwk", par.publicKey);
-    const [{ r: lig }] = await sql(comoAdmin(adminId, `public.painel_comando(${uuid(pc)}, ${texto("ligar")}, ${jsonb({ publica: { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y }, idioma: "pt-BR" })})`));
-    let resp = null;
-    for (let i = 0; i < 30 && !resp; i++) {
-      await esperar(1000);
-      const [c] = await sql("select estado::text as estado, resposta from public.comandos where id = $1", [lig.id]);
-      if (c && c.estado === "feito") resp = c.resposta;
-      else if (c && c.estado === "recusado") { resp = c.resposta; break; }
-    }
-    const { abrirEnvelopeNavegador } = await import(path.join(home, ".reveza", "app", "agente", "dist", "src", "ligar.js"));
-    let frase = null;
-    try { frase = resp && resp.envelope ? await abrirEnvelopeNavegador(par.privateKey, resp.envelope) : null; } catch { frase = null; }
-    conferir("ligar pelo painel: a frase chega cifrada e só este navegador abre", frase && frase.palavras.length === 6 && !JSON.stringify(resp).includes(frase.palavras.join(" ")), JSON.stringify(resp).slice(0, 120));
-    const [{ abertas }] = await sql("select count(*)::int as abertas from public.ligacoes where usado_em is null and expira_em > now()");
-    conferir("a ligação ficou aberta na nuvem (embrulhada pela frase)", abertas === 1);
+    // o pedido "ligar" do painel antigo (a frase cifrada para o navegador) saiu na 0.2.0
+    const antigo = await sql(comoAdmin(adminId, `public.painel_comando(${uuid(pc)}, ${texto("ligar")}, ${jsonb({ publica: { kty: "EC", crv: "P-256", x: "a".repeat(43), y: "b".repeat(43) }, idioma: "pt-BR" })})`));
+    conferir("o pedido de ligação pelo painel antigo é recusado", !Array.isArray(antigo) && /ligação pelo painel saiu/.test(JSON.stringify(antigo)), JSON.stringify(antigo).slice(0, 160));
 
-    // um SEGUNDO computador entra só com o código de ligação do painel (acesso e frase juntos)
-    if (frase) {
+    // um SEGUNDO computador entra pelo fluxo da 0.2.0: o painel cria a identidade pendente e escolhe onde a janela
+    // abre; o código de acesso (rvzc_) só deixa o computador novo pedir; o código de 8 caracteres aparece NELE; quem tem
+    // a chave libera digitando esse código (aqui, sem tela no contêiner, por `reveza ligar CODIGO`)
+    {
       const senha2 = "s".repeat(20) + Math.random().toString(36).slice(2) + "X9";
       const u = await (await fetch(`${emu.url}/proj/auth/v1/admin/users`, { method: "POST", headers: { apikey: "servico-emulador", "Content-Type": "application/json" },
         body: JSON.stringify({ email: "pc-segundo@computadores.reveza.invalid", password: senha2 }) })).json();
-      await sql("select public.servico_registrar_computador($1, $2)", [u.id, adminId]);
-      // o código de um passo só (o que o painel monta): acesso e frase juntos, nada mais é perguntado
-      const codigo = "rvzl_" + Buffer.from(JSON.stringify({ u: `https://${emu.ref}.supabase.co`, k: "anon-emulador", e: "pc-segundo@computadores.reveza.invalid", s: senha2, f: frase.palavras.join(" ") })).toString("base64url");
+      const [{ r: reg2 }] = await sql("select public.servico_registrar_computador($1, $2) as r", [u.id, adminId]);
+      const pc2 = reg2 && reg2.computador_id;
+      await sql(comoAdmin(adminId, `public.painel_ligacao_aprovador(${uuid(pc2)}, ${uuid(pc)}, ${texto("pt-BR")})`));
+      const codigoAcesso = "rvzc_" + Buffer.from(JSON.stringify({ u: `https://${emu.ref}.supabase.co`, k: "anon-emulador", e: "pc-segundo@computadores.reveza.invalid", s: senha2 })).toString("base64url");
       const home2 = mkdtempSync(path.join(os.tmpdir(), "reveza-e2e-pc2-"));
-      const env2 = { ...env, HOME: home2, REVEZA_CODIGO: codigo };
+      const env2 = { ...env, HOME: home2, REVEZA_CODIGO: codigoAcesso };
       delete env2.SUPABASE_ACCESS_TOKEN;
       delete env2.VERCEL_TOKEN;
       // sem --ligar: o código no ambiente basta para o instalador saber que é um computador novo
-      const r2 = await rodar(process.execPath, ["instalador/instalar.mjs", "--sim", "--sem-servico", "--sem-react-bits"], env2, { saida: false });
-      conferir("segundo computador: o instalador --ligar termina", r2.codigo === 0, r2.codigo === 0 ? "" : r2.texto.slice(-300));
-      const [{ n2 }] = await sql("select count(*)::int as n2 from public.computadores");
+      const p2 = spawn(process.execPath, ["instalador/instalar.mjs", "--sim", "--sem-servico", "--sem-react-bits"], { cwd: RAIZ, env: env2, stdio: ["ignore", "pipe", "pipe"] });
+      let texto2 = "";
+      p2.stdout.on("data", (d) => (texto2 += d));
+      p2.stderr.on("data", (d) => (texto2 += d));
+      let fim2 = null;
+      const terminou2 = new Promise((ok) => p2.on("close", (c) => ok((fim2 = c))));
+      // o instalador compila o agente antes de pedir: o código pode levar alguns minutos para aparecer
+      let codigoLig = null;
+      for (let i = 0; i < 600 && !codigoLig && fim2 === null; i++) {
+        await esperar(1000);
+        codigoLig = (/^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto2) || [])[1] || null;
+      }
+      conferir("computador novo: o código de 8 caracteres aparece nele, em letras grandes", codigoLig && texto2.includes("█"), codigoLig ? "" : texto2.slice(-300));
+      const [ped] = await sql("select publica, envelope from public.ligacao_pedidos where computador_id = $1", [pc2]);
+      conferir("a nuvem guarda só a chave pública do pedido (nada que abra o cofre)", ped && ped.publica && ped.publica.crv === "P-256" && !ped.envelope);
+      conferir("a identidade pendente não entrou antes de receber a chave",
+        (await sql("select sistema from public.computadores where id = $1", [pc2]))[0]?.sistema === "pendente");
+      if (codigoLig) {
+        const { spawnSync } = await import("node:child_process");
+        const errado = spawnSync(process.execPath, [cli, "ligar", "AAAA-AAAA"], { env, encoding: "utf8" });
+        conferir("reveza ligar com o código errado não libera", errado.status !== 0 && /não confere/.test(errado.stderr), (errado.stderr || "").slice(-200));
+        const lib = spawnSync(process.execPath, [cli, "ligar", codigoLig.toLowerCase()], { env, encoding: "utf8" });
+        conferir("reveza ligar CODIGO no computador que tem a chave entrega a chave cifrada", lib.status === 0, (lib.stderr || "").slice(-200));
+      }
+      await Promise.race([terminou2, esperar(120_000)]);
+      if (fim2 === null) p2.kill("SIGTERM");
+      conferir("segundo computador: o instalador --ligar termina", fim2 === 0, fim2 === 0 ? "" : texto2.slice(-300));
+      const [{ n2 }] = await sql("select count(*)::int as n2 from public.computadores where sistema <> 'pendente'");
       conferir("segundo computador registrado na nuvem", n2 === 2, `${n2} computadores`);
-      const [{ usadas }] = await sql("select count(*)::int as usadas from public.ligacoes where usado_em is not null");
-      conferir("segundo computador recebeu a chave do cofre pela frase", usadas === 1 && /recebeu a chave do cofre/.test(r2.texto), "");
+      const [lp] = await sql("select envelope, lido_em from public.ligacao_pedidos where computador_id = $1", [pc2]);
+      conferir("a chave chegou cifrada e foi lida uma vez (o envelope saiu da nuvem)", lp && !lp.envelope && !!lp.lido_em && /recebeu a chave do cofre/.test(texto2));
+      const chave = (h) => { try { return readFileSync(path.join(h, ".reveza", "segredos", "chave-cofre"), "utf8"); } catch { return null; } };
+      conferir("o segundo computador tem a mesma chave do cofre do primeiro", !!chave(home) && chave(home) === chave(home2));
+      conferir("nenhum segredo na saída do computador novo", !texto2.includes(senha2) && !(chave(home) && texto2.includes(chave(home))));
       // atualizar o segundo computador não é instalação nova: nem com os tokens no ambiente ele mexe na nuvem ou no
       // painel, e não pergunta nada disso (12/10/2026, o MacBook do Paulo pedia o token do Supabase)
-      const antes2 = readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8");
-      const consultasAntes = emu.estado.consultas;
-      const at2 = await rodar(process.execPath, ["instalador/instalar.mjs", "--sim", "--sem-servico", "--sem-react-bits", "--atualizar"],
-        { ...env, HOME: home2 }, { saida: false });
-      const depois2 = JSON.parse(readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8"));
-      conferir("atualizar o segundo computador só atualiza o programa dele (sem token, sem nuvem, sem painel)",
-        at2.codigo === 0 && /Computador ligado a uma instalação/.test(at2.texto) && !/Projeto do Supabase|Token da Vercel/.test(at2.texto)
-          && emu.estado.consultas === consultasAntes && JSON.stringify(depois2.nuvem) === JSON.stringify(JSON.parse(antes2).nuvem) && !depois2.painel,
-        at2.codigo === 0 ? `${emu.estado.consultas - consultasAntes} consultas à nuvem` : at2.texto.slice(-300));
+      if (fim2 === 0) {
+        const antes2 = readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8");
+        const consultasAntes = emu.estado.consultas;
+        const at2 = await rodar(process.execPath, ["instalador/instalar.mjs", "--sim", "--sem-servico", "--sem-react-bits", "--atualizar"],
+          { ...env, HOME: home2 }, { saida: false });
+        const depois2 = JSON.parse(readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8"));
+        conferir("atualizar o segundo computador só atualiza o programa dele (sem token, sem nuvem, sem painel)",
+          at2.codigo === 0 && /Computador ligado a uma instalação/.test(at2.texto) && !/Projeto do Supabase|Token da Vercel/.test(at2.texto)
+            && emu.estado.consultas === consultasAntes && JSON.stringify(depois2.nuvem) === JSON.stringify(JSON.parse(antes2).nuvem) && !depois2.painel,
+          at2.codigo === 0 ? `${emu.estado.consultas - consultasAntes} consultas à nuvem` : at2.texto.slice(-300));
+      }
     }
     const [{ n }] = await sql("select count(*)::int as n from public.computadores where id = $1 and visto_em > now() - interval '1 minute'", [pc]);
     conferir("o computador aparece como visto agora", n === 1);

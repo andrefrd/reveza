@@ -269,18 +269,22 @@ test("a troca que valia no computador vai para a nuvem nova", async () => {
   } finally { limpar(); }
 });
 
-test("código de acesso do painel: o instalador lê o que o painel gera", async () => {
+test("código de acesso do painel: o instalador lê o rvzc_ (só pede para entrar) e recusa os antigos, que levavam a frase", async () => {
   const { lerCodigoDeAcesso } = await import("../instalar.mjs");
   const a = { u: "https://abcdefghijklmnopqrst.supabase.co", k: "chave-publica", e: "pc-1@computadores.reveza.invalid", s: "s".repeat(48) };
-  const codigo = "rvzpc_" + Buffer.from(JSON.stringify(a)).toString("base64url");
+  const codigo = "rvzc_" + Buffer.from(JSON.stringify(a)).toString("base64url");
   assert.deepEqual(lerCodigoDeAcesso(codigo), { url: a.u, anon: a.k, email: a.e, senha: a.s });
-  assert.equal(lerCodigoDeAcesso("rvzpc_" + Buffer.from("{}").toString("base64url")), null);
+  assert.deepEqual(lerCodigoDeAcesso(`  ${codigo}\n`), { url: a.u, anon: a.k, email: a.e, senha: a.s }, "colado com espaço");
+  assert.equal(lerCodigoDeAcesso("rvzc_" + Buffer.from("{}").toString("base64url")), null);
+  assert.equal(lerCodigoDeAcesso("rvzc_!!"), null);
   assert.equal(lerCodigoDeAcesso("qualquer coisa"), null);
-  // o de um passo só (rvzl_) traz também a frase, e frase fora do formato invalida o código
-  const um = "rvzl_" + Buffer.from(JSON.stringify({ ...a, f: "Abacate bola casa dado elefante faca" })).toString("base64url");
-  assert.deepEqual(lerCodigoDeAcesso(um), { url: a.u, anon: a.k, email: a.e, senha: a.s, frase: "abacate bola casa dado elefante faca" });
-  assert.equal(lerCodigoDeAcesso("rvzl_" + Buffer.from(JSON.stringify({ ...a, f: "duas palavras" })).toString("base64url")), null);
-  assert.equal(lerCodigoDeAcesso("rvzl_" + Buffer.from(JSON.stringify({ ...a, f: "a b c d e; rm -rf" })).toString("base64url")), null);
+  // o de um passo só (rvzl_, com a frase do cofre) e o de antes (rvzpc_) não valem mais: o instalador pede um código novo
+  const rvzl = "rvzl_" + Buffer.from(JSON.stringify({ ...a, f: "abacate bola casa dado elefante faca" })).toString("base64url");
+  assert.deepEqual(lerCodigoDeAcesso(rvzl), { antigo: true });
+  assert.deepEqual(lerCodigoDeAcesso("rvzpc_" + Buffer.from(JSON.stringify(a)).toString("base64url")), { antigo: true });
+  // e a mensagem é clara
+  const fonte = (await import("node:fs")).readFileSync(new URL("../instalar.mjs", import.meta.url), "utf8");
+  assert.match(fonte, /gere um código novo no painel/);
 });
 
 test("dependências só pelas versões travadas: npm ci, sem script de terceiros, com package-lock.json no repositório", async () => {

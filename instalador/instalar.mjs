@@ -587,22 +587,20 @@ async function desinstalar(ctx) {
 }
 
 /**
- * Código que o painel mostra em Computadores → Ligar computador novo. O de um passo só (rvzl_) leva o endereço, a chave
- * pública, o e-mail e a senha do computador novo e a frase de 6 palavras; o antigo (rvzpc_), tudo menos a frase.
+ * Código de acesso que o painel mostra em Computadores → Ligar computador novo (rvzc_, desde a 0.2.0): o endereço da
+ * nuvem, a chave pública e o e-mail e a senha da identidade PENDENTE do computador novo. Não abre o cofre: só deixa
+ * este computador pedir para entrar (a chave do cofre vem cifrada para ele depois que a pessoa digita, num computador
+ * que já usa o Reveza, o código que aparece aqui). Os de antes (rvzl_, que levava a frase do cofre, e rvzpc_) não
+ * valem mais: voltam marcados como antigos, para a mensagem pedir um código novo.
  */
 export function lerCodigoDeAcesso(codigo) {
-  const m = /^(rvzpc|rvzl)_([A-Za-z0-9_-]+)$/.exec(String(codigo || "").trim());
+  const m = /^(rvzc|rvzpc|rvzl)_([A-Za-z0-9_-]+)$/.exec(String(codigo || "").trim());
   if (!m) return null;
+  if (m[1] !== "rvzc") return { antigo: true };
   try {
     const a = JSON.parse(Buffer.from(m[2], "base64url").toString("utf8"));
     if (!a || ![a.u, a.k, a.e, a.s].every((x) => typeof x === "string" && x)) return null;
-    const r = { url: a.u, anon: a.k, email: a.e, senha: a.s };
-    if (m[1] === "rvzl") {
-      const frase = typeof a.f === "string" ? a.f.trim().toLowerCase() : "";
-      if (!/^[\p{L}]+( [\p{L}]+){5}$/u.test(frase)) return null;
-      r.frase = frase;
-    }
-    return r;
+    return { url: a.u, anon: a.k, email: a.e, senha: a.s };
   } catch {
     return null;
   }
@@ -610,10 +608,16 @@ export function lerCodigoDeAcesso(codigo) {
 
 async function ligar(ctx) {
   titulo(t("Ligar este computador a uma instalação que já existe", "Join this computer to an existing installation"));
-  info(t("No painel: Computadores → Ligar computador novo → Gerar o código de ligação. Cole aqui o código (rvzl_...).",
-    "In the panel: Computers → Link new computer → Generate the link code. Paste the code (rvzl_...) here."));
-  const codigo = await ctx.p.segredo(t("Código de ligação:", "Link code:"), "REVEZA_CODIGO");
+  info(t("No painel: Computadores → Ligar computador novo. Cole aqui o código de acesso (rvzc_...).",
+    "In the panel: Computers → Link new computer. Paste the access code (rvzc_...) here."));
+  info(t("Ele só deixa este computador PEDIR para entrar: não abre o cofre. Depois aparece aqui um código de 8 caracteres para digitar no computador que já usa o Reveza.",
+    "It only lets this computer ASK to join: it does not open the vault. Then an 8-character code shows up here, to type on the computer that already uses Reveza."));
+  const codigo = await ctx.p.segredo(t("Código de acesso:", "Access code:"), "REVEZA_CODIGO");
   const doCodigo = lerCodigoDeAcesso(codigo);
+  if (doCodigo?.antigo) {
+    throw new Error(t("este código é de uma versão antiga do painel (levava a frase do cofre) e não vale mais: gere um código novo no painel (Computadores → Ligar computador novo)",
+      "this code comes from an old panel version (it carried the vault phrase) and is no longer accepted: generate a new code in the panel (Computers → Link new computer)"));
+  }
   if (codigo && !doCodigo) throw new Error(t("código de acesso inválido (copie de novo do painel)", "invalid access code (copy it again from the panel)"));
   const url = doCodigo?.url ?? (await ctx.p.perguntar(t("Endereço da nuvem (https://....supabase.co)", "Cloud address (https://....supabase.co)"), process.env.REVEZA_URL || ""));
   const anon = doCodigo?.anon ?? (await ctx.p.perguntar(t("Chave pública", "Public key"), process.env.REVEZA_CHAVE_PUBLICA || ""));
@@ -623,16 +627,11 @@ async function ligar(ctx) {
   const e = reveza(ctx, ["nuvem", "entrar", "--url", url, "--chave-publica", anon, "--email", email], false, { REVEZA_SENHA: senha });
   if (!e.ok) throw new Error(e.erro.slice(-300));
   ok(t("identidade guardada no chaveiro do sistema", "identity stored in the system keychain"));
-  // o código de um passo só já traz a frase; com o código antigo, ela sai de `reveza ligar` noutro computador
-  let frase = doCodigo?.frase;
-  if (!frase) {
-    info(t("Agora a frase de 6 palavras: num computador que já tem o Reveza, rode: reveza ligar",
-      "Now the 6-word phrase: on a computer that already has Reveza, run: reveza ligar"));
-    frase = await ctx.p.segredo(t("As 6 palavras:", "The 6 words:"), "REVEZA_FRASE");
-  }
-  // a frase vai pelo ambiente do filho, não pela linha de comando (que outros programas do computador enxergam)
-  const l = reveza(ctx, ["ligar"], true, { REVEZA_FRASE: frase });
-  if (!l.ok) throw new Error(t("a frase não abriu a chave do cofre", "the phrase did not open the vault key"));
+  // o computador novo pede para entrar: mostra o código aqui e espera a chave do cofre chegar cifrada para ele
+  const l = reveza(ctx, ["ligar", "--idioma", t("pt-BR", "en")], true);
+  if (!l.ok) throw new Error(t("a chave do cofre não chegou (veja a mensagem acima): gere outro código no painel e rode de novo",
+    "the vault key did not arrive (see the message above): generate another code in the panel and run again"));
+  ok(t("chave do cofre recebida (cifrada só para este computador)", "vault key received (encrypted for this computer only)"));
   ctx.ligado = { url, anon };
 }
 
@@ -674,7 +673,7 @@ async function main() {
     if (tem("--desinstalar")) return await desinstalar(ctx);
     if (ctx.atualizar && !inst) throw new Error(t("não há instalação para atualizar: rode sem --atualizar", "nothing to update: run without --atualizar"));
     // computador novo: entra numa instalação que já existe (código do painel) ou cria uma nova
-    ctx.ligar = tem("--ligar") || (!inst && /^rvz(l|pc)_/.test(process.env.REVEZA_CODIGO || ""));
+    ctx.ligar = tem("--ligar") || (!inst && /^rvz(c|l|pc)_/.test(process.env.REVEZA_CODIGO || ""));
     if (!inst && !ctx.ligar && !ctx.atualizar && !ctx.importar && !tem("--com-nuvem") && !tem("--sem-nuvem") && !ctx.semPerguntas) {
       const i = await ctx.p.escolha(t("Este computador", "This computer"), [
         t("vai entrar numa instalação que já existe (tenho o código do painel)", "joins an existing installation (I have the panel code)"),
