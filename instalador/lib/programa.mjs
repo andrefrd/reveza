@@ -92,12 +92,31 @@ export function instalarPrograma(raiz, app, { log = () => {} } = {}) {
   return path.join(app, "agente", "dist", "src", "cli.js");
 }
 
+/**
+ * O `reveza.cmd` do Windows. O cmd lê o arquivo na página de código do console (850 no Windows em português), e o
+ * caminho de quem tem acento no nome (C:\Users\João) chegava errado: o lançador passa para UTF-8 (65001) só enquanto
+ * roda e volta à página de antes, com o código de saída do agente.
+ */
+export function lancadorWindows(node, cli) {
+  return [
+    "@echo off",
+    "setlocal",
+    'for /f "tokens=2 delims=:." %%p in (\'chcp\') do set /a "REVEZA_CP=%%p" >nul 2>&1',
+    "chcp 65001 >nul",
+    `"${node}" "${cli}" %*`,
+    'set "REVEZA_SAIDA=%errorlevel%"',
+    'if defined REVEZA_CP chcp %REVEZA_CP% >nul',
+    "exit /b %REVEZA_SAIDA%",
+    "",
+  ].join("\r\n");
+}
+
 /** O comando `reveza` em ~/.reveza/bin, apontando para o agente instalado com o Node que rodou o instalador. */
 export function criarLancador(bin, cli, node = process.execPath) {
   mkdirSync(bin, { recursive: true });
   if (WIN) {
     const arq = path.join(bin, "reveza.cmd");
-    writeFileSync(arq, `@echo off\r\n"${node}" "${cli}" %*\r\n`);
+    writeFileSync(arq, lancadorWindows(node, cli));
     return arq;
   }
   const arq = path.join(bin, "reveza");
@@ -107,14 +126,36 @@ export function criarLancador(bin, cli, node = process.execPath) {
 }
 
 /** Linha para o PATH, conforme o shell (o instalador mostra e, com ok da pessoa, acrescenta). */
-export function linhaPath(bin, shell = process.env.SHELL || "") {
-  if (WIN) return null;
+export function linhaPath(bin, shell = process.env.SHELL || "", win = WIN) {
+  if (win) return { arquivo: "HKCU\\Environment", linha: path.win32.join(bin, "reveza.cmd") };
   if (/fish$/.test(shell)) return { arquivo: path.join(process.env.HOME || "", ".config", "fish", "config.fish"), linha: `fish_add_path "${bin}"` };
   const arquivo = /zsh$/.test(shell) ? ".zshrc" : ".bashrc";
   return { arquivo: path.join(process.env.HOME || "", arquivo), linha: `export PATH="${bin}:$PATH"` };
 }
 
+/**
+ * Windows: o Path do usuário (HKCU\Environment), lido SEM expandir (o %USERPROFILE% de quem já estava lá fica como
+ * estava) e gravado como REG_EXPAND_SZ; mudar uma variável pelo .NET avisa o Windows (WM_SETTINGCHANGE) e os terminais
+ * novos já enxergam o `reveza`. O caminho vai pelo ambiente, não pelo texto do script.
+ */
+const PS_PATH = [
+  "$k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')",
+  "$atual = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)",
+  "$partes = @($atual -split ';' | Where-Object { $_ })",
+  "if ($partes -notcontains $env:REVEZA_BIN) {",
+  "  $k.SetValue('Path', (($partes + $env:REVEZA_BIN) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)",
+  "  [Environment]::SetEnvironmentVariable('REVEZA_AVISO', '1', 'User')",
+  "  [Environment]::SetEnvironmentVariable('REVEZA_AVISO', $null, 'User')",
+  "}",
+  "$k.Close()",
+].join("\n");
+
 export function acrescentarPath(bin) {
+  if (WIN) {
+    const script = Buffer.from(PS_PATH, "utf16le").toString("base64");
+    const r = rodar("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", script], { env: ambienteLimpo({ REVEZA_BIN: bin }) });
+    return r.ok;
+  }
   const l = linhaPath(bin);
   if (!l) return false;
   const atual = existsSync(l.arquivo) ? readFileSync(l.arquivo, "utf8") : "";

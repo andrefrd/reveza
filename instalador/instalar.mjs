@@ -113,8 +113,8 @@ async function programa(ctx) {
   const l = linhaPath(BIN);
   if (l && !(process.env.PATH || "").split(path.delimiter).includes(BIN)) {
     if (await ctx.p.sim(t(`Acrescentar ${BIN} ao PATH em ${l.arquivo}?`, `Add ${BIN} to PATH in ${l.arquivo}?`), !ctx.semPerguntas)) {
-      acrescentarPath(BIN);
-      ok(t("PATH atualizado (vale nos terminais novos)", "PATH updated (applies to new terminals)"));
+      if (acrescentarPath(BIN)) ok(t("PATH atualizado (vale nos terminais novos)", "PATH updated (applies to new terminals)"));
+      else nao(t(`não consegui mudar o PATH: use ${l.linha}`, `could not change PATH: use ${l.linha}`));
     } else info(t(`Para usar o comando reveza: ${l.linha}`, `To use the reveza command: ${l.linha}`));
   }
   if (ctx.importar) {

@@ -1,13 +1,16 @@
 # Prova o Reveza num Windows de verdade (não há máquina Windows na casa): o serviço do agente (tarefa agendada) criado,
 # subindo sozinho, respondendo ao `reveza` e saindo na desinstalação; a janela de confirmação e o som pelo PowerShell; e
 # o Claude Code de verdade lendo o login e a configuração onde o agente grava. Roda numa máquina descartável do GitHub:
-# aqui o instalador mexe no perfil do usuário de verdade (tarefa agendada, ~\.reveza, ~\.claude, usuário de teste).
+# aqui o instalador mexe no perfil do usuário de verdade (tarefa agendada, ~\.reveza, ~\.claude, o Path do usuário).
+# Roda a cada envio para a main (uns 6 minutos: espera o agente cair e voltar, e conferir que não volta depois de sair).
 #
-# Ensaio de uma mudança ainda não publicada, sem branch: `git diff | gzip | base64 > ensaio.txt` e
+# Ensaio de uma mudança ainda não publicada, sem branch: `git diff origin/main | gzip | base64 > ensaio.txt` e
 # `gh workflow run windows.yml -F ensaio=@ensaio.txt`. Só quem escreve no repositório dispara; nada é publicado.
 name: Windows de verdade
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       ensaio:

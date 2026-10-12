@@ -109,7 +109,7 @@ Uso: reveza <comando> [opções]
   importar --de <pasta>           copia contas, credenciais e histórico de outro gestor (nada é apagado)
   cofre iniciar                   cria a chave do cofre no primeiro computador
   nuvem entrar --url U --chave-publica K --email E    guarda a identidade deste computador (senha pelo stdin)
-  rodar [--sombra] [--porta N] [--sem-nuvem]          o agente em si (o serviço chama este)
+  rodar [--sombra] [--porta N] [--sem-nuvem]          o agente em si (o serviço chama este; no Windows, com --vigiar-pai)
 
   --sombra   lê e decide, mas não grava credencial, não pega posse e não responde comando; registra o que faria`;
 
@@ -560,7 +560,12 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
   amb.saida(`agente rodando${sombra ? " em modo sombra" : ""} na porta ${porta}; log em ${amb.c.log}`);
   const manter = setInterval(() => undefined, 1 << 30);
   await new Promise<void>((resolve) => {
+    let saindo = false;
+    let vigia: ReturnType<typeof setInterval> | null = null;
     const sair = () => {
+      if (saindo) return;
+      saindo = true;
+      if (vigia) clearInterval(vigia);
       void agente.desligar().finally(() => {
         clearInterval(manter);
         resolve();
@@ -568,8 +573,28 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     };
     process.once("SIGTERM", sair);
     process.once("SIGINT", sair);
+    // No Windows o serviço roda pelo conhost sem janela (servico.ts): quando a tarefa para (schtasks /End), o conhost
+    // sai e o agente sai junto, senão ficaria órfão segurando a porta.
+    if (a.flags["vigiar-pai"]) {
+      const pai = process.ppid;
+      vigia = setInterval(() => {
+        if (!processoVivo(pai)) {
+          log.info("o processo que chamou o agente saiu (a tarefa parou): saindo também");
+          sair();
+        }
+      }, 1000);
+    }
   });
   return 0;
+}
+
+function processoVivo(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()): Promise<number> {

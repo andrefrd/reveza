@@ -16,11 +16,12 @@ export interface Cli {
 }
 
 // No Windows, o "claude.cmd" do npm é um script de lote: rodá-lo exigiria o interpretador de comandos (e o Node novo
-// recusa). Em vez disso, achamos o programa JavaScript que ele chama e o rodamos com o próprio Node, sem shell.
-export function jsDoCmd(cmd: string): string | null {
+// recusa). Em vez disso, achamos o programa que ele chama e o rodamos sem shell: o .exe direto (o pacote do npm de hoje
+// traz o binário nativo, `bin/claude.exe`) ou o .js com o próprio Node (o pacote antigo, `cli.js`).
+export function programaDoCmd(cmd: string): string | null {
   try {
     const texto = fs.readFileSync(cmd, "utf8");
-    const m = /"%~?dp0%?\\([^"%]+?\.(?:c?js|mjs))"/i.exec(texto) ?? /"%dp0%\\([^"%]+?\.(?:c?js|mjs))"/i.exec(texto);
+    const m = /"%~?dp0%?\\([^"%]+?\.(?:c?js|mjs|exe))"/i.exec(texto);
     if (!m) return null;
     const alvo = path.join(path.dirname(cmd), ...m[1]!.split("\\"));
     return fs.statSync(alvo).isFile() ? alvo : null;
@@ -37,8 +38,8 @@ export function acharBinario(env: NodeJS.ProcessEnv = process.env, home = os.hom
       try {
         if (!fs.statSync(c).isFile()) continue;
         if (n.endsWith(".cmd")) {
-          const js = jsDoCmd(c);
-          if (js) return js;
+          const alvo = programaDoCmd(c);
+          if (alvo) return alvo;
           continue;
         }
         return c;

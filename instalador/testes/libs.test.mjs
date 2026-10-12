@@ -9,7 +9,7 @@ import { Vercel, listar } from "../lib/vercel.mjs";
 import { criarProjeto, conferirToken, organizacoes, projetos, regiaoSugerida } from "../lib/supabase.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "../lib/dominio.mjs";
 import { acharChatTelegram, testar, topicoNtfy } from "../lib/alertas.mjs";
-import { criarLancador, gravarConfigLocal, gravarInstalacao, lerInstalacao } from "../lib/programa.mjs";
+import { criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath } from "../lib/programa.mjs";
 import { emailValido, senhaForte, t } from "../lib/texto.mjs";
 import { lerArgs } from "../instalar.mjs";
 
@@ -203,6 +203,20 @@ test("arquivos locais: configuração mescla no estado, instalação não guarda
       assert.ok(statSync(l).mode & 0o100);
     }
   } finally { limpar(); }
+});
+
+test("Windows: o reveza.cmd roda em UTF-8 (caminho com acento), volta à página de código e devolve a saída do agente", () => {
+  const t = lancadorWindows("C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\João Silva\\.reveza\\app\\agente\\dist\\src\\cli.js");
+  const linhas = t.split("\r\n");
+  assert.ok(!t.replace(/\r\n/g, "").includes("\n"), "linhas do Windows");
+  const utf8 = linhas.indexOf("chcp 65001 >nul");
+  const node = linhas.findIndex((l) => l.includes("João Silva"));
+  assert.ok(utf8 > 0 && node > utf8, "o caminho com acento só é lido depois de passar para UTF-8");
+  assert.ok(linhas.slice(0, utf8).every((l) => /^[\x20-\x7e]*$/.test(l)), "antes do chcp, só ASCII");
+  assert.equal(linhas[node], '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\João Silva\\.reveza\\app\\agente\\dist\\src\\cli.js" %*');
+  assert.ok(linhas.includes("if defined REVEZA_CP chcp %REVEZA_CP% >nul") && linhas.includes("exit /b %REVEZA_SAIDA%"));
+  // no Windows o PATH vai para o Path do usuário (o instalador pergunta antes); sem isso, mostra o caminho do reveza.cmd
+  assert.deepEqual(linhaPath("C:\\Users\\x\\.reveza\\bin", "", true), { arquivo: "HKCU\\Environment", linha: "C:\\Users\\x\\.reveza\\bin\\reveza.cmd" });
 });
 
 test("erro do build mostra o começo, não o fim da pilha", async () => {

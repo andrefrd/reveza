@@ -2,6 +2,7 @@
 // Só do usuário (nada de root/administrador): o agente mexe nas credenciais de quem está logado.
 
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { Sistema } from "./config.js";
@@ -23,6 +24,10 @@ export interface OpcoesServico {
   uid?: number;
   /** Espera entre tentativas (os testes passam uma que não espera). */
   dormir?: (ms: number) => Promise<void>;
+  /** Alguém escuta na porta do agente? (os testes passam um falso; o padrão olha a porta de verdade) */
+  portaOcupada?: (porta: number) => Promise<boolean>;
+  /** Hora do registro da tarefa do Windows (os testes fixam). */
+  agora?: Date;
 }
 
 export interface StatusServico {
@@ -110,9 +115,140 @@ WantedBy=default.target
 `;
 }
 
-export function comandoTarefa(o: OpcoesServico): string[] {
-  const tr = [o.node, ...argumentos(o)].map((a) => `"${a}"`).join(" ");
-  return ["schtasks", "/Create", "/F", "/TN", TAREFA, "/SC", "ONLOGON", "/RL", "LIMITED", "/TR", tr];
+// ── Windows ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+// A tarefa sai de um XML, não do `schtasks /SC ONLOGON`, porque o jeito curto (provado no Windows de verdade, 12/10/2026):
+// - abria uma janela de terminal com o agente na tela de quem entra (fechar a janela derrubava o agente);
+// - deixava os padrões do Agendador: para o agente depois de 3 dias, não sobe na bateria e para ao tirar da tomada;
+// - não trazia o agente de volta se ele caísse (o launchd e o systemd trazem);
+// - criava um gatilho de entrada de QUALQUER usuário, que pede administrador.
+// Aqui: o agente roda pelo `conhost.exe --headless` (console sem janela), com gatilho de entrada só deste usuário, um
+// gatilho de minuto em minuto que só sobe o agente se ele não estiver rodando (IgnoreNew), sem limite de tempo e na
+// bateria também. O conhost sai quando o agente sai; o agente sai quando o conhost sai (--vigiar-pai): o `schtasks /End`
+// para os dois.
+
+/** O XML da tarefa, guardado ao lado do estado (o schtasks lê dele). */
+export function arquivoTarefa(o: OpcoesServico): string {
+  return path.join(path.dirname(o.logs), "tarefa-windows.xml");
+}
+
+/** Um argumento na linha de comando do Windows (as regras do CommandLineToArgvW: aspas e as barras antes delas). */
+export function aspasWindows(a: string): string {
+  if (a && !/[\s"]/.test(a)) return a;
+  let r = '"';
+  let barras = 0;
+  for (const ch of a) {
+    if (ch === "\\") {
+      barras++;
+      continue;
+    }
+    r += ch === '"' ? "\\".repeat(barras * 2 + 1) + '"' : "\\".repeat(barras) + ch;
+    barras = 0;
+  }
+  return r + "\\".repeat(barras * 2) + '"';
+}
+
+function horaLocal(d: Date): string {
+  const z = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+}
+
+export function conhost(env: NodeJS.ProcessEnv = process.env): string {
+  return path.win32.join(env.SystemRoot || env.windir || "C:\\Windows", "System32", "conhost.exe");
+}
+
+/** O XML da tarefa do Windows para o usuário `usuario` (o SID, de preferência). */
+export function xmlTarefa(o: OpcoesServico, usuario: string): string {
+  const args = ["--headless", o.node, ...argumentos(o), "--vigiar-pai"].map(aspasWindows).join(" ");
+  const u = xml(usuario);
+  return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Reveza AI: agente de contas (sem janela; volta sozinho se cair)</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>${u}</UserId>
+    </LogonTrigger>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>${horaLocal(o.agora ?? new Date())}</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>${u}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${xml(conhost())}</Command>
+      <Arguments>${xml(args)}</Arguments>
+      <WorkingDirectory>${xml(o.home)}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
+/** O SID de quem roda (o gatilho de entrada é só dele); sem o `whoami`, o nome DOMINIO\usuario. */
+async function usuarioWindows(o: OpcoesServico): Promise<string> {
+  const r = await o.exec.rodar(["whoami", "/user", "/fo", "csv", "/nh"]);
+  const sid = /"(S-1-[0-9-]+)"/.exec(r.saida)?.[1];
+  if (sid) return sid;
+  const u = os.userInfo().username;
+  return process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${u}` : u;
+}
+
+function portaOcupada(porta: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = net.connect({ port: porta, host: "127.0.0.1" });
+    const fim = (v: boolean) => {
+      s.destroy();
+      resolve(v);
+    };
+    s.once("connect", () => fim(true));
+    s.once("error", () => fim(false));
+    s.setTimeout(800, () => fim(false));
+  });
+}
+
+/** Para a tarefa e espera o agente soltar a porta (até ~10 s), para o que subir depois ser a versão nova. */
+async function pararTarefa(o: OpcoesServico): Promise<void> {
+  const dormir = o.dormir ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const ocupada = o.portaOcupada ?? portaOcupada;
+  const porta = o.porta ?? (o.sombra ? 7789 : 7788);
+  await o.exec.rodar(["schtasks", "/End", "/TN", TAREFA]);
+  for (let i = 0; i < 20 && (await ocupada(porta)); i++) await dormir(500);
 }
 
 function uid(o: OpcoesServico): number {
@@ -145,14 +281,23 @@ export async function instalar(o: OpcoesServico): Promise<string> {
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     fs.writeFileSync(arq, unidade(o), { mode: 0o644 });
     await o.exec.rodar(["systemctl", "--user", "daemon-reload"]);
-    const r = await o.exec.rodar(["systemctl", "--user", "enable", "--now", UNIDADE]);
+    const r = await o.exec.rodar(["systemctl", "--user", "enable", UNIDADE]);
     if (r.codigo !== 0) throw new Error(`systemctl --user enable falhou: ${r.erro.trim() || r.codigo}`);
+    // restart, não `enable --now`: numa atualização o agente antigo já está rodando, e o `--now` o deixaria lá
+    const rr = await o.exec.rodar(["systemctl", "--user", "restart", UNIDADE]);
+    if (rr.codigo !== 0) throw new Error(`systemctl --user restart falhou: ${rr.erro.trim() || rr.codigo}`);
     return `serviço ${UNIDADE} instalado (${arq}); para seguir rodando sem sessão aberta: loginctl enable-linger ${os.userInfo().username}`;
   }
-  const r = await o.exec.rodar(comandoTarefa(o));
+  const arq = arquivoTarefa(o);
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  // o schtasks lê o XML em UTF-16 (com a marca no começo): caminhos com acento chegam inteiros
+  fs.writeFileSync(arq, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xmlTarefa(o, await usuarioWindows(o)), "utf16le")]));
+  // numa atualização o agente antigo está rodando: sai antes, senão a tarefa nova não sobe (uma instância por vez)
+  await pararTarefa(o);
+  const r = await o.exec.rodar(["schtasks", "/Create", "/F", "/TN", TAREFA, "/XML", arq]);
   if (r.codigo !== 0) throw new Error(`schtasks /Create falhou: ${r.erro.trim() || r.saida.trim() || r.codigo}`);
   await o.exec.rodar(["schtasks", "/Run", "/TN", TAREFA]);
-  return `tarefa "${TAREFA}" criada (roda ao entrar no Windows)`;
+  return `tarefa "${TAREFA}" criada (roda ao entrar no Windows, sem janela, e volta sozinha se cair)`;
 }
 
 export async function remover(o: OpcoesServico): Promise<string> {
@@ -167,8 +312,11 @@ export async function remover(o: OpcoesServico): Promise<string> {
     await o.exec.rodar(["systemctl", "--user", "daemon-reload"]);
     return `serviço ${UNIDADE} removido`;
   }
-  await o.exec.rodar(["schtasks", "/End", "/TN", TAREFA]);
+  // desliga antes de parar: o gatilho de minuto em minuto não sobe o agente de novo no meio da remoção
+  await o.exec.rodar(["schtasks", "/Change", "/TN", TAREFA, "/DISABLE"]);
+  await pararTarefa(o);
   await o.exec.rodar(["schtasks", "/Delete", "/F", "/TN", TAREFA]);
+  fs.rmSync(arquivoTarefa(o), { force: true });
   return `tarefa "${TAREFA}" removida`;
 }
 
