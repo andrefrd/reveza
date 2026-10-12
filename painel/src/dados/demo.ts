@@ -890,8 +890,14 @@ export class FonteDemo implements Fonte {
    */
   private rolarSozinho() {
     if (this.d.config.atualizarSozinho !== "assim_que_sair" || this.d.config.atualizacaoVez?.estado === "em_andamento") return
+    // como a trava do agente: quem precisa da nuvem e do painel atualizados primeiro não vai
     const pc = this.d.computadores.find(
-      (c) => !c.revogado && c.sistema !== "pendente" && c.diagnostico?.versaoNova && compararVersao(c.diagnostico.versaoNova, c.versao) > 0
+      (c) =>
+        !c.revogado &&
+        c.sistema !== "pendente" &&
+        c.diagnostico?.versaoNova &&
+        compararVersao(c.diagnostico.versaoNova, c.versao) > 0 &&
+        c.diagnostico.precisaNuvem?.para !== c.diagnostico.versaoNova
     )
     if (!pc) return
     const de = pc.versao
