@@ -52,9 +52,17 @@ Regras herdadas do roteador (provadas em 10 e 11/10, com teste):
   senão arquivo 600 com aviso).
 - Cada login guardado: `AES-256-GCM(K, nonce aleatório de 12 bytes, JSON só com claudeAiOauth e organizationUuid)`,
   com dado associado `conta_id|versao` (impede trocar o cifrado de uma conta pelo de outra).
-- Computador novo recebe `K` por uma **frase de ligação**: o computador que já tem `K` gera 6 palavras, deriva uma
-  chave com scrypt e publica `K` embrulhado por 10 minutos; o novo digita as palavras (ou lê o QR no painel) e
-  desembrulha. A frase nunca vai à nuvem.
+- Computador novo recebe `K` cifrada só para ele (0.2.0; achado 2 da revisão de segurança de 11/10/2026, em que o
+  código `rvzl_` levava a frase do cofre em texto reversível). Ele cria um par ECDH P-256 só em memória (chave privada
+  não exportável) e registra a chave pública no pedido dele (`ligacao_pedidos`). O computador que tem `K` confere o
+  código de 8 caracteres que a pessoa digita, cifra `K` para essa chave pública (ECDH efêmero + HKDF-SHA256 +
+  AES-256-GCM, rótulos `reveza-ligacao-computador-v2`, dado associado com o id do computador novo) e entrega pela
+  nuvem, que só vê texto cifrado e apaga o envelope na primeira leitura. O novo confere a impressão de `K` contra a da
+  instalação antes de guardar. Detalhes na seção 8.
+- Emergência (computador já ligado que perdeu `K`): a **frase de 6 palavras**. O computador que tem `K` gera as
+  palavras (`reveza ligar --mostrar-frase`), deriva uma chave com scrypt e publica `K` embrulhado por 10 minutos; o
+  outro digita as palavras (`reveza ligar --frase`) e desembrulha. A frase não vai à nuvem e não liga computador
+  novo (a identidade pendente não chega a computador ativo sem receber `K` pelo pedido).
 - Perdeu todos os computadores: o cofre não se recupera (é o preço de a nuvem não conseguir ler). As contas se
   conectam de novo pelo login oficial.
 
@@ -95,6 +103,7 @@ aviso de limite. Para cada computador ligado:
 | `sessoes(id, computador_id, projeto, inicio, fim, agentes, usd, contas)` | membro | computador |
 | `eventos(em, tipo, texto, dados)` | membro | funções e computador |
 | `comandos(id, criado_por, computador_id, acao, corpo, estado, resposta)` | membro | admin cria; computador reserva e responde |
+| `ligacao_pedidos(computador_id, aprovador, idioma, publica, pedido_em, expira_em, envelope, entregue_por, entregue_em, lido_em, recusado)` | membro, sem `publica` e `envelope` | o computador novo registra a chave pública (uma vez); computador ativo entrega ou recusa; admin escolhe o aprovador |
 | `config(chave, valor)` modo, limiares, rodízio, intervalo | membro | admin |
 | `alertas(canal, destino_cifrado, eventos, ativo)` | admin | admin |
 | `auditoria(em, user_id, acao, alvo, ip)` | admin | gatilhos (ninguém edita) |
@@ -113,8 +122,8 @@ Ajustes da revisão de segurança de 11/10/2026 (migrações 0007 e 0008, testes
 - convite novo cancela o anterior do mesmo e-mail, convite pode ser cancelado e aceitar nunca rebaixa administrador;
 - revogar computador desliga o login dele no Auth e derruba as sessões;
 - uma conta só pode estar atribuída a um computador (índice único e trava na `rvz_atribuir`);
-- comando `ligar`: o painel manda só uma chave pública efêmera (P-256); o computador publica a ligação e devolve as 6
-  palavras cifradas para ela (ECDH + HKDF-SHA256 + AES-256-GCM, rótulos `reveza-ligacao*`).
+- comando `ligar` (0.1.x: a frase cifrada para o navegador): saiu na 0.2.0. `painel_comando` recusa a ação e o agente
+  responde 410; o computador novo entra pelo código que aparece nele (seção 8).
 
 ## 7b. Ponte local (mod e linha de comando ↔ agente)
 
@@ -137,18 +146,34 @@ migração nova); as permissões (0099) fecham qualquer aplicação. As chaves d
 - Supabase Auth com senha + verificação em duas etapas (TOTP) para `admin`: quem ativou precisa do código em toda
   sessão; quem não ativou age só com a senha, a não ser que a instalação exija (`exigir_duas_etapas`). Quem confere é o
   banco (`rvz_exigir_admin` = admin e `rvz_aal2`) e as Edge Functions (`servico_aal_ok`); não há servidor do painel.
-- Computador novo: pelo painel, em um passo. O painel cria o acesso do computador novo e manda o comando `ligar`
-  (com a chave pública efêmera do navegador) a um computador que tem a chave do cofre. Esse computador abre uma janela
-  (macOS `osascript`, Windows `InputBox`, Linux `zenity --entry`) que PEDE um código de 6 caracteres (30 bits) tirado do
-  SHA-256 da chave pública do navegador; só o painel que fez o pedido mostra esse código. Um pareamento por vez: se
-  chegam dois pedidos `ligar` juntos (no mesmo lote, ou um com a janela do outro ainda aberta), o computador recusa os
-  dois, porque quem escreve direto no banco pode ler a chave pública do pedido verdadeiro e procurar uma chave com o
-  mesmo código (com 4 caracteres, ~37 s de CPU; revisão de segurança de 11/10/2026). Só com o código certo e o clique em
-  Liberar ele publica a ligação e devolve a frase cifrada para o navegador, que junta acesso e frase num código só
-  (`rvzl_`). Um pedido forjado direto no banco não tem código na tela de ninguém. (No primeiro teste real, uma janela
-  que só pedia o clique foi liberada em 8 s, sem olhar o código; por isso ela pede para digitar.) A janela espera até 90 s, à parte
-  da busca (a troca não para). Sem tela, a frase sai por `reveza ligar` no terminal; `reveza ligar --painel ligar`
-  (arquivo `~/.reveza/ligar-pelo-painel`) libera sem perguntar, para quem aceita que a nuvem autorize.
+- Computador novo (0.2.0): o código aparece NELE e é digitado num computador que já tem a chave do cofre; nenhum
+  segredo passa pela tela.
+  1. O painel cria a identidade pendente (Edge Function `computador-novo`, linha `pendente` em `computadores`, visível e
+     revogável) e escolhe o aprovador, o computador onde a janela abre (`painel_ligacao_aprovador`, com a língua do
+     painel). Mostra o comando do instalador e o código de acesso `rvzc_` (endereço, chave anon, e-mail e senha da
+     identidade pendente). Esse código só deixa PEDIR: a identidade pendente só alcança `agente_ligacao_pedir` e
+     `agente_ligacao_receber`, e `agente_registrar` a recusa até ela ler a chave entregue (menos a primeira identidade
+     da instalação, antes de existir `cofre_impressao`, que cria a chave). Os códigos `rvzl_` e `rvzpc_` são recusados.
+  2. O computador novo (`reveza ligar`, chamado pelo instalador `--ligar`) cria o par ECDH P-256 em memória e registra
+     a chave pública: um pedido por computador, que não se troca (a mesma chave de novo devolve o mesmo pedido) e vence
+     em 10 minutos. Mostra em letras grandes o código `XXXX-XXXX`: 8 símbolos de 32 (sem 0/O/1/I), 40 bits, tirados do
+     SHA-256 da chave pública esticado por scrypt (N=2^15, r=8, ~40 ms). Espera a entrega consultando a nuvem.
+  3. O agente do aprovador vê o pedido em `agente_ola.ligacoes`, toca o som e abre a janela (macOS `osascript`, Windows
+     `InputBox`, Linux `zenity --entry`) que PEDE o código, sem mostrá-lo; o texto é fixo, só a língua vem da nuvem.
+     Código errado pergunta de novo, e na terceira o pedido é recusado; Recusar recusa; sem resposta em 90 s o pedido
+     segue aberto. `reveza ligar XXXX-XXXX` faz o mesmo sem janela (servidor, VPS, SSH), em qualquer computador com a
+     chave. Com o código certo, cifra `K` para a chave pública do pedido e entrega (`agente_ligacao_entregar`, que
+     confere a mesma chave pública e deixa entregar uma vez).
+  4. Um pedido por vez: dois abertos ao mesmo tempo são recusados pelo agente (e pela própria entrega, no banco), e
+     um pedido que chega com a janela aberta anula o que se digitar nela (revisão de segurança de 11/10/2026).
+  5. O computador novo lê o envelope uma vez (o banco o apaga), decifra, confere a impressão contra `cofre_impressao`
+     e guarda `K` no chaveiro; só então se registra como computador. O painel acompanha por `ligacao_pedidos` (sem a
+     chave pública e sem o envelope).
+  O que um código vazado consegue: o `rvzc_` antes do uso deixa registrar uma chave pública no pedido (o computador
+  verdadeiro então recebe erro, e quem libera não tem o código do intruso na tela); depois do uso, o pedido não aceita
+  outra chave. Não abre o cofre nem vira computador ativo. O código de 8 caracteres não é segredo. Quem escreve direto
+  no banco e troca a chave pública por uma com o mesmo código precisa de 2^40 tentativas, cada uma com um scrypt, em
+  10 minutos. A liberação sem perguntar (`reveza ligar --painel ligar`, 0.1.x) saiu: deixava a nuvem autorizar sozinha.
 - Cadastro público desligado; entra só por convite (link de uso único, expira em 72 h).
 - Troca de senha com reautenticação; "esqueci a senha" com redirecionamento só para o domínio do painel.
 - Sessão: JWT de 1 h com renovação; lista de sessões e "sair de todas" (revoga os refresh tokens do usuário).
@@ -162,8 +187,8 @@ Menu lateral, nada empilhado numa tela só:
 1. **Visão geral**: conta em uso por computador, ritmo, previsão, faixas de alerta.
 2. **Contas**: lista, cor, prioridade, reserva, agenda, teto semanal, conectar (gera o pedido ao computador), entrar
    de novo, pausar.
-3. **Computadores**: lista, sistema, versão, visto há, conta em uso, ligar computador novo (frase de 6 palavras ou
-   QR), revogar.
+3. **Computadores**: lista, sistema, versão, visto há, conta em uso, ligar computador novo (o código aparece nele e é
+   digitado num computador que já usa o Reveza; o painel só acompanha), revogar.
 4. **Uso**: custo equivalente, tokens, agentes, sessões por dia, conta, modelo, projeto e computador; mapa de calor;
    ranking; previsão de esgotar; exportar planilha.
 5. **Plano da semana**: cota semanal por conta dividida pelos dias, quanto já foi, alerta de ritmo.

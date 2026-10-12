@@ -114,7 +114,7 @@ automática**. Quem importa de outro gestor (`--importar`) fica com a configura�
 
 | Opção | Para quê |
 |---|---|
-| `--ligar` | liga mais um computador a uma instalação que já existe: pede só o código de ligação do painel |
+| `--ligar` | liga mais um computador a uma instalação que já existe: pede o código de acesso do painel e mostra o código para digitar no computador que já usa o Reveza |
 | `--atualizar` | atualiza agente, mod, banco e painel; contas, uso e configuração ficam |
 | `--sem-nuvem` | só neste computador: agente, mod e contas, sem painel online |
 | `--demo` | o painel com dados de exemplo, sem nuvem e sem mexer em conta nenhuma |
@@ -129,14 +129,28 @@ automática**. Quem importa de outro gestor (`--importar`) fica com a configura�
 
 <br/>
 
-## ➕ Computador novo, com um código só
+## ➕ Computador novo: o código aparece nele
 
-1. No painel: **Computadores → Ligar computador novo → Gerar o código de ligação**.
-2. O computador que já usa o Reveza toca um som e abre uma janela. Digite nela o código de 6 caracteres que o painel mostra e clique em **Liberar**.
-3. No computador novo, rode `npx github:dantaspaulo/reveza --ligar` e cole o código que o painel mostrou. Pronto: ele entra sozinho, já com as contas.
+1. No painel: **Computadores → Ligar computador novo → Gerar o código de acesso**. Escolha em qual computador a janela vai abrir.
+2. No computador novo, rode o comando que o painel mostra (`npx ... --ligar`) e cole o código de acesso (`rvzc_...`) quando ele pedir. Esse código só deixa o computador novo **pedir** para entrar: ele não abre o cofre.
+3. O computador novo mostra, em letras grandes, um código de 8 caracteres (`XXXX-XXXX`). No computador que já usa o Reveza, que toca um som e abre uma janela, digite esse código e clique em **Liberar**. Sem tela (servidor, VPS, SSH): rode lá `reveza ligar XXXX-XXXX`.
+4. Pronto: a chave do cofre vai cifrada só para o computador novo, e ele entra já com as contas.
 
-O código vale 10 minutos e uma vez só. A nuvem sozinha não consegue liberar a chave do cofre: quem libera digita, na
-tela do computador, o código que só o seu painel mostra.
+Nenhum segredo passa pela tela: um print ou o código de acesso copiado não abrem o cofre. O pedido vale 10 minutos,
+um computador novo por vez (dois ao mesmo tempo são recusados), e o código errado três vezes recusa o pedido. Os códigos
+de antes da 0.2.0 (`rvzl_`, que levavam a frase do cofre) não valem mais: gere um novo no painel. O computador que libera
+precisa estar na 0.2.0 ou mais nova.
+
+<details>
+<summary><b>Emergência: computador já ligado que perdeu a chave do cofre</b></summary>
+
+<br/>
+
+Num computador que tem a chave, `reveza ligar --mostrar-frase` mostra 6 palavras, válidas por 10 minutos. No que perdeu
+a chave (e continua ligado à nuvem), `reveza ligar --frase` pede as palavras. A frase abre o cofre nesses 10 minutos: só
+na tela, nunca por chat ou e-mail. Computador novo não usa a frase; ele entra pelo código que aparece nele.
+
+</details>
 
 <br/>
 

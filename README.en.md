@@ -115,7 +115,7 @@ settings.
 
 | Option | What for |
 |---|---|
-| `--ligar` | joins one more computer to an existing installation: asks only for the dashboard's link code |
+| `--ligar` | joins one more computer to an existing installation: asks for the dashboard's access code and shows the code to type on the computer that already uses Reveza |
 | `--atualizar` | updates agent, mod, database and dashboard; accounts, usage and settings stay |
 | `--sem-nuvem` | this computer only: agent, mod and accounts, no online dashboard |
 | `--demo` | the dashboard with example data, no cloud, no account touched |
@@ -130,14 +130,29 @@ settings.
 
 <br/>
 
-## ➕ A new computer, with one code
+## ➕ A new computer: the code shows up on it
 
-1. In the dashboard: **Computers → Link new computer → Generate the link code**.
-2. The computer that already uses Reveza plays a sound and opens a window. Type in it the 6-character code the dashboard shows and click **Release**.
-3. On the new computer, run `npx github:dantaspaulo/reveza --ligar` and paste the code the dashboard showed. Done: it joins on its own, accounts included.
+1. In the dashboard: **Computers → Link new computer → Generate the access code**. Choose which computer the window opens on.
+2. On the new computer, run the command the dashboard shows (`npx ... --ligar`) and paste the access code (`rvzc_...`) when it asks. That code only lets the new computer **ask** to join: it does not open the vault.
+3. The new computer shows an 8-character code in large letters (`XXXX-XXXX`). On the computer that already uses Reveza, which plays a sound and opens a window, type that code and click **Release**. No screen (server, VPS, SSH): run `reveza ligar XXXX-XXXX` there.
+4. Done: the vault key travels encrypted for the new computer only, and it joins with the accounts.
 
-The code is valid for 10 minutes, once. The cloud alone cannot release the vault key: whoever releases types, on the
-computer's screen, the code that only your dashboard shows.
+No secret goes through the screen: a screenshot or a copied access code does not open the vault. The request is valid
+for 10 minutes, one new computer at a time (two at once are both refused), and three wrong codes refuse the request.
+Codes from before 0.2.0 (`rvzl_`, which carried the vault phrase) no longer work: generate a new one in the dashboard.
+The computer that lets the new one in needs version 0.2.0 or newer.
+
+<details>
+<summary><b>Emergency: a computer already linked that lost the vault key</b></summary>
+
+<br/>
+
+On a computer that has the key, `reveza ligar --mostrar-frase` shows 6 words, valid for 10 minutes. On the one that lost
+the key (and is still linked to the cloud), `reveza ligar --frase` asks for the words. The phrase opens the vault during
+those 10 minutes: on screen only, never by chat or e-mail. A new computer does not use the phrase; it joins through the
+code it shows.
+
+</details>
 
 <br/>
 
