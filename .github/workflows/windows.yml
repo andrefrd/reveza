@@ -36,7 +36,14 @@ jobs:
         shell: bash
         env:
           ENSAIO: ${{ inputs.ensaio }}
-        run: printf '%s' "$ENSAIO" | base64 -d | gunzip | git apply -v --whitespace=nowarn
+        # mudança grande não cabe no disparo (65 mil caracteres): ela vai num gist secreto do dono e aqui chega o endereço
+        # (a 0.2.0 saiu sem este ensaio no Windows e o teste da janela ficou vermelho depois do lançamento)
+        run: |
+          case "$ENSAIO" in
+            https://gist.githubusercontent.com/dantaspaulo/*) curl -fsSL "$ENSAIO" ;;
+            https://*|http://*) echo "só gist do dono do repositório" >&2; exit 1 ;;
+            *) printf '%s' "$ENSAIO" ;;
+          esac | base64 -d | gunzip | git apply -v --whitespace=nowarn
 
       - name: Testes do agente
         working-directory: agente
