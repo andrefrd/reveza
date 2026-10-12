@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Instalador do Reveza AI: gestor de várias contas do assistente de código, com painel na nuvem da própria pessoa.
-//   1. confere o computador          5. o painel na Vercel (e o domínio)
-//   2. instala o agente e o mod      6. contas e modo de troca
-//   3. a nuvem no Supabase           7. alertas, com mensagem de teste
-//   4. o serviço                     8. prova final
+//   Etapas (numeradas só com as que rodam no caminho escolhido): conferência do computador, agente e mod, a nuvem
+//   no Supabase com o painel na Vercel, serviço, painel no ar (e o domínio), contas, alertas e prova final.
+//   A troca automática já vem ligada, antes do limite (avisa em 90%, troca em 95%): muda no painel.
 //
 //   npx github:dantaspaulo/reveza                 interativo
 //   ... --atualizar                               atualiza agente, mod, banco e painel; contas, uso e configuração ficam
@@ -29,6 +28,7 @@ import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "./lib/dominio.mjs";
 import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
+import { etapasDoCaminho, manterNuvemPrevisto, numeroDaEtapa } from "./lib/etapas.mjs";
 import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
 import { esperarConta } from "./lib/prova.mjs";
@@ -38,7 +38,7 @@ import {
   copiarEstado, voltarAtualizacao,
 } from "./lib/programa.mjs";
 import { conferirToken, criarProjeto, organizacoes, projetos, REGIOES, regiaoSugerida } from "./lib/supabase.mjs";
-import { emailValido, fraco, info, mascara, nao, negrito, ok, perguntador, senhaForte, t, titulo, usarIdioma, verde } from "./lib/texto.mjs";
+import { emailValido, fraco, info, mascara, nao, negrito, numerarProximoTitulo, ok, perguntador, senhaForte, t, titulo, usarIdioma, verde } from "./lib/texto.mjs";
 import { Vercel } from "./lib/vercel.mjs";
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,7 +79,7 @@ function emailDoClaude() {
 
 // ── passos ────────────────────────────────────────────────────────────────────
 async function conferir(ctx) {
-  titulo(t("1/8 Conferência do computador", "1/8 Checking this computer"));
+  titulo(t("Conferência do computador", "Checking this computer"));
   // 20.19: o painel (vite 8) pede, e todo Node daí em diante tem a correção de argumento de .cmd no Windows (CVE-2024-27980)
   const [maior, menor] = process.versions.node.split(".").map(Number);
   if (maior < 20 || (maior === 20 && menor < 19)) throw new Error(t(`Node 20.19 ou mais novo é necessário (este tem ${process.versions.node}): https://nodejs.org`,
@@ -108,7 +108,7 @@ async function conferir(ctx) {
 }
 
 async function programa(ctx) {
-  titulo(t("2/8 Agente e mod", "2/8 Agent and mod"));
+  titulo(t("Agente e mod", "Agent and mod"));
   ctx.cli = instalarPrograma(RAIZ, ctx.app, { log: info });
   ok(t(`agente ${VERSAO} em ${ctx.app}`, `agent ${VERSAO} in ${ctx.app}`));
   const lanc = criarLancador(BIN, ctx.cli);
@@ -157,7 +157,7 @@ export function descreverTroca({ auto, modo, aviso, troca }) {
 }
 
 async function nuvem(ctx) {
-  titulo(t("3/8 A nuvem (Supabase)", "3/8 The cloud (Supabase)"));
+  titulo(t("A nuvem (Supabase)", "The cloud (Supabase)"));
   info(t("O painel, o cofre cifrado e a decisão de troca moram num projeto Supabase SEU. O plano grátis basta.",
     "The panel, the encrypted vault and the switching decision live in a Supabase project of YOURS. The free plan is enough."));
   info(t("O token do Supabase serve para criar o projeto, montar o banco e publicar as funções. É usado só agora e não fica guardado.",
@@ -327,7 +327,7 @@ export function trocaLocal(arquivo = path.join(BASE, "estado.json")) {
 }
 
 async function servico(ctx) {
-  titulo(t("4/8 Serviço", "4/8 Service"));
+  titulo(t("Serviço", "Service"));
   if (ctx.semServico) nao(t("sem serviço (--sem-servico): rode `reveza rodar` para testar", "no service (--sem-servico): run `reveza rodar` to test"));
   else {
     const r = reveza(ctx, ["servico", "instalar", ...(ctx.sombra ? ["--sombra"] : [])]);
@@ -385,7 +385,7 @@ async function conferirSubiu(ctx) {
 }
 
 async function painel(ctx) {
-  titulo(t("5/8 Painel", "5/8 Panel"));
+  titulo(t("Painel", "Panel"));
   prepararPasta(RAIZ, BUILD);
   const proj = await ctx.vercel.projeto(ctx.projetoVercel);
   const publicar = async (dominio, vercelHost) => {
@@ -432,7 +432,7 @@ async function painel(ctx) {
 }
 
 async function contas(ctx) {
-  titulo(t("6/8 Contas", "6/8 Accounts"));
+  titulo(t("Contas", "Accounts"));
   const atual = emailDoClaude();
   atual ? ok(t(`conta em uso no Claude Code: ${atual} (o agente adota sozinho)`, `account in use in Claude Code: ${atual} (the agent adopts it)`))
     : nao(t("nenhuma conta conectada no Claude Code ainda", "no account connected in Claude Code yet"));
@@ -450,7 +450,7 @@ async function contas(ctx) {
 }
 
 async function alertas(ctx) {
-  titulo(t("7/8 Alertas", "7/8 Alerts"));
+  titulo(t("Alertas", "Alerts"));
   if (!ctx.adminId || ctx.semPerguntas) return info(t("Canais de alerta: no painel, em Alertas.", "Alert channels: in the panel, under Alerts."));
   // o ntfy saiu dos canais (12/10/2026); a notificação no celular se liga no próprio painel, em Alertas
   const canais = ["telegram", "email", "webhook"];
@@ -503,7 +503,7 @@ function estadoDoAgente(ctx) {
 }
 
 async function prova(ctx) {
-  titulo(t("8/8 Prova final", "8/8 Final check"));
+  titulo(t("Prova final", "Final check"));
   // o serviço acabou de subir: dá até 15 s para a ponte local responder antes do doctor
   for (let i = 0; i < 15 && !ctx.semServico && !(await portaOcupada(ctx.sombra ? 7789 : 7788)); i++) await new Promise((r) => setTimeout(r, 1000));
   // a conta que a nuvem mandou chega na primeira busca do agente: espera ela (até 60 s) antes de conferir
@@ -683,22 +683,36 @@ async function main() {
       if (!ctx.atualizar) throw new Error(t("para instalar do zero, use --desinstalar antes", "to install from scratch, run --desinstalar first"));
     }
 
+    ctx.soEsteComputador = soEsteComputador(inst, ctx.atualizar);
+    ctx.manterNuvem = manterNuvemPrevisto({ atualizar: ctx.atualizar, temNuvem: !!inst?.nuvem, semPerguntas: ctx.semPerguntas,
+      tokenNoAmbiente: !!process.env.SUPABASE_ACCESS_TOKEN });
+    const planejar = () => { ctx.etapas = etapasDoCaminho(ctx); };
+    const etapa = (id) => numerarProximoTitulo(numeroDaEtapa(ctx.etapas, id));
+    planejar();
+
+    etapa("conferir");
     await conferir(ctx);
     if (inst) {
       // antes de mexer em qualquer coisa: cópia conferida do estado (contas, logins, uso, configuração, identidade)
       ctx.copia = copiarEstado(BASE, `antes-${VERSAO}`);
       ok(t(`cópia do estado antes de atualizar: ${ctx.copia}`, `state copy before updating: ${ctx.copia}`));
     }
+    etapa("programa");
     await programa(ctx);
-    if (ctx.ligar) await ligar(ctx);
-    else if (ctx.importar) info(t("Troca: fica a configuração importada (ajuste no painel).", "Switching: the imported settings stay (adjust in the panel)."));
+    if (ctx.ligar) {
+      etapa("ligar");
+      await ligar(ctx);
+    } else if (ctx.importar) info(t("Troca: fica a configuração importada (ajuste no painel).", "Switching: the imported settings stay (adjust in the panel)."));
     ctx.troca = trocaInicial(ctx);
-    ctx.soEsteComputador = soEsteComputador(inst, ctx.atualizar);
     if (ctx.soEsteComputador) {
       info(t("Computador ligado a uma instalação: atualizo só o programa deste computador. A nuvem e o painel são atualizados no computador que criou a instalação.",
         "Computer joined to an installation: only this computer's program is updated. The cloud and the panel are updated on the computer that created the installation."));
     } else if (!ctx.semNuvem && !ctx.ligar) {
+      ctx.manterNuvem = false;
+      etapa("nuvem");
       await nuvem(ctx);
+      // sem token numa atualização, a nuvem e o painel ficam como estão: as etapas seguintes saem com o total novo
+      planejar();
       if (!ctx.manterNuvem) {
         await perguntarPainel(ctx);
         await aplicarNuvem(ctx);
@@ -707,13 +721,24 @@ async function main() {
       gravarConfigLocal(path.join(BASE, "estado.json"), { auto: ctx.troca.auto, modo: ctx.troca.modo, aviso: ctx.troca.aviso, troca: ctx.troca.troca });
       ok(`${descreverTroca(ctx.troca)}${t(", neste computador (com --com-nuvem ela passa para o painel)", ", on this computer (with --com-nuvem it moves to the panel)")}`);
     }
+    etapa("servico");
     await servico(ctx);
     if (ctx.atualizar && !ctx.semServico) await conferirSubiu(ctx);
-    if (ctx.gerencia && ctx.vercel) await painel(ctx);
+    if (ctx.gerencia && ctx.vercel) {
+      etapa("painel");
+      await painel(ctx);
+    }
     // computador ligado: as contas vêm da nuvem (o cofre), nada para conectar aqui
-    if (!ctx.atualizar && !ctx.ligar) await contas(ctx);
-    if (ctx.nuvemNova && ctx.gerencia) await alertas(ctx);
+    if (!ctx.atualizar && !ctx.ligar) {
+      etapa("contas");
+      await contas(ctx);
+    }
+    if (ctx.nuvemNova && ctx.gerencia) {
+      etapa("alertas");
+      await alertas(ctx);
+    }
     ctx.p.fechar();
+    etapa("prova");
     await prova(ctx);
 
     gravarInstalacao(ARQ_INST, {

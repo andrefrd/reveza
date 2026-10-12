@@ -13,7 +13,14 @@ export const negrito = (s) => cor("1", s);
 export const ok = (s) => console.log(`  ${verde("✓")} ${s}`);
 export const nao = (s) => console.log(`  ${laranja("·")} ${s}`);
 export const info = (s) => console.log(fraco(`    ${s}`));
-export const titulo = (s) => console.log(`\n${negrito(s)}`);
+// O número da etapa vem de fora (lib/etapas.mjs): quem roda a etapa anuncia o número, e o primeiro título dela sai
+// com ele na frente ("3/5 Serviço"). Assim cada etapa guarda só o próprio nome, inclusive a de ligar computador.
+let numeroPendente = "";
+export const numerarProximoTitulo = (numero) => { numeroPendente = numero ? `${numero} ` : ""; };
+export const titulo = (s) => {
+  console.log(`\n${negrito(numeroPendente + s)}`);
+  numeroPendente = "";
+};
 
 /** Perguntas: com terminal, pergunta; sem terminal (ou --sim), devolve o padrão. */
 export function perguntador({ semPerguntas }) {
