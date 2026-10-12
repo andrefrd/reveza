@@ -1,0 +1,54 @@
+# Prova o Reveza num Windows de verdade (não há máquina Windows na casa): o serviço do agente (tarefa agendada) criado,
+# subindo sozinho, respondendo ao `reveza` e saindo na desinstalação; a janela de confirmação e o som pelo PowerShell; e
+# o Claude Code de verdade lendo o login e a configuração onde o agente grava. Roda numa máquina descartável do GitHub:
+# aqui o instalador mexe no perfil do usuário de verdade (tarefa agendada, ~\.reveza, ~\.claude, usuário de teste).
+#
+# Ensaio de uma mudança ainda não publicada, sem branch: `git diff | gzip | base64 > ensaio.txt` e
+# `gh workflow run windows.yml -F ensaio=@ensaio.txt`. Só quem escreve no repositório dispara; nada é publicado.
+name: Windows de verdade
+
+on:
+  workflow_dispatch:
+    inputs:
+      ensaio:
+        description: "mudança a ensaiar (git diff | gzip | base64); vazio = a main como está"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Ensaio (só no disparo manual com mudança)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.ensaio != '' }}
+        shell: bash
+        env:
+          ENSAIO: ${{ inputs.ensaio }}
+        run: printf '%s' "$ENSAIO" | base64 -d | gunzip | git apply -v --whitespace=nowarn
+
+      - name: Testes do agente
+        working-directory: agente
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test
+
+      - name: Claude Code de verdade (binário e caminhos)
+        run: npm install -g @anthropic-ai/claude-code@2.1.296 --no-audit --no-fund
+
+      - name: Serviço, janela, som e caminhos
+        run: node scripts/e2e-windows.mjs
+
+      - name: Provas (capturas de tela, tarefa, saídas)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-provas
+          path: ${{ runner.temp }}/provas
+          if-no-files-found: ignore
