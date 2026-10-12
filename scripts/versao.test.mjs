@@ -1,0 +1,46 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { maior, precisaVersao, primeiraDoChangelog, secaoDoChangelog, versoes } from "./versao.mjs";
+
+const CHANGELOG = `# Versões
+
+texto
+
+## 0.2.0 · 12/10/2026
+
+Recurso novo.
+
+- item
+
+## 0.1.1 · 11/10/2026
+
+Correção.
+`;
+
+test("todas as versões do repositório batem (package.json, travas, agente, badges e CHANGELOG)", () => {
+  const v = versoes();
+  const unicas = new Set(Object.values(v));
+  assert.equal(unicas.size, 1, JSON.stringify(v, null, 2));
+});
+
+test("CHANGELOG: a primeira entrada e o texto de uma versão", () => {
+  assert.equal(primeiraDoChangelog(CHANGELOG), "0.2.0");
+  assert.equal(secaoDoChangelog(CHANGELOG, "0.2.0"), "Recurso novo.\n\n- item");
+  assert.equal(secaoDoChangelog(CHANGELOG, "0.1.1"), "Correção.");
+  assert.equal(secaoDoChangelog(CHANGELOG, "9.9.9"), null);
+});
+
+test("versão nova só quando o que se instala mudou e a versão ficou a mesma", () => {
+  assert.equal(precisaVersao(["agente/src/troca.ts"], "0.1.1", "0.1.1"), true);
+  assert.equal(precisaVersao(["instalador/instalar.mjs", "README.md"], "0.1.1", "0.1.1"), true);
+  assert.equal(precisaVersao(["agente/src/troca.ts"], "0.1.2", "0.1.1"), false, "já subiu");
+  assert.equal(precisaVersao(["README.md", "docs/ARQUITETURA.md", "CHANGELOG.md"], "0.1.1", "0.1.1"), false, "só documentação");
+  assert.equal(precisaVersao(["package.json"], "0.1.1", "0.1.1"), true);
+});
+
+test("comparação de versões", () => {
+  assert.equal(maior("0.1.2", "0.1.1"), true);
+  assert.equal(maior("0.2.0", "0.1.9"), true);
+  assert.equal(maior("0.1.1", "0.1.1"), false);
+  assert.equal(maior("0.1.0", "0.1.1"), false);
+});

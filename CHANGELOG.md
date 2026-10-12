@@ -7,6 +7,17 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.2 · 11/10/2026
+
+Apoio ao projeto e versão num lugar só. Quem tem a 0.1.1 atualiza com `npx github:dantaspaulo/reveza#v0.1.2 --atualizar`.
+
+- **Apoie o projeto:** no README, contribuição de R$ 100 pelo Asaas (Pix, cartão ou boleto), Pix direto para valores
+  maiores e o botão de mandar o Reveza no WhatsApp.
+- **Toda correção sai com versão:** `node scripts/versao.mjs lancar X.Y.Z` sobe a versão em todos os lugares (pacotes,
+  travas, agente, README), publica, marca a tag e cria a release com o texto desta página. O `npm test` confere que
+  tudo está na mesma versão, e o pre-push (`.githooks`) recusa empurrar para a main mudança no que se instala sem
+  versão nova.
+
 ## 0.1.1 · 11/10/2026
 
 Correção: computador novo instalado pelo `npx github:dantaspaulo/reveza` parava em "agente/package-lock.json ausente".

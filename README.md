@@ -193,6 +193,7 @@ cd nuvem && npm ci && npm test              # banco (PGlite com as migrações) 
 npm ci && npm test                          # instalador e travas
 cd painel && npm ci && npm run react-bits && npm run dev   # painel em http://localhost:5173/?demo=1
 npm run auditoria                           # npm audit em todas as travas
+node scripts/versao.mjs lancar X.Y.Z        # versão nova: escreva a CHANGELOG antes; sobe tudo, tag e release
 ```
 
 <br/>

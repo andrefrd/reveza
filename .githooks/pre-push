@@ -1,0 +1,3 @@
+#!/bin/sh
+# Toda mudança no que se instala vai para a main com versão nova (scripts/versao.mjs). O git passa as refs pelo stdin.
+exec node scripts/versao.mjs pre-push "$@"

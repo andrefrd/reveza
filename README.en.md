@@ -193,6 +193,7 @@ cd nuvem && npm ci && npm test              # database (PGlite with the migratio
 npm ci && npm test                          # installer and guards
 cd painel && npm ci && npm run react-bits && npm run dev   # dashboard at http://localhost:5173/?demo=1
 npm run auditoria                           # npm audit on every lockfile
+node scripts/versao.mjs lancar X.Y.Z        # new version: write the CHANGELOG first; bumps everything, tag and release
 ```
 
 <br/>
