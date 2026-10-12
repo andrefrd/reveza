@@ -190,4 +190,9 @@ export interface Nuvem {
   vezDeAtualizar(de: string, para: string): Promise<{ pode: boolean; motivo: string | null }>;
   /** Como terminou a atualização sozinha deste computador (libera a vez, ou para os outros e vira alerta). */
   resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null): Promise<{ ok: boolean }>;
+  /**
+   * Os nomes das migrações que a nuvem já aplicou (só os nomes). Null quando a nuvem não tem o registro; erro com código
+   * PGRST202/42883 quando ela é de antes da 0.2.1 (sem a função).
+   */
+  migracoesAplicadas(): Promise<string[] | null>;
 }

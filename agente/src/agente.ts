@@ -38,15 +38,22 @@ import {
   acharInstalador,
   ATUALIZACAO_VALIDA_S,
   naMadrugada,
+  CONFERIR_AGORA_S,
   CONFERIR_VERSAO_S,
   escolherVersao,
   extrairTarGz,
+  faltamNaNuvem,
   lerPedido,
+  migracoesDoPacote,
+  modoAtualizar,
   rodarSeparado,
   TAREFA_ATUALIZAR,
+  textoPrecisaNuvem,
+  TRAVA_CONFERIR_S,
   ultimaLinha,
   type AtualizacaoPendente,
   type FonteVersoes,
+  type ModoAtualizar,
 } from "./atualizar.js";
 import { compararVersao } from "./doctor.js";
 import { gravarJson, lerJson } from "./util/arquivos.js";
@@ -86,6 +93,8 @@ const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_l
 /** O registro da atualização em andamento, com o que o agente já contou dela. */
 type Pendente = AtualizacaoPendente & {
   sozinho?: boolean;
+  /** O jeito da atualização sozinha (de madrugada ou assim que saiu), para os textos. */
+  modo?: ModoAtualizar;
   relatado?: boolean;
   fim?: "concluida" | "falhou";
   motivo?: string;
@@ -105,6 +114,21 @@ export { LIGACAO_DUPLA };
 /** O pedido de ligação pelo painel (frase cifrada para o navegador) saiu na 0.2.0. */
 export const LIGAR_PELO_PAINEL_SAIU =
   "o pedido de ligação pelo painel saiu na 0.2.0: atualize o painel; o código aparece no computador novo e é digitado neste";
+
+/** A versão nova que a trava de compatibilidade recusou: a nuvem ainda não tem as migrações que ela traz. */
+export interface TravaNuvem {
+  para: string;
+  /** As migrações que vieram no pacote da versão nova. */
+  precisa: string[];
+  /** As que faltam na nuvem (null: a nuvem não disse quais, por ser de antes da 0.2.1 ou não ter o registro). */
+  faltam: string[] | null;
+  conferidaEm: number;
+}
+
+/** O resultado de pedir para atualizar o programa (o painel, ou o sozinho). */
+export type ResultadoAtualizar =
+  | { ok: true; de: string; para: string }
+  | { ok: false; status: number; erro: string; precisaNuvem?: { para: string; faltam: string[] | null } };
 
 /** Até 3 tentativas de digitar o código na janela; na terceira errada, o pedido é recusado. */
 export const TENTATIVAS_CODIGO = 3;
@@ -166,6 +190,10 @@ export class Agente {
   private vezPedidaEm = 0;
   private sozinhoNaoComecouEm = 0;
   private motivoSemVez: string | null = null;
+  /** A versão nova que a trava recusou (o agente espera a nuvem ter as migrações dela); o painel mostra. */
+  travaNuvem: TravaNuvem | null = null;
+  /** Versão da trava que já virou evento (um por versão, não um a cada conferência). */
+  private travaAvisada: string | null = null;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -739,21 +767,28 @@ export class Agente {
   }
 
   /**
-   * Atualizar sozinho de madrugada (opção da instalação `atualizar_sozinho`, desligada de fábrica): com versão nova
-   * publicada, entre 3h e 5h no fuso da instalação, num momento calmo e com a vez da nuvem (um computador por vez: o
-   * próximo só quando o anterior voltou na versão nova; se um voltou para a anterior, ninguém mais), pelo mesmo
-   * caminho do botão do painel.
+   * Atualizar sozinho (opção da instalação `atualizar_sozinho`, desligada de fábrica): com versão nova publicada, de
+   * madrugada (entre 3h e 5h no fuso da instalação) ou assim que o agente a acha (na conferência de 6 em 6 horas ou no
+   * Verificar atualização do painel). Sempre num momento calmo e com a vez da nuvem (um computador por vez: o próximo só
+   * quando o anterior voltou na versão nova; se um voltou para a anterior, ninguém mais), pelo mesmo caminho do botão do
+   * painel, com a trava de compatibilidade.
    */
   async talvezAtualizarSozinho(): Promise<void> {
     const cfg = this.configNuvem;
     const nuvem = this.d.nuvem;
-    if (cfg.atualizar_sozinho !== true || !nuvem || this.d.sombra || !this.d.versoes) return;
+    const modo = modoAtualizar(cfg.atualizar_sozinho);
+    if (modo === "desligada" || !nuvem || this.d.sombra || !this.d.versoes) return;
     const para = this.versaoNova;
     if (!para || compararVersao(para, VERSAO) <= 0) return;
     const t = this.d.relogio.agora();
-    if (!naMadrugada(t, cfg.fuso) || this.atualizacaoPendente() || !this.momentoCalmo()) return;
-    // a vez é pedida no máximo a cada 5 minutos; a que nem começou (o pacote não baixou) só na noite seguinte
-    if (t - this.vezPedidaEm < 300 || t - this.sozinhoNaoComecouEm < 12 * 3600) return;
+    if (modo === "madrugada" && !naMadrugada(t, cfg.fuso)) return;
+    if (this.atualizacaoPendente() || !this.momentoCalmo()) return;
+    // a vez é pedida no máximo a cada 5 minutos; a que nem começou (o pacote não baixou) espera: de madrugada, a noite
+    // seguinte; assim que sair, uma hora
+    const esperaNaoComecou = modo === "madrugada" ? 12 * 3600 : 3600;
+    if (t - this.vezPedidaEm < 300 || t - this.sozinhoNaoComecouEm < esperaNaoComecou) return;
+    // versão já recusada pela trava: só pede a vez quando a nuvem tiver as migrações dela (sem baixar o pacote de novo)
+    if (this.travaNuvem?.para === para && !(await this.travaLiberou())) return;
     this.vezPedidaEm = t;
     const vez = await nuvem.vezDeAtualizar(VERSAO, para).catch(() => ({ pode: false, motivo: "sem rede" }));
     if (!vez.pode) {
@@ -761,9 +796,10 @@ export class Agente {
       this.motivoSemVez = vez.motivo;
       return;
     }
-    const r = await this.atualizarPrograma(para, { comando: null, sozinho: true });
+    const r = await this.atualizarPrograma(para, { comando: null, sozinho: true, modo });
     if (!r.ok) {
-      this.sozinhoNaoComecouEm = t;
+      // a trava espera a nuvem (conferida de 5 em 5 minutos); o resto, o tempo de cima
+      if (!r.precisaNuvem) this.sozinhoNaoComecouEm = t;
       await nuvem.resultadoAtualizacao(para, "nao_comecou", r.erro).catch(() => undefined);
     }
   }
@@ -782,10 +818,7 @@ export class Agente {
    * Atualiza o programa deste computador para `pedida` (X.Y.Z ou "mais_nova"): só versão publicada do repositório
    * oficial e maior que esta, pelo instalador da própria versão nova, num processo separado (atualizar.ts).
    */
-  async atualizarPrograma(
-    pedida: string,
-    origem: { comando: number | null; sozinho: boolean },
-  ): Promise<{ ok: true; de: string; para: string } | { ok: false; status: number; erro: string }> {
+  async atualizarPrograma(pedida: string, origem: { comando: number | null; sozinho: boolean; modo?: ModoAtualizar }): Promise<ResultadoAtualizar> {
     if (this.d.sombra) return { ok: false, status: 409, erro: "modo sombra: o agente não se atualiza" };
     if (!this.d.versoes || !this.d.exec) return { ok: false, status: 501, erro: "este agente não se atualiza pelo painel" };
     const pendente = this.atualizacaoPendente();
@@ -800,26 +833,55 @@ export class Agente {
     const escolha = escolherVersao(pedida, VERSAO, publicadas);
     if (!escolha.ok) return { ok: false, status: 409, erro: escolha.erro };
     const para = escolha.versao;
-    const dados = { atualizacao: "falhou", de: VERSAO, para, comando: origem.comando, sozinho: origem.sozinho };
+    const sozinho = origem.sozinho ? { modo: origem.modo ?? "madrugada" } : {};
+    const dados = { atualizacao: "falhou", de: VERSAO, para, comando: origem.comando, sozinho: origem.sozinho, ...sozinho };
+    // a mesma versão já foi recusada pela trava: confere a nuvem antes de baixar o pacote de novo
+    const recusada = this.travaNuvem?.para === para ? this.travaNuvem : null;
+    if (recusada && !(await this.travaLiberou(true))) return this.recusaDaTrava(recusada);
     let pasta: string | null = null;
     let instalador: string;
+    let precisa: string[];
     try {
       pasta = fs.mkdtempSync(path.join(os.tmpdir(), "reveza-atualizar-"));
       const pacote = path.join(pasta, `reveza-${para}.tar.gz`);
       await this.d.versoes.baixar(para, pacote);
       extrairTarGz(pacote, path.join(pasta, "pacote"));
       instalador = acharInstalador(path.join(pasta, "pacote"), para);
+      precisa = migracoesDoPacote(path.dirname(path.dirname(instalador)));
     } catch (e) {
       if (pasta) fs.rmSync(pasta, { recursive: true, force: true });
       const motivo = (e as Error).message;
       this.registrarEvento("erro", `A atualização para a ${para} não começou: ${motivo}.`, { ...dados, motivo });
       return { ok: false, status: 502, erro: `a atualização não começou: ${motivo}` };
     }
+    // a trava de compatibilidade: a nuvem já tem as migrações que a versão nova traz? (só o computador principal aplica)
+    if (this.d.nuvem) {
+      const c = await this.conferirMigracoes(precisa);
+      if (!c.ok) {
+        fs.rmSync(pasta, { recursive: true, force: true });
+        if (!c.precisaNuvem) {
+          this.registrarEvento("erro", `A atualização para a ${para} não começou: ${c.erro}.`, { ...dados, motivo: c.erro });
+          return { ok: false, status: 503, erro: `a atualização não começou: ${c.erro}` };
+        }
+        const trava: TravaNuvem = { para, precisa, faltam: c.faltam, conferidaEm: this.d.relogio.agora() };
+        this.travaNuvem = trava;
+        if (this.travaAvisada !== para) {
+          this.travaAvisada = para;
+          this.registrarEvento("info", `A versão ${para} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.`, {
+            ...dados,
+            atualizacao: "precisa_nuvem",
+            faltam: c.faltam?.slice(0, 20) ?? null,
+          });
+        }
+        return this.recusaDaTrava(trava);
+      }
+    }
+    if (this.travaNuvem?.para === para) this.travaNuvem = null;
     fs.mkdirSync(this.d.c.logs, { recursive: true, mode: 0o700 });
     const log = path.join(this.d.c.logs, `atualizacao-${para}.log`);
     const resultado = path.join(pasta, "resultado.json");
     const instalacao = lerJson<{ semServico?: boolean }>(path.join(this.d.c.base, "instalacao.json"));
-    const registro = { de: VERSAO, para, comando: origem.comando, em: this.d.relogio.agora(), pasta, log, resultado, sozinho: origem.sozinho };
+    const registro = { de: VERSAO, para, comando: origem.comando, em: this.d.relogio.agora(), pasta, log, resultado, sozinho: origem.sozinho, ...sozinho };
     gravarJson(this.arquivoAtualizacao(), registro);
     try {
       await rodarSeparado({
@@ -841,12 +903,88 @@ export class Agente {
       this.registrarEvento("erro", `A atualização para a ${para} não começou: ${motivo}.`, { ...dados, motivo });
       return { ok: false, status: 500, erro: `a atualização não começou: ${motivo}` };
     }
-    this.registrarEvento(
-      "info",
-      `Atualizando de ${VERSAO} para ${para} (${origem.sozinho ? "sozinho, de madrugada" : "pedido pelo painel"}). Log: ${log}`,
-      { ...dados, atualizacao: "pedida" },
-    );
+    const como = !origem.sozinho ? "pedido pelo painel" : origem.modo === "assim_que_sair" ? "sozinho, assim que saiu" : "sozinho, de madrugada";
+    this.registrarEvento("info", `Atualizando de ${VERSAO} para ${para} (${como}). Log: ${log}`, { ...dados, atualizacao: "pedida" });
     return { ok: true, de: VERSAO, para };
+  }
+
+  private recusaDaTrava(t: TravaNuvem): ResultadoAtualizar {
+    return { ok: false, status: 409, erro: textoPrecisaNuvem(t.para), precisaNuvem: { para: t.para, faltam: t.faltam } };
+  }
+
+  /**
+   * A trava de compatibilidade: a nuvem tem todas as migrações que vieram no pacote? Pergunta só os nomes
+   * (agente_migracoes). Nuvem de antes da 0.2.1 (sem a função) ou sem o registro conta como desatualizada; sem rede ou
+   * outro erro, não se sabe agora, e também não atualiza.
+   */
+  async conferirMigracoes(precisa: string[]): Promise<{ ok: true } | { ok: false; precisaNuvem: true; faltam: string[] | null } | { ok: false; precisaNuvem: false; erro: string }> {
+    const nuvem = this.d.nuvem;
+    if (!nuvem) return { ok: true };
+    let aplicadas: string[] | null;
+    try {
+      aplicadas = await nuvem.migracoesAplicadas();
+    } catch (e) {
+      const semFuncao = e instanceof ErroNuvem && (e.codigo === "PGRST202" || e.codigo === "42883");
+      if (semFuncao) return { ok: false, precisaNuvem: true, faltam: null };
+      return { ok: false, precisaNuvem: false, erro: `não consegui conferir as migrações da nuvem (${(e as Error).message})` };
+    }
+    if (aplicadas === null) return { ok: false, precisaNuvem: true, faltam: null };
+    const faltam = faltamNaNuvem(precisa, aplicadas);
+    return faltam.length ? { ok: false, precisaNuvem: true, faltam } : { ok: true };
+  }
+
+  /** A versão recusada pela trava pode seguir? Confere a nuvem de novo (no máximo a cada 5 minutos, menos se forçar). */
+  private async travaLiberou(forcar = false): Promise<boolean> {
+    const tr = this.travaNuvem;
+    if (!tr) return true;
+    const t = this.d.relogio.agora();
+    if (!forcar && t - tr.conferidaEm < TRAVA_CONFERIR_S) return false;
+    tr.conferidaEm = t;
+    const c = await this.conferirMigracoes(tr.precisa);
+    if (c.ok) {
+      this.travaNuvem = null;
+      this.d.log.info(`a nuvem já tem as migrações da ${tr.para}: a atualização pode seguir`);
+      return true;
+    }
+    if (c.precisaNuvem) tr.faltam = c.faltam;
+    return false;
+  }
+
+  /**
+   * O "Verificar atualização" do painel: lê agora a versão mais nova publicada (sem esperar as 6 horas; no máximo uma
+   * vez por minuto) e conta o que achou. Com a atualização sozinha ligada, o resto segue o jeito escolhido: assim que
+   * sair, a próxima busca já pede a vez; de madrugada, espera a janela.
+   */
+  async conferirAgora(): Promise<{ ok: true; corpo: Record<string, unknown> } | { ok: false; status: number; erro: string }> {
+    if (!this.d.versoes) return { ok: false, status: 501, erro: "este agente não confere versões pelo painel" };
+    const t = this.d.relogio.agora();
+    if (t - this.versaoNovaLidaEm >= CONFERIR_AGORA_S) {
+      this.versaoNovaLidaEm = t;
+      try {
+        this.versaoNova = (await this.d.versoes.publicadas())[0] ?? null;
+        gravarJson(path.join(this.d.c.base, "versoes.json"), { lidoEm: t, maisNova: this.versaoNova });
+      } catch (e) {
+        return { ok: false, status: 502, erro: `não consegui ler as versões publicadas (${(e as Error).message})` };
+      }
+    }
+    if (this.travaNuvem && this.travaNuvem.para === this.versaoNova) await this.travaLiberou(true);
+    // o próximo agente_ola leva o diagnóstico com a versão nova (o cartão do computador mostra)
+    this.diagnosticoEm = 0;
+    const nova = !!this.versaoNova && compararVersao(this.versaoNova, VERSAO) > 0;
+    const pendente = this.atualizacaoPendente();
+    return {
+      ok: true,
+      corpo: {
+        ok: true,
+        conferido: true,
+        atual: VERSAO,
+        mais_nova: this.versaoNova,
+        nova,
+        atualizando: pendente && !pendente.relatado ? pendente.para : null,
+        // a mais nova precisa da nuvem e do painel atualizados primeiro (a trava já recusou esta versão aqui)
+        precisa_nuvem: !!this.travaNuvem && this.travaNuvem.para === this.versaoNova,
+      },
+    };
   }
 
   /**
@@ -872,7 +1010,7 @@ export class Agente {
         motivo = "a atualização não terminou em 30 minutos";
       }
       if (!fim) return;
-      const dados = { atualizacao: fim, de: p.de, para: p.para, comando: p.comando ?? null, sozinho: !!p.sozinho };
+      const dados = { atualizacao: fim, de: p.de, para: p.para, comando: p.comando ?? null, sozinho: !!p.sozinho, ...(p.sozinho ? { modo: p.modo ?? "madrugada" } : {}) };
       if (fim === "concluida") this.registrarEvento("info", `Atualizado de ${p.de} para ${p.para}.`, dados);
       else {
         this.registrarEvento("erro", `A atualização de ${p.de} para ${p.para} não deu certo: ${motivo}. Este computador segue na ${VERSAO}.`, {
@@ -1160,8 +1298,15 @@ export class Agente {
         if (Object.keys(corpo).length) {
           const p = lerPedido(corpo);
           if (!p.ok) return recusa(400, p.erro);
+          if ("conferir" in p) {
+            const c = await this.conferirAgora();
+            return c.ok ? { status: 200, corpo: c.corpo } : recusa(c.status, c.erro);
+          }
           const r = await this.atualizarPrograma(p.versao, { comando: cmd.id ?? null, sozinho: false });
-          if (!r.ok) return recusa(r.status, r.erro);
+          if (!r.ok) {
+            if (!r.precisaNuvem) return recusa(r.status, r.erro);
+            return { status: r.status, corpo: { ok: false, erro: r.erro, precisa_nuvem: true, para: r.precisaNuvem.para, faltam: r.precisaNuvem.faltam?.slice(0, 20) ?? null } };
+          }
           return { status: 200, corpo: { ok: true, atualizando: true, de: r.de, para: r.para } };
         }
         await this.atualizarTudo();

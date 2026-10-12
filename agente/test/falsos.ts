@@ -31,6 +31,7 @@ import type {
   SessaoNuvem,
 } from "../src/nuvem/tipos.js";
 import { Agente } from "../src/agente.js";
+import { modoAtualizar } from "../src/atualizar.js";
 import type { Sistema } from "../src/config.js";
 import { novaChave } from "../src/cofre/cifra.js";
 import { SEGREDO_COFRE } from "../src/cofre/guarda.js";
@@ -204,6 +205,9 @@ interface ContaNuvemF {
   precisaLogin?: boolean;
 }
 
+/** As migrações que os pacotes de teste trazem (nuvem/migracoes) e que o banco falso já tem aplicadas. */
+export const MIGRACOES_DO_PACOTE = ["0001_base.sql", "0099_permissoes.sql"];
+
 /** O banco em memória, com as mesmas regras das funções agente_* (posse, atribuição, versão do cofre, comandos). */
 export class BancoFalso {
   contas = new Map<string, ContaNuvemF>();
@@ -225,6 +229,10 @@ export class BancoFalso {
   vez: { pc: string; de: string; para: string; desde: number; estado: string } | null = null;
   versoes = new Map<string, string>();
   alertas: { texto: string; dados: Record<string, unknown> }[] = [];
+  /** O registro das migrações aplicadas (reveza_migracoes): null = sem registro; o agente_migracoes devolve os nomes. */
+  migracoes: string[] | null = [...MIGRACOES_DO_PACOTE];
+  /** Nuvem de antes da 0.2.1: sem a função agente_migracoes. */
+  semFuncaoMigracoes = false;
   config: Record<string, unknown> = { auto: false, modo: "limiar", aviso: 90, troca: 95, intervalo_s: 5, retomar_terminal: false };
   chamadas: { pc: string; fn: string; args: unknown[] }[] = [];
   agora = () => T0;
@@ -517,11 +525,11 @@ export class NuvemFalsa implements Nuvem {
     return this.banco.agora();
   }
 
-  /** As mesmas regras do agente_vez_de_atualizar (0017). */
+  /** As mesmas regras do agente_vez_de_atualizar (0018; desde a 0020, nos dois jeitos ligados). */
   async vezDeAtualizar(de: string, para: string) {
     this.registrarChamada("vezDeAtualizar", de, para);
     const b = this.banco;
-    if (b.config.atualizar_sozinho !== true) return { pode: false, motivo: "desligado" };
+    if (modoAtualizar(b.config.atualizar_sozinho) === "desligada") return { pode: false, motivo: "desligado" };
     const v = b.vez;
     if (v?.estado === "falhou") return { pode: false, motivo: "falhou" };
     if (v?.estado === "em_andamento") {
@@ -535,6 +543,13 @@ export class NuvemFalsa implements Nuvem {
     }
     b.vez = { pc: this.pc, de, para, desde: b.agora(), estado: "em_andamento" };
     return { pode: true, motivo: null };
+  }
+
+  /** O agente_migracoes (0020): só os nomes; nuvem antiga não tem a função (o PostgREST responde PGRST202). */
+  async migracoesAplicadas() {
+    this.registrarChamada("migracoesAplicadas");
+    if (this.banco.semFuncaoMigracoes) throw new ErroNuvem("agente_migracoes: Could not find the function public.agente_migracoes", false, "PGRST202");
+    return this.banco.migracoes ? [...this.banco.migracoes] : null;
   }
 
   async resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null) {

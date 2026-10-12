@@ -710,6 +710,8 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
       // a versão mais nova publicada (o painel mostra "Versão X disponível") e a atualização em andamento
       versaoNova: agente.versaoNova,
       atualizacao: pendente && !pendente.relatado ? { para: pendente.para, desde: new Date(pendente.em * 1000).toISOString() } : null,
+      // a versão nova que a trava recusou: a nuvem e o painel precisam ser atualizados no computador principal primeiro
+      precisaNuvem: agente.travaNuvem ? { para: agente.travaNuvem.para } : null,
     };
   };
   await agente.iniciar();

@@ -49,6 +49,9 @@ describe("contrato das funções agente_*", () => {
     await n.ligacaoPublicar(b, b);
     await n.vezDeAtualizar("0.1.0", "0.1.1");
     await n.resultadoAtualizacao("0.1.1", "falhou", "voltou");
+    r.resposta = { nomes: ["0001_base.sql"] };
+    await n.migracoesAplicadas();
+    r.resposta = { ok: true };
     const chave = { kty: "EC" as const, crv: "P-256" as const, x: "a".repeat(43), y: "b".repeat(43) };
     await n.ligacoesAbertas();
     await n.ligacaoEntregar("pc-novo", chave, { efemera: chave, iv: "A".repeat(16), cifrado: "B".repeat(64) });
@@ -77,6 +80,7 @@ describe("contrato das funções agente_*", () => {
       "agente_ligacao_publicar(p_embrulho,p_sal)",
       "agente_vez_de_atualizar(p_de,p_para)",
       "agente_atualizacao_resultado(p_para,p_estado,p_motivo)",
+      "agente_migracoes()",
       "agente_ligacoes_abertas()",
       "agente_ligacao_entregar(p_computador,p_publica,p_envelope)",
       "agente_ligacao_recusar(p_computador,p_motivo)",
@@ -227,6 +231,33 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
     assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: false, motivo: "outro" });
     assert.deepEqual(await n1.resultadoAtualizacao("1.0.1", "concluida", null), { ok: true });
     assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: true, motivo: null });
+  });
+
+  test("a trava pelo banco: o agente lê só os nomes das migrações e compara com as do pacote de verdade", async () => {
+    const apoio = (await import(pathToFileURL(APOIO).href)) as { banco: () => Promise<any> };
+    const prov = (await import(pathToFileURL(path.resolve(aqui, "..", "..", "..", "nuvem", "provisionar.mjs")).href)) as {
+      migracoes: () => { nome: string; sql: string }[];
+      SQL_REGISTRO: string;
+      sqlRegistrar: (nome: string, hash: string) => string;
+    };
+    const { faltamNaNuvem, migracoesDoPacote } = await import("../src/atualizar.js");
+    const { createHash } = await import("node:crypto");
+    const db = await apoio.banco();
+    const p1 = await db.computador("p1");
+    const n1 = new NuvemRpc({ chamar: (fn, args) => db.rpc(p1, fn, args), horaDoServidor: async () => null });
+    assert.equal(await n1.migracoesAplicadas(), null, "sem o registro do instalador: não se sabe");
+    await db.db.exec(prov.SQL_REGISTRO);
+    const todas = prov.migracoes();
+    // a nuvem sem a 0020: o pacote desta versão é recusado
+    const raiz = path.resolve(aqui, "..", "..", "..");
+    const doPacote = migracoesDoPacote(raiz);
+    assert.deepEqual(doPacote, todas.map((m) => m.nome).sort());
+    for (const m of todas.filter((x) => x.nome !== "0020_atualizar_escolha.sql")) {
+      await db.sql(prov.sqlRegistrar(m.nome, createHash("sha256").update(m.sql).digest("hex")));
+    }
+    assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!), ["0020_atualizar_escolha.sql"]);
+    await db.sql(prov.sqlRegistrar("0020_atualizar_escolha.sql", "0".repeat(64)));
+    assert.deepEqual(faltamNaNuvem(doPacote, (await n1.migracoesAplicadas())!), []);
   });
 
   test("computador novo pelo banco: pede, o velho libera pelo código, a chave chega igual, uma vez, e só então ele entra", async () => {

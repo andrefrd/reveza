@@ -7,6 +7,11 @@
 // roda o instalador DELE com `--atualizar --sim` (sem token: só este computador; a nuvem e o painel ficam) num processo
 // separado, que sobrevive à troca do agente. A cópia do estado e a volta para a versão anterior quando a nova não sobe
 // são do instalador.
+//
+// A trava de compatibilidade: a versão nova pode trazer migração da nuvem e painel novo, que só o computador principal
+// aplica (com os tokens). As migrações vêm no próprio pacote (nuvem/migracoes); antes de rodar o instalador, o agente
+// compara os nomes com os que a nuvem já aplicou (agente_migracoes, só a lista de nomes) e, faltando alguma, não se
+// atualiza: o painel pede a atualização no computador principal primeiro.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -31,6 +36,29 @@ export const TAREFA_ATUALIZAR = "Reveza AI atualizar";
 /** O fuso que o banco usa quando a instalação não tem um (config `fuso`). */
 export const FUSO_PADRAO = "America/Sao_Paulo";
 
+/**
+ * Como cada computador se atualiza sozinho (config `atualizar_sozinho` da instalação): desligada (o padrão), de
+ * madrugada (true, das 3h às 5h) ou assim que sair (a versão nova é instalada assim que o agente a acha). Só esses três;
+ * qualquer outro valor é desligada.
+ */
+export type ModoAtualizar = "desligada" | "madrugada" | "assim_que_sair";
+
+export function modoAtualizar(valor: unknown): ModoAtualizar {
+  if (valor === true || valor === "madrugada") return "madrugada";
+  if (valor === "assim_que_sair") return "assim_que_sair";
+  return "desligada";
+}
+
+/** O "Verificar atualização" do painel não confere mais de uma vez por minuto (a API do GitHub dá 60 por hora). */
+export const CONFERIR_AGORA_S = 60;
+/** Versão nova recusada pela trava: a nuvem é conferida de novo a cada 5 minutos. */
+export const TRAVA_CONFERIR_S = 5 * 60;
+
+/** O que o painel mostra quando a versão nova precisa da nuvem e do painel atualizados (só o computador principal faz). */
+export function textoPrecisaNuvem(versao: string): string {
+  return `a versão ${versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal`;
+}
+
 /** Atualizar sozinho só de madrugada: das 3h às 5h no fuso da instalação. */
 export function naMadrugada(epoch: number, fuso: unknown): boolean {
   const formatar = (tz: string) =>
@@ -49,9 +77,18 @@ export function urlDoPacote(versao: string): string {
   return `https://github.com/${REPOSITORIO}/archive/refs/tags/v${versao}.tar.gz`;
 }
 
-/** O pedido do painel: só `{ versao: "X.Y.Z" | "mais_nova" }`. Qualquer outro campo (endereço, caminho...) é recusado. */
-export function lerPedido(corpo: Record<string, unknown>): { ok: true; versao: string } | { ok: false; erro: string } {
-  if (Object.keys(corpo).some((k) => k !== "versao")) return { ok: false, erro: "o pedido de atualização só leva a versão" };
+/**
+ * O pedido do painel: `{ versao: "X.Y.Z" | "mais_nova" }` (atualizar) ou `{ conferir: true }` (Verificar atualização:
+ * ler agora a versão publicada, sem esperar as 6 horas). Qualquer outro campo (endereço, caminho...) é recusado.
+ */
+export function lerPedido(
+  corpo: Record<string, unknown>,
+): { ok: true; versao: string } | { ok: true; conferir: true } | { ok: false; erro: string } {
+  const chaves = Object.keys(corpo);
+  if (chaves.length === 1 && chaves[0] === "conferir") {
+    return corpo.conferir === true ? { ok: true, conferir: true } : { ok: false, erro: "pedido de conferir inválido" };
+  }
+  if (chaves.some((k) => k !== "versao")) return { ok: false, erro: "o pedido de atualização só leva a versão" };
   const v = corpo.versao;
   if (v === MAIS_NOVA || (typeof v === "string" && VERSAO_VALIDA.test(v))) return { ok: true, versao: v };
   return { ok: false, erro: "versão inválida: só X.Y.Z ou a mais nova" };
@@ -203,6 +240,27 @@ export function acharInstalador(pasta: string, versao: string): string {
   const instalador = path.join(pasta, raiz, "instalador", "instalar.mjs");
   if (!fs.existsSync(instalador)) throw new Error("o pacote não tem o instalador");
   return instalador;
+}
+
+/**
+ * As migrações da nuvem que a versão nova traz: os nomes dos arquivos de `nuvem/migracoes` do pacote (o mesmo filtro do
+ * instalador, provisionar.mjs). Pacote sem essa pasta é recusado: sem ela não há como saber se a nuvem está pronta.
+ */
+export function migracoesDoPacote(raiz: string): string[] {
+  const dir = path.join(raiz, "nuvem", "migracoes");
+  let nomes: string[];
+  try {
+    nomes = fs.readdirSync(dir);
+  } catch {
+    throw new Error("o pacote não tem as migrações da nuvem");
+  }
+  return nomes.filter((n) => n.endsWith(".sql") && !n.startsWith(".")).sort();
+}
+
+/** As migrações do pacote que a nuvem ainda não aplicou (pelo nome, como o registro do instalador). */
+export function faltamNaNuvem(doPacote: string[], aplicadas: string[]): string[] {
+  const tem = new Set(aplicadas);
+  return doPacote.filter((n) => !tem.has(n));
 }
 
 // ------------------------------------------------------------------------------------------------ processo separado

@@ -14,9 +14,12 @@ import {
   EXECUTOR_DA_ATUALIZACAO,
   escolherVersao,
   extrairTarGz,
+  faltamNaNuvem,
   GithubOficial,
   lerPedido,
   MAIS_NOVA,
+  migracoesDoPacote,
+  modoAtualizar,
   naMadrugada,
   rodarSeparado,
   TAREFA_ATUALIZAR,
@@ -26,7 +29,8 @@ import {
   type FonteVersoes,
 } from "../src/atualizar.js";
 import { VERSAO } from "../src/config.js";
-import { ativaEm, BancoFalso, ExecutorFalso, montar, NuvemFalsa, pastaTemporaria, RelogioFalso, type Montado } from "./falsos.js";
+import { ErroNuvem } from "../src/nuvem/tipos.js";
+import { ativaEm, BancoFalso, ExecutorFalso, MIGRACOES_DO_PACOTE, montar, NuvemFalsa, pastaTemporaria, RelogioFalso, type Montado } from "./falsos.js";
 
 let tmp: ReturnType<typeof pastaTemporaria> | null = null;
 let m: Montado | null = null;
@@ -105,14 +109,18 @@ function tarGz(entradas: Entrada[]): Buffer {
   return zlib.gzipSync(Buffer.concat(partes));
 }
 
-/** O pacote de uma versão, como o GitHub monta (pasta reveza-X.Y.Z com package.json e o instalador). */
-function pacote(versao: string, extra: Entrada[] = []): Buffer {
+/**
+ * O pacote de uma versão, como o GitHub monta (pasta reveza-X.Y.Z com package.json, o instalador e as migrações da
+ * nuvem). `migracoes` null: pacote sem a pasta nuvem/migracoes.
+ */
+function pacote(versao: string, extra: Entrada[] = [], migracoes: string[] | null = MIGRACOES_DO_PACOTE): Buffer {
   const raiz = `reveza-${versao}`;
   return tarGz([
     { nome: "pax_global_header", conteudo: registroPax("comment", "abc123").toString(), tipo: "g" },
     { nome: `${raiz}/`, tipo: "5", modo: 0o755 },
     { nome: `${raiz}/package.json`, conteudo: JSON.stringify({ name: "reveza", version: versao }) },
     { nome: `${raiz}/instalador/instalar.mjs`, conteudo: "#!/usr/bin/env node\n", modo: 0o755 },
+    ...(migracoes ?? []).map((n) => ({ nome: `${raiz}/nuvem/migracoes/${n}`, conteudo: "-- migração\n" })),
     ...extra,
   ]);
 }
@@ -150,9 +158,22 @@ describe("o que a nuvem pode pedir", () => {
       { versao: "0.1.7", url: "https://exemplo.com/x.tgz" },
       { versao: "0.1.7", caminho: "/tmp/x" },
       { url: "https://exemplo.com/x.tgz" },
+      // o Verificar atualização leva só { conferir: true }
+      { conferir: "sim" },
+      { conferir: false },
+      { conferir: true, versao: "0.1.7" },
+      { conferir: true, url: "https://exemplo.com/x.tgz" },
     ]) {
       assert.equal(lerPedido(corpo as Record<string, unknown>).ok, false, JSON.stringify(corpo));
     }
+    assert.deepEqual(lerPedido({ conferir: true }), { ok: true, conferir: true });
+  });
+
+  test("o jeito de atualizar sozinho: true (de antes da escolha) continua de madrugada; valor estranho é desligada", () => {
+    assert.equal(modoAtualizar(true), "madrugada");
+    assert.equal(modoAtualizar("madrugada"), "madrugada");
+    assert.equal(modoAtualizar("assim_que_sair"), "assim_que_sair");
+    for (const v of [false, undefined, null, "desligada", "sempre", 1, {}]) assert.equal(modoAtualizar(v), "desligada", JSON.stringify(v));
   });
 
   test("o endereço do pacote é fixo no código: só a versão entra nele", () => {
@@ -271,6 +292,23 @@ describe("extrair o pacote com o Node", () => {
     const versao = JSON.parse(fs.readFileSync(path.join(raiz, "package.json"), "utf8")).version;
     assert.ok(escritos.length > 50);
     assert.equal(acharInstalador(path.join(tmp.dir, "repo"), versao), path.join(tmp.dir, "repo", "reveza-teste", "instalador", "instalar.mjs"));
+    // as migrações que o pacote traz são as de nuvem/migracoes, com o mesmo filtro do instalador
+    const doRepo = fs.readdirSync(path.join(raiz, "nuvem", "migracoes")).filter((n) => n.endsWith(".sql")).sort();
+    assert.deepEqual(migracoesDoPacote(path.join(tmp.dir, "repo", "reveza-teste")), doRepo);
+    assert.ok(doRepo.includes("0020_atualizar_escolha.sql"));
+  });
+
+  test("as migrações do pacote e as que faltam na nuvem (pelo nome); pacote sem a pasta é recusado", () => {
+    tmp = pastaTemporaria();
+    const arq = path.join(tmp.dir, "p.tgz");
+    fs.writeFileSync(arq, pacote("0.1.7", [], ["0002_b.sql", "0001_a.sql", ".oculta.sql", "LEIA.md"]));
+    extrairTarGz(arq, path.join(tmp.dir, "x"));
+    assert.deepEqual(migracoesDoPacote(path.join(tmp.dir, "x", "reveza-0.1.7")), ["0001_a.sql", "0002_b.sql"]);
+    assert.deepEqual(faltamNaNuvem(["0001_a.sql", "0002_b.sql", "0003_c.sql"], ["0002_b.sql", "0001_a.sql", "0009_outra.sql"]), ["0003_c.sql"]);
+    assert.deepEqual(faltamNaNuvem(["0001_a.sql"], ["0001_a.sql"]), []);
+    fs.writeFileSync(arq, pacote("0.1.8", [], null));
+    extrairTarGz(arq, path.join(tmp.dir, "y"));
+    assert.throws(() => migracoesDoPacote(path.join(tmp!.dir, "y", "reveza-0.1.8")), /não tem as migrações da nuvem/);
   });
 });
 
@@ -604,5 +642,353 @@ describe("atualizar sozinho de madrugada", () => {
     await a.m.relogio.avancar(301_000);
     await a.m.agente.busca();
     assert.deepEqual(v.baixadas, [NOVA], "não tenta de novo na mesma noite");
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ verificar agora
+
+/** 13/10/2026, 15:30 em São Paulo: fora da madrugada. */
+const TARDE_SP = Date.UTC(2026, 9, 13, 18, 30) / 1000;
+const NOVA_MIGRACAO = "0021_nova.sql";
+const comNovaMigracao = (v: string) => pacote(v, [], [...MIGRACOES_DO_PACOTE, NOVA_MIGRACAO]);
+const doTipo = (banco: BancoFalso, atualizacao: string) => banco.eventos.filter((e) => (e.dados as { atualizacao?: string }).atualizacao === atualizacao);
+
+describe("Verificar atualização: o painel pede que cada computador confira agora", () => {
+  let banco: BancoFalso;
+  let exec: ExecutorFalso;
+  let nuvem: NuvemFalsa;
+  async function preparar(versoes = new VersoesFalsas(), config: Record<string, unknown> = {}, t = TARDE_SP) {
+    banco = new BancoFalso();
+    banco.config = { ...banco.config, ...config };
+    exec = new ExecutorFalso();
+    nuvem = new NuvemFalsa(banco, "pc-1");
+    const relogio = new RelogioFalso();
+    relogio.t = t;
+    m = await montar({ nuvem, exec, versoes, relogio, diagnostico: async () => ({ conferencias: [] }) });
+    banco.agora = () => m!.relogio.agora();
+    m.agente.estado.trocadaEm = 0;
+    await m.agente.busca();
+    return versoes;
+  }
+  let ids = 100;
+  async function pedir(corpo: Record<string, unknown>) {
+    const id = ++ids;
+    banco.comandos.push({ id, acao: "atualizar", corpo, pc: "pc-1", estado: "pendente" });
+    await m!.agente.busca();
+    return banco.comandos.find((c) => c.id === id)! as { estado: string; http?: number; resposta?: Record<string, unknown> };
+  }
+  const olasComDiagnostico = () => banco.chamadas.filter((c) => c.fn === "ola" && c.args[1] !== null).length;
+
+  test("lê a versão publicada agora (sem esperar as 6 horas), conta o que achou e o cartão do computador recebe", async () => {
+    const v = await preparar(new VersoesFalsas([VERSAO]));
+    let leituras = 0;
+    const lista = v.publicadas.bind(v);
+    v.publicadas = async () => (leituras++, lista());
+    await m!.agente.conferirVersaoNova();
+    assert.equal(m!.agente.versaoNova, VERSAO);
+    // saiu uma versão nova uma hora depois: o ciclo normal só veria em 6 horas
+    v.lista = [NOVA, VERSAO];
+    await m!.relogio.avancar(3600 * 1000);
+    await m!.agente.conferirVersaoNova();
+    assert.equal(m!.agente.versaoNova, VERSAO);
+    const antes = leituras;
+    const cmd = await pedir({ conferir: true });
+    assert.equal(cmd.estado, "feito", JSON.stringify(cmd.resposta));
+    assert.deepEqual(cmd.resposta, { ok: true, conferido: true, atual: VERSAO, mais_nova: NOVA, nova: true, atualizando: null, precisa_nuvem: false });
+    assert.equal(leituras, antes + 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(m!.c.base, "versoes.json"), "utf8")).maisNova, NOVA);
+    // a próxima busca leva o diagnóstico novo (com a versão nova) para o cartão do computador, sem esperar os 10 minutos
+    const diagAntes = olasComDiagnostico();
+    await m!.agente.busca();
+    assert.equal(olasComDiagnostico(), diagAntes + 1);
+    // desligada: só conferiu, nada baixou nem rodou
+    assert.deepEqual(v.baixadas, []);
+    assert.equal(exec.iniciados.length, 0);
+    // dois cliques seguidos: uma leitura só por minuto (a API do GitHub dá 60 por hora)
+    await pedir({ conferir: true });
+    assert.equal(leituras, antes + 1);
+    await m!.relogio.avancar(61_000);
+    await pedir({ conferir: true });
+    assert.equal(leituras, antes + 2);
+  });
+
+  test("já na mais nova: diz que está em dia; sem conseguir ler o GitHub, recusa com o motivo", async () => {
+    const v = await preparar(new VersoesFalsas([VERSAO, MEIO.replace(/\d+$/, "0")]));
+    const cmd = await pedir({ conferir: true });
+    assert.equal(cmd.estado, "feito");
+    assert.equal(cmd.resposta?.nova, false);
+    assert.equal(cmd.resposta?.mais_nova, VERSAO);
+    v.falharLista = true;
+    await m!.relogio.avancar(61_000);
+    const falha = await pedir({ conferir: true });
+    assert.equal(falha.estado, "recusado");
+    assert.match(String(falha.resposta?.erro), /não consegui ler as versões publicadas/);
+  });
+
+  test("com 'assim que sair', o computador acha a versão nova no Verificar e já começa sozinho", async () => {
+    const v = await preparar(new VersoesFalsas([VERSAO]), { atualizar_sozinho: "assim_que_sair" });
+    await m!.agente.conferirVersaoNova();
+    v.lista = [NOVA, VERSAO];
+    await m!.agente.busca();
+    assert.equal(exec.iniciados.length, 0, "ainda não sabe da versão nova");
+    await m!.relogio.avancar(61_000);
+    const cmd = await pedir({ conferir: true });
+    assert.equal(cmd.resposta?.nova, true);
+    await m!.agente.busca();
+    assert.equal(exec.iniciados.length, 1, "achou e começou, com a vez da nuvem");
+    assert.equal(banco.vez?.pc, "pc-1");
+    const [ev] = doTipo(banco, "pedida");
+    assert.match(ev!.texto, /sozinho, assim que saiu/);
+    assert.deepEqual({ ...(ev!.dados as object) }, { atualizacao: "pedida", de: VERSAO, para: NOVA, comando: null, sozinho: true, modo: "assim_que_sair" });
+    // e o Verificar de novo conta que está atualizando
+    await m!.relogio.avancar(61_000);
+    assert.equal((await pedir({ conferir: true })).resposta?.atualizando, NOVA);
+  });
+
+  test("com 'de madrugada', o Verificar acha a versão nova mas a atualização espera a janela das 3h às 5h", async () => {
+    await preparar(new VersoesFalsas(), { atualizar_sozinho: true });
+    const cmd = await pedir({ conferir: true });
+    assert.equal(cmd.resposta?.nova, true);
+    await m!.agente.busca();
+    assert.equal(exec.iniciados.length, 0);
+    assert.ok(!banco.chamadas.some((c) => c.fn === "vezDeAtualizar"), "fora da janela nem pede a vez");
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ assim que sair
+
+describe("atualizar sozinho assim que sair", () => {
+  const montados: Montado[] = [];
+  afterEach(() => {
+    while (montados.length) montados.pop()!.limpar();
+  });
+
+  async function computador(banco: BancoFalso, pc: string, versoes = new VersoesFalsas()) {
+    const relogio = new RelogioFalso();
+    relogio.t = TARDE_SP;
+    const exec = new ExecutorFalso();
+    const mm = await montar({ nuvem: new NuvemFalsa(banco, pc), exec, versoes, relogio });
+    montados.push(mm);
+    mm.agente.estado.trocadaEm = 0;
+    await mm.agente.conferirVersaoNova();
+    return { m: mm, exec, versoes };
+  }
+  function bancoCom(valor: unknown) {
+    const banco = new BancoFalso();
+    banco.config = { ...banco.config, atualizar_sozinho: valor };
+    banco.agora = () => TARDE_SP;
+    return banco;
+  }
+
+  test("atualiza a qualquer hora, assim que acha a versão nova, pelo mesmo caminho do botão (oficial, maior, --atualizar --sim)", async () => {
+    const banco = bancoCom("assim_que_sair");
+    const a = await computador(banco, "pc-1");
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1);
+    assert.deepEqual(a.exec.iniciados[0]!.argv.slice(5), ["--atualizar", "--sim"]);
+    assert.deepEqual(a.versoes.baixadas, [NOVA]);
+    const p = JSON.parse(fs.readFileSync(path.join(a.m.c.base, "atualizacao.json"), "utf8"));
+    assert.equal(p.modo, "assim_que_sair");
+  });
+
+  test("de madrugada (o true de antes ou o nome) não atualiza à tarde, e desligada nem pede a vez", async () => {
+    for (const valor of [true, "madrugada", false, "desligada", "qualquer"]) {
+      const banco = bancoCom(valor);
+      const a = await computador(banco, "pc-1");
+      await a.m.agente.busca();
+      assert.equal(a.exec.iniciados.length, 0, JSON.stringify(valor));
+      assert.ok(!banco.chamadas.some((c) => c.fn === "vezDeAtualizar"), JSON.stringify(valor));
+    }
+  });
+
+  test("só com o computador calmo: troca de conta em andamento ou sessão no limite fazem esperar", async () => {
+    const banco = bancoCom("assim_que_sair");
+    const a = await computador(banco, "pc-1");
+    a.m.agente.estado.trocadaEm = TARDE_SP - 60;
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0, "trocou de conta há 1 minuto");
+    a.m.agente.estado.trocadaEm = 0;
+    a.m.agente.estado.fila.unshift({ sessao: "s1", cwd: "/x", tipo: "interativa", em: TARDE_SP - 30, estado: "aguardando", conta: null });
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0, "uma sessão parou no limite agora");
+    a.m.agente.estado.fila = [];
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1, "calmo: segue");
+  });
+
+  test("um computador por vez: o segundo só começa quando o primeiro voltou na versão nova", async () => {
+    const banco = bancoCom("assim_que_sair");
+    const a = await computador(banco, "pc-1");
+    const b = await computador(banco, "pc-2");
+    await a.m.agente.busca();
+    await b.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1);
+    assert.equal(b.exec.iniciados.length, 0, "o primeiro ainda não voltou");
+    banco.versoes.set("pc-1", NOVA);
+    await b.m.relogio.avancar(301_000);
+    await b.m.agente.busca();
+    assert.equal(b.exec.iniciados.length, 1);
+  });
+
+  test("o pacote nem baixou: libera a vez e tenta de novo em uma hora (não na noite seguinte)", async () => {
+    const banco = bancoCom("assim_que_sair");
+    const v = new VersoesFalsas();
+    v.falharDownload = "o GitHub respondeu 503 ao pacote";
+    const a = await computador(banco, "pc-1", v);
+    await a.m.agente.busca();
+    assert.equal(banco.vez, null);
+    v.falharDownload = null;
+    await a.m.relogio.avancar(30 * 60_000);
+    await a.m.agente.busca();
+    assert.deepEqual(v.baixadas, [NOVA], "meia hora depois, ainda não");
+    await a.m.relogio.avancar(31 * 60_000);
+    await a.m.agente.busca();
+    assert.deepEqual(v.baixadas, [NOVA, NOVA]);
+    assert.equal(a.exec.iniciados.length, 1);
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ a trava
+
+describe("a trava de compatibilidade: sem as migrações da versão nova na nuvem, o programa não troca", () => {
+  let banco: BancoFalso;
+  let exec: ExecutorFalso;
+  let nuvem: NuvemFalsa;
+  async function preparar(versoes = new VersoesFalsas(undefined, comNovaMigracao)) {
+    banco = new BancoFalso();
+    exec = new ExecutorFalso();
+    nuvem = new NuvemFalsa(banco, "pc-1");
+    m = await montar({ nuvem, exec, versoes });
+    banco.agora = () => m!.relogio.agora();
+    await m.agente.busca();
+    return versoes;
+  }
+  let ids = 200;
+  async function pedir(corpo: Record<string, unknown>) {
+    const id = ++ids;
+    banco.comandos.push({ id, acao: "atualizar", corpo, pc: "pc-1", estado: "pendente" });
+    await m!.agente.busca();
+    return banco.comandos.find((c) => c.id === id)! as { estado: string; http?: number; resposta?: Record<string, unknown> };
+  }
+  const restos = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("reveza-atualizar-"));
+
+  test("faltando migração, o botão recusa com o aviso do computador principal, sem rodar nada e sem deixar o pacote", async () => {
+    const v = await preparar();
+    const antes = new Set(restos());
+    const cmd = await pedir({ versao: MAIS_NOVA });
+    assert.equal(cmd.estado, "recusado");
+    assert.equal(cmd.http, 409);
+    assert.deepEqual(cmd.resposta, {
+      ok: false,
+      erro: `a versão ${NOVA} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal`,
+      precisa_nuvem: true,
+      para: NOVA,
+      faltam: [NOVA_MIGRACAO],
+    });
+    assert.equal(exec.iniciados.length, 0, "o instalador não roda");
+    assert.equal(fs.existsSync(path.join(m!.c.base, "atualizacao.json")), false);
+    assert.deepEqual(restos().filter((n) => !antes.has(n)), [], "a pasta do pacote sai");
+    const [ev] = doTipo(banco, "precisa_nuvem");
+    assert.match(ev!.texto, /precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal/);
+    assert.deepEqual((ev!.dados as { faltam: string[] }).faltam, [NOVA_MIGRACAO]);
+    assert.equal(m!.agente.travaNuvem?.para, NOVA);
+    // de novo: confere a nuvem antes de baixar outra vez, e o aviso não se repete
+    const outra = await pedir({ versao: MAIS_NOVA });
+    assert.equal(outra.resposta?.precisa_nuvem, true);
+    assert.deepEqual(v.baixadas, [NOVA]);
+    assert.equal(doTipo(banco, "precisa_nuvem").length, 1);
+    // e o Verificar conta que a mais nova precisa da nuvem
+    const conferida = await pedir({ conferir: true });
+    assert.equal(conferida.resposta?.mais_nova, NOVA);
+    assert.equal(conferida.resposta?.precisa_nuvem, true);
+  });
+
+  test("o computador principal atualizou a nuvem: o mesmo pedido agora atualiza", async () => {
+    await preparar();
+    assert.equal((await pedir({ versao: MAIS_NOVA })).resposta?.precisa_nuvem, true);
+    banco.migracoes!.push(NOVA_MIGRACAO);
+    const cmd = await pedir({ versao: MAIS_NOVA });
+    assert.equal(cmd.estado, "feito", JSON.stringify(cmd.resposta));
+    assert.equal(cmd.resposta?.atualizando, true);
+    assert.equal(exec.iniciados.length, 1);
+    assert.equal(m!.agente.travaNuvem, null);
+  });
+
+  test("nuvem de antes da 0.2.1 (sem a função) ou sem o registro conta como desatualizada; sem rede, não atualiza e não trava", async () => {
+    await preparar(new VersoesFalsas());
+    banco.semFuncaoMigracoes = true;
+    const semFuncao = await pedir({ versao: MAIS_NOVA });
+    assert.equal(semFuncao.http, 409);
+    assert.equal(semFuncao.resposta?.precisa_nuvem, true);
+    assert.equal(semFuncao.resposta?.faltam, null);
+    banco.semFuncaoMigracoes = false;
+    banco.migracoes = null;
+    const semRegistro = await pedir({ versao: MAIS_NOVA });
+    assert.equal(semRegistro.resposta?.precisa_nuvem, true);
+    assert.equal(exec.iniciados.length, 0);
+    // sem rede na hora de conferir: não se sabe, então não atualiza, mas também não fica travado
+    banco.migracoes = [...MIGRACOES_DO_PACOTE];
+    m!.agente.travaNuvem = null;
+    nuvem.migracoesAplicadas = async () => {
+      throw new ErroNuvem("fetch failed", true);
+    };
+    const semRede = await pedir({ versao: MAIS_NOVA });
+    assert.equal(semRede.estado, "recusado");
+    assert.equal(semRede.http, 503);
+    assert.match(String(semRede.resposta?.erro), /não consegui conferir as migrações da nuvem/);
+    assert.equal(semRede.resposta?.precisa_nuvem, undefined);
+    assert.equal(m!.agente.travaNuvem, null);
+    assert.equal(exec.iniciados.length, 0);
+    // a nuvem respondeu: atualiza
+    nuvem.migracoesAplicadas = NuvemFalsa.prototype.migracoesAplicadas.bind(nuvem);
+    assert.equal((await pedir({ versao: MAIS_NOVA })).estado, "feito");
+    assert.equal(exec.iniciados.length, 1);
+  });
+
+  test("pacote sem as migrações da nuvem: recusado, nada roda", async () => {
+    await preparar(new VersoesFalsas(undefined, (v) => pacote(v, [], null)));
+    const cmd = await pedir({ versao: MAIS_NOVA });
+    assert.equal(cmd.estado, "recusado");
+    assert.match(String(cmd.resposta?.erro), /não tem as migrações da nuvem/);
+    assert.equal(exec.iniciados.length, 0);
+  });
+
+  test("sozinho: a trava devolve a vez sem alerta, espera a nuvem sem baixar de novo, e segue quando a migração chega", async () => {
+    const MADRUGADA_SP = Date.UTC(2026, 9, 13, 6, 30) / 1000;
+    for (const [valor, t] of [["assim_que_sair", TARDE_SP], [true, MADRUGADA_SP]] as const) {
+      banco = new BancoFalso();
+      banco.config = { ...banco.config, atualizar_sozinho: valor };
+      exec = new ExecutorFalso();
+      const relogio = new RelogioFalso();
+      relogio.t = t;
+      const v = new VersoesFalsas(undefined, comNovaMigracao);
+      m?.limpar();
+      m = await montar({ nuvem: new NuvemFalsa(banco, "pc-1"), exec, versoes: v, relogio });
+      banco.agora = () => m!.relogio.agora();
+      m.agente.estado.trocadaEm = 0;
+      await m.agente.conferirVersaoNova();
+      await m.agente.busca();
+      assert.deepEqual(v.baixadas, [NOVA], String(valor));
+      assert.equal(exec.iniciados.length, 0);
+      assert.equal(banco.vez, null, "a vez volta livre para os outros");
+      assert.equal(banco.alertas.length, 0, "não é falha: é a nuvem atrás");
+      assert.equal(doTipo(banco, "precisa_nuvem").length, 1);
+      const vezes = () => banco.chamadas.filter((c) => c.fn === "vezDeAtualizar").length;
+      const pedidas = vezes();
+      // a nuvem ainda sem a migração: confere de 5 em 5 minutos, sem pedir a vez nem baixar
+      for (let i = 0; i < 3; i++) {
+        await m.relogio.avancar(301_000);
+        await m.agente.busca();
+      }
+      assert.equal(vezes(), pedidas);
+      assert.deepEqual(v.baixadas, [NOVA]);
+      // o computador principal atualizou a nuvem: na conferência seguinte, pede a vez e atualiza
+      banco.migracoes!.push(NOVA_MIGRACAO);
+      await m.relogio.avancar(301_000);
+      await m.agente.busca();
+      assert.equal(exec.iniciados.length, 1, String(valor));
+      assert.deepEqual(v.baixadas, [NOVA, NOVA]);
+      assert.equal((banco.vez as BancoFalso["vez"])?.pc, "pc-1");
+    }
   });
 });

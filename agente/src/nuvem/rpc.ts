@@ -259,4 +259,12 @@ export class NuvemRpc implements Nuvem {
     const r = await this.chamar("agente_atualizacao_resultado", { p_para: para, p_estado: estado, p_motivo: motivo });
     return { ok: r.ok === true };
   }
+
+  async migracoesAplicadas() {
+    const r = await this.chamar("agente_migracoes", {});
+    if (r.nomes === null || r.nomes === undefined) return null;
+    if (!Array.isArray(r.nomes)) throw new ErroNuvem("agente_migracoes: resposta fora do formato", false, "formato");
+    // só nome de arquivo de migração (como o registro do instalador aceita)
+    return r.nomes.filter((n): n is string => typeof n === "string" && /^[0-9a-z_.]{1,120}$/.test(n));
+  }
 }
