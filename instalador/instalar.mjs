@@ -115,7 +115,7 @@ async function programa(ctx) {
   ok(t(`comando reveza em ${lanc}`, `reveza command at ${lanc}`));
   const l = linhaPath(BIN);
   if (l && !(process.env.PATH || "").split(path.delimiter).includes(BIN)) {
-    if (await ctx.p.sim(t(`Acrescentar ${BIN} ao PATH em ${l.arquivo}?`, `Add ${BIN} to PATH in ${l.arquivo}?`), !ctx.semPerguntas)) {
+    if (await ctx.p.sim(t(`Pôr o comando reveza no PATH (uma linha em ${l.arquivo})?`, `Put the reveza command on PATH (one line in ${l.arquivo})?`), !ctx.semPerguntas)) {
       if (acrescentarPath(BIN)) ok(t("PATH atualizado (vale nos terminais novos)", "PATH updated (applies to new terminals)"));
       else nao(t(`não consegui mudar o PATH: use ${l.linha}`, `could not change PATH: use ${l.linha}`));
     } else info(t(`Para usar o comando reveza: ${l.linha}`, `To use the reveza command: ${l.linha}`));
@@ -195,16 +195,19 @@ async function nuvem(ctx) {
     ctx.ref = ctx.inst.nuvem.ref;
   } else {
     const lista = await projetos(ctx.gerencia);
-    const opcoes = [t("criar um projeto novo", "create a new project"), ...lista.map((p) => `${p.nome} (${p.ref}, ${p.regiao})`)];
+    const opcoes = [t("criar um projeto novo, só do Reveza (recomendado)", "create a new project just for Reveza (recommended)"), ...lista.map((p) => `${p.nome} (${p.ref}, ${p.regiao})`)];
     const i = await ctx.p.escolha(t("Projeto do Supabase", "Supabase project"), opcoes, process.env.REVEZA_SUPABASE_REF ? 0 : 1);
     if (process.env.REVEZA_SUPABASE_REF) ctx.ref = process.env.REVEZA_SUPABASE_REF;
     else if (i === 0) {
       const orgs = await organizacoes(ctx.gerencia);
       if (!orgs.length) throw new Error(t("o token não vê nenhuma organização", "the token sees no organization"));
-      const o = orgs.length === 1 ? 0 : await ctx.p.escolha(t("Organização", "Organization"), orgs.map((x) => x.nome), 1);
+      const o = orgs.length === 1 ? 0 : await ctx.p.escolha(t("Organização do Supabase onde criar o projeto", "Supabase organization to create the project in"), orgs.map((x) => x.nome), 1);
       const sugerida = regiaoSugerida();
-      let regiao = await ctx.p.perguntar(t("Região", "Region"), sugerida);
-      if (!REGIOES.includes(regiao)) regiao = sugerida;
+      let regiao = await ctx.p.perguntar(t("Região do projeto (a sugerida é a mais perto, pelo fuso deste computador)", "Project region (the suggested one is the closest, by this computer's time zone)"), sugerida);
+      if (!REGIOES.includes(regiao)) {
+        nao(t(`região desconhecida: fico com ${sugerida}`, `unknown region: using ${sugerida}`));
+        regiao = sugerida;
+      }
       ctx.ref = await criarProjeto(ctx.gerencia, { org: orgs[o].slug, nome: "reveza", regiao });
       ok(t(`projeto criado (${ctx.ref}); a senha do banco é aleatória e não fica guardada`, `project created (${ctx.ref}); the database password is random and not stored`));
     } else ctx.ref = lista[i - 1].ref;
@@ -214,16 +217,16 @@ async function nuvem(ctx) {
   if (ctx.nuvemNova) {
     titulo(t("  Administrador do painel", "  Panel administrator"));
     let email = process.env.REVEZA_ADMIN_EMAIL || emailDoClaude() || "";
-    email = (await ctx.p.perguntar(t("E-mail", "E-mail"), email)).toLowerCase();
+    email = (await ctx.p.perguntar(t("Seu e-mail (é o login do painel)", "Your e-mail (the panel login)"), email)).toLowerCase();
     if (!emailValido(email)) throw new Error(t("e-mail inválido", "invalid e-mail"));
     let senha = "";
     for (let i = 0; i < 3; i++) {
-      senha = await ctx.p.segredo(t("Senha (12+ caracteres, com maiúscula, minúscula e número):", "Password (12+ characters, with upper, lower case and a number):"), "REVEZA_ADMIN_SENHA");
+      senha = await ctx.p.segredo(t("Senha do painel (12+ caracteres, com maiúscula, minúscula e número):", "Panel password (12+ characters, with upper, lower case and a number):"), "REVEZA_ADMIN_SENHA");
       if (!senhaForte(senha)) { nao(t("senha fraca", "weak password")); senha = ""; continue; }
       if (ctx.semPerguntas || process.env.REVEZA_ADMIN_SENHA) break;
-      const de2 = await ctx.p.segredo(t("De novo:", "Again:"));
+      const de2 = await ctx.p.segredo(t("Repita a senha:", "Repeat the password:"));
       if (de2 === senha) break;
-      nao(t("não bateu", "did not match"));
+      nao(t("as duas senhas não bateram", "the two passwords did not match"));
       senha = "";
     }
     if (!senha) throw new Error(t("sem senha do administrador", "no administrator password"));
@@ -231,11 +234,12 @@ async function nuvem(ctx) {
     info(t("No primeiro login o painel pede a verificação em duas etapas (app autenticador).", "On first login the panel asks for two-step verification (authenticator app)."));
 
     titulo(t("  E-mail do painel (convites e recuperação de senha)", "  Panel e-mail (invites and password recovery)"));
-    info(t("Sem um envio próprio, o Supabase só manda e-mail para quem é da organização dele, e convite para outra pessoa não chega.",
-      "Without your own sender, Supabase only e-mails members of its organization, and invites to other people do not arrive."));
-    if (await ctx.p.sim(t("Configurar agora com o Resend (grátis até 3 mil e-mails por mês)?", "Set it up now with Resend (free up to 3,000 e-mails a month)?"), false)) {
+    info(t("Sem envio próprio, o Supabase só manda e-mail a quem é da sua organização nele: convite para outra pessoa não chega.",
+      "Without your own sender, Supabase only e-mails members of your organization there: invites to other people do not arrive."));
+    if (await ctx.p.sim(t("Configurar agora o envio pelo Resend (grátis até 3 mil e-mails por mês; dá para fazer depois)?",
+      "Set up sending through Resend now (free up to 3,000 e-mails a month; you can do it later)?"), false)) {
       const chave = await ctx.p.segredo(t("Chave da API do Resend (resend.com/api-keys):", "Resend API key (resend.com/api-keys):"), "REVEZA_RESEND_CHAVE");
-      const remetente = await ctx.p.perguntar(t("Remetente (de um domínio verificado no Resend)", "Sender (from a domain verified in Resend)"), "");
+      const remetente = await ctx.p.perguntar(t("Remetente (e-mail de um domínio verificado no Resend)", "Sender (an e-mail on a domain verified in Resend)"), "");
       if (chave && emailValido(remetente)) {
         ctx.smtp = { host: "smtp.resend.com", porta: 465, usuario: "resend", senha: chave, remetente };
         ctx.resendChave = chave;
@@ -263,7 +267,7 @@ async function perguntarPainel(ctx) {
     // padrão: a equipe padrão da conta (na Vercel de hoje, a conta pessoal também é uma equipe); REVEZA_VERCEL_EQUIPE escolhe
     const pedida = process.env.REVEZA_VERCEL_EQUIPE;
     const indice = pedida ? eu.equipes.findIndex((x) => x.id === pedida || x.slug === pedida) : eu.equipes.findIndex((x) => x.id === eu.padrao);
-    const i = await ctx.p.escolha(t("Onde publicar", "Where to publish"), [t("conta pessoal", "personal account"), ...eu.equipes.map((x) => x.nome)], indice >= 0 ? indice + 2 : 1);
+    const i = await ctx.p.escolha(t("Onde publicar na Vercel", "Where to publish on Vercel"), [t("conta pessoal", "personal account"), ...eu.equipes.map((x) => x.nome)], indice >= 0 ? indice + 2 : 1);
     equipe = i === 0 ? null : eu.equipes[i - 1].id;
   }
   ctx.vercel = new Vercel(token, { equipe });
@@ -274,7 +278,7 @@ async function perguntarPainel(ctx) {
       t("um subdomínio meu (ex.: contas.meudominio.com)", "a subdomain of mine (e.g. accounts.mydomain.com)"),
     ], 1);
     if (d === 1) {
-      ctx.dominio = dominioValido(await ctx.p.perguntar(t("Subdomínio", "Subdomain"), process.env.REVEZA_DOMINIO || ""));
+      ctx.dominio = dominioValido(await ctx.p.perguntar(t("Subdomínio (ex.: contas.meudominio.com)", "Subdomain (e.g. accounts.mydomain.com)"), process.env.REVEZA_DOMINIO || ""));
       if (!ctx.dominio) nao(t("domínio inválido: fico com o da Vercel", "invalid domain: using Vercel's"));
     }
   } else ctx.dominio = dominioValido(process.env.REVEZA_DOMINIO || "") || ctx.inst?.painel?.dominio || null; // atualização: REVEZA_DOMINIO liga ou troca o domínio
@@ -413,7 +417,7 @@ async function painel(ctx) {
     if (!pronto) {
       console.log("");
       for (const l of passosCloudflare(reg.registro, t)) console.log(`    ${l}`);
-      if (!ctx.semPerguntas && (await ctx.p.sim(t("Criou o registro? Confiro por até 5 minutos", "Created the record? I will check for up to 5 minutes"), true))) {
+      if (!ctx.semPerguntas && (await ctx.p.sim(t("Já criou o registro? Eu confiro por até 5 minutos", "Created the record? I will check for up to 5 minutes"), true))) {
         for (let i = 0; i < 20 && !pronto; i++) {
           await new Promise((r) => setTimeout(r, 15000));
           pronto = (await dnsPronto(ctx.dominio, reg.registro)) || (await ctx.vercel.registroDns(ctx.dominio)).configurado;
@@ -441,7 +445,7 @@ async function contas(ctx) {
     return;
   }
   for (;;) {
-    const email = (await ctx.p.perguntar(t("Conectar mais uma conta? E-mail (enter para seguir)", "Connect one more account? E-mail (enter to continue)"), "")).toLowerCase();
+    const email = (await ctx.p.perguntar(t("Mais uma conta do Claude para revezar? Digite o e-mail (Enter para seguir)", "One more Claude account to rotate? Type its e-mail (Enter to continue)"), "")).toLowerCase();
     if (!email) break;
     if (!emailValido(email)) { nao(t("e-mail inválido", "invalid e-mail")); continue; }
     info(t("O navegador abre o login oficial: entre com ESTA conta.", "The browser opens the official login: sign in with THIS account."));
@@ -454,7 +458,7 @@ async function alertas(ctx) {
   if (!ctx.adminId || ctx.semPerguntas) return info(t("Canais de alerta: no painel, em Alertas.", "Alert channels: in the panel, under Alerts."));
   // o ntfy saiu dos canais (12/10/2026); a notificação no celular se liga no próprio painel, em Alertas
   const canais = ["telegram", "email", "webhook"];
-  const i = await ctx.p.escolha(t("Onde avisar (conta sem folga, login vencendo, computador parado)", "Where to alert (no free account, login expiring, computer stopped)"), [
+  const i = await ctx.p.escolha(t("Onde receber os alertas (conta sem folga, login vencendo, computador parado)", "Where to get alerts (no free account, login expiring, computer stopped)"), [
     "Telegram", t("e-mail (Resend)", "e-mail (Resend)"), t("webhook (n8n, Make, script)", "webhook (n8n, Make, script)"),
     t("agora não (dá para fazer no painel, inclusive a notificação no celular)", "not now (can be done in the panel, including phone notifications)"),
   ], 4);
@@ -464,7 +468,7 @@ async function alertas(ctx) {
   let segredo = "";
   if (canal === "telegram") {
     info(t("1) No Telegram, fale com @BotFather, mande /newbot e copie o token.", "1) In Telegram, talk to @BotFather, send /newbot and copy the token."));
-    segredo = await ctx.p.segredo(t("Token do bot:", "Bot token:"));
+    segredo = await ctx.p.segredo(t("Token do bot (o que o @BotFather mostrou):", "Bot token (the one @BotFather showed):"));
     info(t("2) Abra o seu bot e mande qualquer mensagem (ex.: oi).", "2) Open your bot and send any message (e.g. hi)."));
     await ctx.p.perguntar(t("Enter quando tiver mandado", "Enter when sent"), "");
     const chats = await acharChatTelegram(segredo).catch((e) => { nao(e.message); return []; });
