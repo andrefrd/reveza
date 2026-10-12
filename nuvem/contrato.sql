@@ -208,6 +208,7 @@ create table ligacao_pedidos (
   computador_id uuid primary key references computadores on delete cascade,  -- o computador novo (linha pendente)
   aprovador uuid references computadores on delete set null,                  -- onde a janela abre (o painel escolhe)
   aprovador_em timestamptz,
+  idioma text not null default 'pt-BR',      -- a língua da janela (a do painel)
   publica jsonb,                             -- chave pública ECDH P-256 do computador novo; registrada uma vez só
   pedido_em timestamptz,
   expira_em timestamptz,                     -- pedido_em + 10 minutos
@@ -245,7 +246,7 @@ create table auditoria (
 -- agente_evento(tipo, texto, dados)                             -> {ok}
 -- agente_ligacao_publicar(embrulho bytea, sal bytea)            -> {ok, expira_em}  (frase de emergência, 10 min)
 -- agente_ligacao_buscar()                                       -> {embrulho, sal}  (computador já ativo, uma vez)
--- agente_ligacoes_abertas()                                     -> {pedidos: [{computador_id, publica, expira_em, para_mim}]}
+-- agente_ligacoes_abertas()                                     -> {pedidos: [{computador_id, publica, expira_em, para_mim, idioma}]}
 --     (também vem em agente_ola.ligacoes; mais de um aberto = todos recusados)
 -- agente_ligacao_entregar(computador_id, publica, envelope)     -> {ok}  (só o pedido aberto com a mesma chave pública)
 -- agente_ligacao_recusar(computador_id, motivo)                 -> {ok}
@@ -262,7 +263,7 @@ create table auditoria (
 -- painel_comando(computador_id, acao, corpo)     enfileira para o computador (a ação ligar saiu na 0.2.0)
 -- painel_convidar(email, papel) / painel_revogar_membro(user_id) / painel_mudar_papel(user_id, papel)
 -- painel_revogar_computador(computador_id)
--- painel_ligacao_aprovador(computador_novo, aprovador)  em qual computador a janela de liberar abre
+-- painel_ligacao_aprovador(computador_novo, aprovador, idioma)  em qual computador (e língua) a janela de liberar abre
 -- painel_alerta(...) / painel_webhook(...) / painel_chave_api(...)  (segredos vão ao Vault pela função)
 -- Qualquer membro: painel_meu_idioma(idioma), painel_push_inscrever(endpoint, p256dh, auth)
 

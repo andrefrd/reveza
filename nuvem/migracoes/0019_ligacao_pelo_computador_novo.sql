@@ -18,6 +18,7 @@ create table if not exists public.ligacao_pedidos (
   computador_id uuid primary key references public.computadores on delete cascade,   -- o computador novo (pendente)
   aprovador uuid references public.computadores on delete set null,                   -- onde a janela abre (o painel escolhe)
   aprovador_em timestamptz,
+  idioma text not null default 'pt-BR' check (idioma in ('pt-BR', 'en')),                -- a língua da janela (a do painel)
   publica jsonb check (publica is null or pg_column_size(publica) <= 512),            -- chave pública do computador novo
   pedido_em timestamptz,
   expira_em timestamptz,
@@ -31,7 +32,7 @@ create table if not exists public.ligacao_pedidos (
 alter table public.ligacao_pedidos enable row level security;
 revoke all on public.ligacao_pedidos from anon, authenticated;
 -- o painel acompanha o pedido, sem a chave pública e sem o envelope
-grant select (computador_id, aprovador, aprovador_em, pedido_em, expira_em, entregue_em, lido_em, recusado, recusado_em)
+grant select (computador_id, aprovador, aprovador_em, idioma, pedido_em, expira_em, entregue_em, lido_em, recusado, recusado_em)
   on public.ligacao_pedidos to authenticated;
 drop policy if exists membro_le on public.ligacao_pedidos;
 create policy membro_le on public.ligacao_pedidos for select to authenticated using (public.rvz_eh_membro());
@@ -69,7 +70,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(jsonb_agg(jsonb_build_object('computador_id', q.computador_id, 'publica', q.publica,
                                                'pedido_em', q.pedido_em, 'expira_em', q.expira_em,
                                                'para_mim', q.aprovador is not distinct from p_pc,
-                                               'aprovador_em', q.aprovador_em) order by q.pedido_em), '[]'::jsonb)
+                                               'aprovador_em', q.aprovador_em, 'idioma', q.idioma) order by q.pedido_em), '[]'::jsonb)
     from (select l.* from public.ligacao_pedidos l
             join public.computadores c on c.id = l.computador_id and not c.revogado and c.sistema = 'pendente'
            where l.publica is not null and l.entregue_em is null and l.recusado is null and l.expira_em > now()
@@ -79,19 +80,23 @@ $$;
 
 -- ------------------------------------------------------------------------------------------- painel
 
--- Em qual computador a janela abre (o painel escolhe um que já tem a chave). Escolher de novo abre a janela de novo.
-create or replace function public.painel_ligacao_aprovador(p_computador uuid, p_aprovador uuid) returns jsonb
+-- Em qual computador a janela abre (o painel escolhe um que já tem a chave), e em que língua (a do painel; o texto da
+-- janela é fixo, só a língua vem daqui). Escolher de novo abre a janela de novo.
+create or replace function public.painel_ligacao_aprovador(p_computador uuid, p_aprovador uuid, p_idioma text default 'pt-BR')
+returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   perform public.rvz_exigir_admin();
+  if coalesce(p_idioma, '') not in ('pt-BR', 'en') then raise exception 'idioma desconhecido'; end if;
   if not exists (select 1 from public.computadores where id = p_computador and sistema = 'pendente' and not revogado) then
     raise exception 'computador novo desconhecido ou revogado';
   end if;
   if not exists (select 1 from public.computadores where id = p_aprovador and sistema <> 'pendente' and not revogado) then
     raise exception 'computador desconhecido ou revogado';
   end if;
-  insert into public.ligacao_pedidos (computador_id, aprovador, aprovador_em) values (p_computador, p_aprovador, now())
-  on conflict (computador_id) do update set aprovador = excluded.aprovador, aprovador_em = excluded.aprovador_em
+  insert into public.ligacao_pedidos (computador_id, aprovador, aprovador_em, idioma) values (p_computador, p_aprovador, now(), p_idioma)
+  on conflict (computador_id) do update set aprovador = excluded.aprovador, aprovador_em = excluded.aprovador_em,
+                                            idioma = excluded.idioma
    where ligacao_pedidos.entregue_em is null and ligacao_pedidos.recusado is null;
   perform public.rvz_auditar('ligacao_aprovador', p_computador::text, jsonb_build_object('aprovador', p_aprovador));
   return jsonb_build_object('ok', true);

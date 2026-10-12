@@ -85,7 +85,8 @@ test("o caminho inteiro: quem tem a chave vê o pedido, entrega cifrado, o novo 
   await assert.rejects(b.rpc(leitor, "painel_ligacao_aprovador", { p_computador: novo.pc, p_aprovador: velho.pc }), /só administrador/);
   await assert.rejects(b.rpc(admin, "painel_ligacao_aprovador", { p_computador: velho.pc, p_aprovador: outro.pc }), /computador novo desconhecido/);
   await assert.rejects(b.rpc(admin, "painel_ligacao_aprovador", { p_computador: novo.pc, p_aprovador: novo.pc }), /computador desconhecido/);
-  assert.equal((await b.rpc(admin, "painel_ligacao_aprovador", { p_computador: novo.pc, p_aprovador: velho.pc })).ok, true);
+  await assert.rejects(b.rpc(admin, "painel_ligacao_aprovador", { p_computador: novo.pc, p_aprovador: velho.pc, p_idioma: "fr" }), /idioma/);
+  assert.equal((await b.rpc(admin, "painel_ligacao_aprovador", { p_computador: novo.pc, p_aprovador: velho.pc, p_idioma: "en" })).ok, true);
   assert.deepEqual(await b.rpc(novo, "agente_ligacao_receber", {}), { estado: "sem_pedido" });
   await b.rpc(novo, "agente_ligacao_pedir", { p_publica: chave("a") });
   const esperando = await b.rpc(novo, "agente_ligacao_receber", {});
@@ -98,6 +99,7 @@ test("o caminho inteiro: quem tem a chave vê o pedido, entrega cifrado, o novo 
   assert.equal(ola.ligacoes[0].computador_id, novo.pc);
   assert.equal(ola.ligacoes[0].publica.x, "a".repeat(43));
   assert.equal(ola.ligacoes[0].para_mim, true);
+  assert.equal(ola.ligacoes[0].idioma, "en", "a janela abre na língua do painel");
   const doOutro = await b.rpc(outro, "agente_ligacoes_abertas", {});
   assert.equal(doOutro.pedidos[0].para_mim, false);
 
