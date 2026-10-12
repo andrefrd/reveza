@@ -142,6 +142,29 @@ describe("conferência: cada problema com o conserto seguro dele ou com o que fa
     assert.match(item(sombra, "mod").fazer!, /sair-da-sombra/);
   });
 
+  test("sem login com a conta que a nuvem mandou a caminho: aviso (não falha), e o conserto é pedir a troca agora", async () => {
+    tmp = pastaTemporaria();
+    const d = deps(tmp.c, { ponte: async () => ({ nuvem: { online: null }, cofre: true, credencial: { esperandoConta: true } }) });
+    d.cred.d.set("principal", SO_MCP);
+    const c = item(await doctor(d), "credenciais");
+    assert.equal(c.situacao, "aviso");
+    assert.match(c.detalhe, /esperando a conta que a nuvem mandou chegar/);
+    assert.equal(c.conserto, "credenciais");
+    const sem = deps(tmp.c, { ponte: async () => ({ nuvem: { online: true }, cofre: true, credencial: { esperandoConta: false } }) });
+    sem.cred.d.set("principal", SO_MCP);
+    assert.equal(item(await doctor(sem), "credenciais").situacao, "falha", "sem conta a caminho, é falha");
+    let pedidos = 0;
+    const r = await consertar(d, {
+      credenciais: async () => {
+        pedidos++;
+        d.cred.d.set("principal", blob("B1"));
+        return { ok: true, texto: "o assistente voltou a ter login: b@exemplo.com" };
+      },
+    });
+    assert.equal(pedidos, 1, "no modo que conserta, a troca é pedida agora");
+    assert.equal(item(r.depois, "credenciais").consertado!.resultado, "corrigido");
+  });
+
   test("credencial: sem login e sem conta para pôr explica; login morto tem conserto; vencido com renovação e revogado não", async () => {
     tmp = pastaTemporaria();
     const semNuvem = { nuvemConfigurada: async () => null };
@@ -331,6 +354,43 @@ describe("conserto da credencial: a troca pedida ao trocador", () => {
       assert.deepEqual(r, { ok: true, texto: "o assistente voltou a ter login: a@exemplo.com" });
       assert.equal(m!.cred.token("principal"), "A2");
       assert.deepEqual(m!.cred.agora("principal")!.mcpOAuth, SO_MCP.mcpOAuth);
+    });
+
+    test("conta a caminho: só com o assistente sem login, a nuvem ainda por responder ou outra conta atribuída, e por 2 minutos", async () => {
+      await preparar();
+      const a = m!.agente;
+      m!.cred.d.set("principal", SO_MCP);
+      assert.equal(a.esperandoConta(), true, "recém-ligado, antes da primeira busca: a atribuição pode estar vindo");
+      assert.deepEqual(a.publico().credencial, { esperandoConta: true }, "vai na ponte (o instalador e o doctor leem)");
+      // a nuvem respondeu sem conta para este computador: nada a caminho
+      await a.busca();
+      assert.equal(a.esperandoConta(), false);
+      // a nuvem atribuiu uma conta que ainda não chegou (a busca seguinte troca)
+      const c = banco.conta("b@exemplo.com");
+      const k = (await lerChave(m!.guarda))!;
+      const { cifrado, nonce } = cifrarLogin(k, aadConta(c.id, 2), blob("B1", true, 3600, m!.relogio.agora()));
+      c.cofre = { cifrado, nonce, versao: 2, expira_em: null };
+      banco.atribuir("pc-1", c.id);
+      a.ultimaAtribuicao = { conta_id: c.id, email: "b@exemplo.com", versao: 1, motivo: "teste" };
+      await a.ciclo();
+      assert.equal(a.esperandoConta(), true);
+      await m!.relogio.avancar(121_000);
+      assert.equal(a.esperandoConta(), false, "passados 2 minutos, algo travou: o doctor acusa falha");
+      // a busca pôs a conta: com login, nada a esperar
+      await a.busca();
+      assert.equal(m!.cred.token("principal"), "B1");
+      assert.equal(a.esperandoConta(), false);
+      // o assistente saiu da conta que já consta em uso: a busca não põe de volta, então não é "a caminho"
+      m!.cred.d.set("principal", SO_MCP);
+      await a.ciclo();
+      assert.equal(a.esperandoConta(), false);
+    });
+
+    test("sem nuvem nunca há conta a caminho (nada põe conta sozinho)", async () => {
+      m = await montar();
+      contaEstacionada(m, "B", 3);
+      m.cred.d.set("principal", SO_MCP);
+      assert.equal(m.agente.esperandoConta(), false);
     });
 
     test("computador novo sem conta e sem atribuição: não deu, e diz onde escolher a conta", async () => {

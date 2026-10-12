@@ -67,6 +67,9 @@ const MUTANTES = [
   ["conserto: reinstalar o serviço não tira o modo sombra", "src/cli.ts", "sombra: instalado ? instalado.sombra : sombra,", "sombra: false,", ["conserto"]],
   ["conserto: sem serviço (--sem-servico) não instala o serviço", "src/doctor.ts", "    d.semServico\n      ? {", "    false\n      ? {", ["conserto"]],
   ["conserto: o --so-ver só lê", "src/cli.ts", "  if (a.flags[\"so-ver\"]) {", "  if (a.flags[\"so-ver\"] === \"nunca\") {", ["conserto"]],
+  ["conserto: a conta que já consta em uso não está 'a caminho' (a busca não a põe de volta)", "src/agente.ts", "return !destino || destino !== this.estado.ativa;", "return true;", ["conserto"]],
+  ["conserto: a espera pela conta da nuvem tem prazo", "src/agente.ts", "(tr.principalSemLoginDesde ?? this.iniciadoEm) > ESPERA_CONTA_S) return false;", "(tr.principalSemLoginDesde ?? this.iniciadoEm) > ESPERA_CONTA_S * 1000) return false;", ["conserto"]],
+  ["conserto: sem login com a conta a caminho é aviso, não falha", "src/doctor.ts", "if (!o.accessToken && esperando) {", "if (!o.accessToken && esperando && false) {", ["conserto"]],
   ["~/.claude.json: não regravar arquivo ilegível", "src/claudejson.ts", "        const v = JSON.parse(bruto);", "        let v; try { v = JSON.parse(bruto); } catch { v = {}; }", ["doctor-cli"]],
 ];
 

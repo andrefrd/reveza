@@ -181,7 +181,12 @@ export async function doctor(d: DepsDoctor): Promise<Conferencia[]> {
   try {
     const blob = await d.cred.ler(PRINCIPAL);
     const o = oauth(blob);
-    if (!o.accessToken) add("credenciais", "Credencial em uso", "falha", `nenhum login em ${d.cred.nome(PRINCIPAL)}`, credencialConserto);
+    // a conta que a nuvem mandou está para chegar (o agente acabou de subir, ou a troca vem na próxima busca): aviso,
+    // não falha; o conserto (pedir a troca agora) segue valendo
+    const esperando = (ponte?.credencial as { esperandoConta?: unknown } | undefined)?.esperandoConta === true;
+    if (!o.accessToken && esperando) {
+      add("credenciais", "Credencial em uso", "aviso", `nenhum login em ${d.cred.nome(PRINCIPAL)}; esperando a conta que a nuvem mandou chegar`, credencialConserto);
+    } else if (!o.accessToken) add("credenciais", "Credencial em uso", "falha", `nenhum login em ${d.cred.nome(PRINCIPAL)}`, credencialConserto);
     else {
       const falta = expiraEm(blob) - d.agora();
       const perfil = await d.api.perfil(o.accessToken);

@@ -30,6 +30,7 @@ import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "./lib/dominio.mjs";
 import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
+import { esperarConta } from "./lib/prova.mjs";
 import {
   acrescentarPath, ambienteLimpo, criarLancador, existe, gravarConfigLocal, gravarInstalacao, instalarMod, instalarPrograma, lerInstalacao,
   linhaPath, npm, portaOcupada, removerMod, rodar,
@@ -474,10 +475,29 @@ async function alertas(ctx) {
     `Signature secret (X-Reveza-Assinatura header, HMAC-SHA256): ${segredo}  Save it now: it is not shown again.`));
 }
 
+/** O estado do agente que está rodando (`reveza status --json`), ou null. */
+function estadoDoAgente(ctx) {
+  const r = reveza(ctx, ["status", "--json", ...(ctx.sombra ? ["--sombra"] : [])]);
+  try {
+    const e = JSON.parse(r.saida);
+    return e && !e.parado ? e : null;
+  } catch {
+    return null;
+  }
+}
+
 async function prova(ctx) {
   titulo(t("8/8 Prova final", "8/8 Final check"));
   // o serviço acabou de subir: dá até 15 s para a ponte local responder antes do doctor
   for (let i = 0; i < 15 && !ctx.semServico && !(await portaOcupada(ctx.sombra ? 7789 : 7788)); i++) await new Promise((r) => setTimeout(r, 1000));
+  // a conta que a nuvem mandou chega na primeira busca do agente: espera ela (até 60 s) antes de conferir
+  if (!ctx.semServico) {
+    const e = await esperarConta(() => estadoDoAgente(ctx));
+    if (e.esperou) {
+      (e.chegou ? ok : nao)(e.chegou ? t(`a conta que a nuvem mandou chegou ao assistente (${e.esperou} s)`, `the account the cloud assigned reached the assistant (${e.esperou} s)`)
+        : t(`a conta que a nuvem mandou não chegou em ${e.esperou} s: o doctor abaixo diz o que fazer`, `the account the cloud assigned did not arrive in ${e.esperou} s: the doctor below says what to do`));
+    }
+  }
   // a prova só confere (--so-ver): consertar aqui esconderia o que a instalação deixou de fazer
   reveza(ctx, ["doctor", "--so-ver", ...(ctx.sombra ? ["--sombra"] : [])], true);
   if (!ctx.gerencia || ctx.semServico || !ctx.emailComputador) return;

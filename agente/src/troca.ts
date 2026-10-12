@@ -59,6 +59,17 @@ export class Trocador {
   ultimaLeitura: Record<string, number> = {};
   sombra = false;
   private ultimoFaria = "";
+  /** A principal já foi lida desde que o agente subiu? */
+  principalLida = false;
+  /** Desde quando a principal está sem login de conta (null: com login, ou ainda não lida). */
+  principalSemLoginDesde: number | null = null;
+
+  /** Anota o que a leitura da principal mostrou: com login, ou desde quando está sem. */
+  private anotarPrincipal(blob: Blob | null): void {
+    this.principalLida = true;
+    if (hashToken(blob)) this.principalSemLoginDesde = null;
+    else this.principalSemLoginDesde ??= this.agora();
+  }
 
   constructor(
     public estado: EstadoLocal,
@@ -175,6 +186,7 @@ export class Trocador {
   /** Quem está na principal? Adota conta nova e corrige `ativa` se alguém trocou por fora. Chamar com `geral`. */
   async conferirPrincipalDentro(): Promise<string | null> {
     const blob = await this.cred.ler(PRINCIPAL);
+    this.anotarPrincipal(blob);
     if (!blob) return null;
     const perfil = await this.identidade(blob);
     if (!perfil) return this.estado.ativa;
@@ -285,6 +297,7 @@ export class Trocador {
       const nova = comLogin(atual, soLogin(blobAlvo!));
       await this.cred.gravar(PRINCIPAL, nova);
       this.ultimaPrincipal = [destino, nova];
+      this.anotarPrincipal(nova);
       return { ok: true };
     });
     if (!r.ok) return r;

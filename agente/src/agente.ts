@@ -67,6 +67,9 @@ const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_l
  * por vez, o pedido forjado que chega junto derruba os dois em vez de ser liberado pelo mesmo código (revisão de
  * segurança de 11/10/2026).
  */
+/** Quanto a conta que a nuvem mandou pode levar para chegar à principal antes de o doctor acusar falha. */
+export const ESPERA_CONTA_S = 120;
+
 export const LIGACAO_DUPLA = "dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel";
 
 export class Agente {
@@ -110,6 +113,8 @@ export class Agente {
   ultimaBuscaMs: number | null = null;
   /** A última atribuição que a nuvem mandou (o conserto da credencial põe esta conta). */
   ultimaAtribuicao: Atribuicao | null = null;
+  /** Quando o agente subiu (a conta que a nuvem manda chega na primeira busca). */
+  private iniciadoEm = 0;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -179,6 +184,7 @@ export class Agente {
 
   async iniciar(opcoes: { laços?: boolean; ponte?: boolean } = {}): Promise<void> {
     fs.mkdirSync(this.d.c.contas, { recursive: true, mode: 0o700 });
+    this.iniciadoEm = this.d.relogio.agora();
     const k = await this.d.guarda.ler(SEGREDO_COFRE).catch(() => null);
     this.chave = k ? Buffer.from(k, "base64") : null;
     if (this.chave && this.chave.length !== 32) this.chave = null;
@@ -680,6 +686,25 @@ export class Agente {
     return { ok: false, texto: r.erro ?? "a troca não aconteceu" };
   }
 
+  /**
+   * O assistente está sem login e a conta que a nuvem mandou está para chegar: a busca aplica a atribuição em segundos
+   * (computador recém-ligado ou recém-atualizado, ou a nuvem mandou outra conta). Não vale para a conta que já consta
+   * em uso (a busca não a põe de volta: aí é o conserto) nem depois de 2 minutos (algo travou: também é o conserto).
+   * A prova final do instalador espera por isto antes de conferir, e o doctor mostra aviso em vez de falha
+   * (12/10/2026: a prova acusou "nenhum login" 1 a 2 s antes de o agente novo pôr a conta).
+   */
+  esperandoConta(): boolean {
+    if (!this.d.nuvem || !this.posse || this.d.sombra) return false;
+    const tr = this.trocador;
+    if (tr.principalLida && tr.principalSemLoginDesde === null) return false;
+    if (this.d.relogio.agora() - (tr.principalSemLoginDesde ?? this.iniciadoEm) > ESPERA_CONTA_S) return false;
+    if (this.online === null) return true; // ainda não falou com a nuvem: a atribuição vem na primeira busca
+    const a = this.ultimaAtribuicao;
+    if (!a?.conta_id) return false;
+    const destino = this.posse.porContaId(a.conta_id);
+    return !destino || destino !== this.estado.ativa;
+  }
+
   /** O e-mail da conta com login de pé na principal (dentro da validade, ou com renovação), ou null. */
   private async principalComLogin(): Promise<string | null> {
     const blob = await this.cred.ler(PRINCIPAL).catch(() => null);
@@ -978,6 +1003,7 @@ export class Agente {
       nuvem: { ligada: this.comNuvem, online: this.online, computadorId: this.estado.nuvem.computadorId },
       cofre: !!this.chave,
       conexoes: this.logins.publico(),
+      credencial: { esperandoConta: this.esperandoConta() },
     });
   }
 
