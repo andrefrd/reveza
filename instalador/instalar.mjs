@@ -29,6 +29,7 @@ import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "./lib/dominio.mjs";
 import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
+import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
 import { esperarConta } from "./lib/prova.mjs";
 import {
@@ -159,9 +160,16 @@ async function nuvem(ctx) {
   titulo(t("3/8 A nuvem (Supabase)", "3/8 The cloud (Supabase)"));
   info(t("O painel, o cofre cifrado e a decisão de troca moram num projeto Supabase SEU. O plano grátis basta.",
     "The panel, the encrypted vault and the switching decision live in a Supabase project of YOURS. The free plan is enough."));
-  info(t("Token pessoal: supabase.com/dashboard/account/tokens (Generate new token). Ele não é guardado.",
-    "Personal token: supabase.com/dashboard/account/tokens (Generate new token). It is not stored."));
-  if (ctx.atualizar && ctx.inst?.nuvem) {
+  info(t("O token do Supabase serve para criar o projeto, montar o banco e publicar as funções. É usado só agora e não fica guardado.",
+    "The Supabase token is used to create the project, set up the database and publish the functions. It is used only now and is not stored."));
+  // numa atualização o token é opcional (em branco, só este computador): a página não abre sozinha
+  const opcional = !!(ctx.atualizar && ctx.inst?.nuvem);
+  await mostrarPaginaDoToken(PAGINA_TOKEN_SUPABASE, {
+    aviso: t(`Crie um token pessoal em ${PAGINA_TOKEN_SUPABASE} (Generate new token).`, `Create a personal token at ${PAGINA_TOKEN_SUPABASE} (Generate new token).`),
+    abriu: t("Abri essa página no navegador.", "I opened that page in your browser."),
+    interativo: !ctx.semPerguntas && !opcional, tokenDoAmbiente: !!process.env.SUPABASE_ACCESS_TOKEN, info,
+  });
+  if (opcional) {
     info(t("Para atualizar só este computador (sem mexer na nuvem e no painel), deixe em branco e tecle Enter.",
       "To update only this computer (leaving the cloud and the panel as they are), leave it blank and press Enter."));
   }
@@ -238,7 +246,13 @@ async function nuvem(ctx) {
 
 async function perguntarPainel(ctx) {
   titulo(t("  Painel na Vercel", "  Panel on Vercel"));
-  info(t("Token: vercel.com/account/tokens (Create). Ele não é guardado.", "Token: vercel.com/account/tokens (Create). It is not stored."));
+  info(t("O token da Vercel serve para publicar o painel na sua conta. É usado só agora e não fica guardado.",
+    "The Vercel token is used to publish the panel to your account. It is used only now and is not stored."));
+  await mostrarPaginaDoToken(PAGINA_TOKEN_VERCEL, {
+    aviso: t(`Crie em ${PAGINA_TOKEN_VERCEL} (Create).`, `Create it at ${PAGINA_TOKEN_VERCEL} (Create).`),
+    abriu: t("Abri essa página no navegador.", "I opened that page in your browser."),
+    interativo: !ctx.semPerguntas, tokenDoAmbiente: !!process.env.VERCEL_TOKEN, info,
+  });
   const token = await ctx.p.segredo(t("Token da Vercel:", "Vercel token:"), "VERCEL_TOKEN");
   if (!token) throw new Error(t("sem token da Vercel não dá para publicar o painel (ou use --sem-nuvem)", "without a Vercel token the panel cannot be published (or use --sem-nuvem)"));
   let v = new Vercel(token);
