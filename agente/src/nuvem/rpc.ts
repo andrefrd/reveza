@@ -21,6 +21,7 @@ import {
   type PontoNuvem,
   type RespostaOla,
   type SessaoNuvem,
+  type TokenNuvem,
 } from "./tipos.js";
 
 export interface Rpc {
@@ -266,5 +267,42 @@ export class NuvemRpc implements Nuvem {
     if (!Array.isArray(r.nomes)) throw new ErroNuvem("agente_migracoes: resposta fora do formato", false, "formato");
     // só nome de arquivo de migração (como o registro do instalador aceita)
     return r.nomes.filter((n): n is string => typeof n === "string" && /^[0-9a-z_.]{1,120}$/.test(n));
+  }
+
+  async credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string) {
+    const r = await this.chamar("agente_credenciais_guardar", {
+      p_supabase: paraB64(supabase.cifrado),
+      p_supabase_nonce: paraB64(supabase.nonce),
+      p_vercel: paraB64(vercel.cifrado),
+      p_vercel_nonce: paraB64(vercel.nonce),
+      p_impressao: impressao,
+    });
+    return { ok: r.ok === true };
+  }
+
+  async credenciaisLer() {
+    const r = await this.chamar("agente_credenciais_atualizacao", {});
+    const um = (v: unknown) => {
+      if (!v || typeof v !== "object") return null;
+      const c = v as Record<string, unknown>;
+      if (typeof c.cifrado !== "string" || typeof c.nonce !== "string") return null;
+      return { cifrado: deB64(c.cifrado), nonce: deB64(c.nonce), gravadoEm: texto(c.gravado_em) };
+    };
+    return { supabase: um(r.supabase), vercel: um(r.vercel) };
+  }
+
+  async credenciaisApagar() {
+    const r = await this.chamar("agente_credenciais_apagar", {});
+    return { ok: r.ok === true };
+  }
+
+  async vezDePublicar(para: string) {
+    const r = await this.chamar("agente_vez_de_publicar", { p_para: para });
+    return { pode: r.pode === true, motivo: texto(r.motivo), funcoes: r.funcoes === true, painel: r.painel === true };
+  }
+
+  async resultadoPublicacao(para: string, estado: "concluida" | "falhou", motivo: string | null) {
+    const r = await this.chamar("agente_publicacao_resultado", { p_para: para, p_estado: estado, p_motivo: motivo });
+    return { ok: r.ok === true };
   }
 }

@@ -29,9 +29,11 @@ import type {
   PontoNuvem,
   RespostaReceber,
   SessaoNuvem,
+  TokenNuvem,
 } from "../src/nuvem/tipos.js";
 import { Agente } from "../src/agente.js";
 import { modoAtualizar } from "../src/atualizar.js";
+import { pendenteDaPublicacao } from "../src/completa.js";
 import type { Sistema } from "../src/config.js";
 import { novaChave } from "../src/cofre/cifra.js";
 import { SEGREDO_COFRE } from "../src/cofre/guarda.js";
@@ -234,6 +236,10 @@ export class BancoFalso {
   /** Nuvem de antes da 0.2.1: sem a função agente_migracoes. */
   semFuncaoMigracoes = false;
   config: Record<string, unknown> = { auto: false, modo: "limiar", aviso: 90, troca: 95, intervalo_s: 5, retomar_terminal: false };
+  /** Os tokens cifrados da atualização completa (0021), como o banco guarda (o falso só confere o formato). */
+  credenciais: { supabase?: TokenNuvem & { gravadoEm: string }; vercel?: TokenNuvem & { gravadoEm: string } } = {};
+  /** A vez de publicar funções e painel (config `publicacao_vez`). */
+  publicacaoVez: { pc: string; para: string; estado: string; desde: number; motivo?: string | null } | null = null;
   chamadas: { pc: string; fn: string; args: unknown[] }[] = [];
   agora = () => T0;
   foraDoAr = false;
@@ -552,6 +558,65 @@ export class NuvemFalsa implements Nuvem {
     return this.banco.migracoes ? [...this.banco.migracoes] : null;
   }
 
+  async credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string) {
+    this.registrarChamada("credenciaisGuardar", supabase, vercel, impressao);
+    const b = this.banco;
+    if (b.cofreImpressao !== impressao) throw new ErroNuvem("agente_credenciais_guardar: a chave do cofre deste computador não é a da instalação", false, "P0001");
+    const em = new Date(b.agora() * 1000).toISOString();
+    b.credenciais = { supabase: { ...supabase, gravadoEm: em }, vercel: { ...vercel, gravadoEm: em } };
+    b.config.atualizacao_completa = { ligada: true, em, computador: this.pc };
+    b.publicacaoVez = null;
+    return { ok: true };
+  }
+
+  async credenciaisLer() {
+    this.registrarChamada("credenciaisLer");
+    const c = this.banco.credenciais;
+    return { supabase: c.supabase ? { ...c.supabase } : null, vercel: c.vercel ? { ...c.vercel } : null };
+  }
+
+  async credenciaisApagar() {
+    this.registrarChamada("credenciaisApagar");
+    this.banco.credenciais = {};
+    this.banco.config.atualizacao_completa = { ligada: false, computador: this.pc };
+    this.banco.publicacaoVez = null;
+    return { ok: true };
+  }
+
+  /** As regras do agente_vez_de_publicar (0021). */
+  async vezDePublicar(para: string) {
+    this.registrarChamada("vezDePublicar", para);
+    const b = this.banco;
+    const nao = (motivo: string) => ({ pode: false, motivo, funcoes: false, painel: false });
+    if (!b.credenciais.supabase || !b.credenciais.vercel) return nao("desligada");
+    const p = pendenteDaPublicacao(b.config);
+    if (p.versao !== para) return nao("nuvem");
+    if (!p.funcoes && !p.painel) return nao("em_dia");
+    const v = b.publicacaoVez;
+    if (v && v.para === para && v.estado === "falhou") return nao("falhou");
+    if (v && v.estado === "em_andamento" && v.pc !== this.pc) {
+      if (b.agora() - v.desde <= 45 * 60) return nao("outro");
+      v.estado = "falhou";
+      return nao("falhou");
+    }
+    b.publicacaoVez = { pc: this.pc, para, estado: "em_andamento", desde: b.agora() };
+    b.config.publicacao_vez = { computador: this.pc, para, estado: "em_andamento" };
+    return { pode: true, motivo: null, funcoes: p.funcoes, painel: p.painel };
+  }
+
+  async resultadoPublicacao(para: string, estado: "concluida" | "falhou", motivo: string | null) {
+    this.registrarChamada("resultadoPublicacao", para, estado, motivo);
+    const b = this.banco;
+    const v = b.publicacaoVez;
+    if (!v || v.pc !== this.pc || v.para !== para || v.estado !== "em_andamento") return { ok: false };
+    v.estado = estado;
+    v.motivo = motivo;
+    b.config.publicacao_vez = { computador: this.pc, para, estado, motivo };
+    if (estado === "concluida") b.config.publicado = { funcoes: para, painel: para };
+    else b.alertas.push({ texto: motivo ?? "", dados: { motivo: "atualizacao_falhou", parte: "publicacao", computador: this.pc, para } });
+    return { ok: true };
+  }
+
   async resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null) {
     this.registrarChamada("resultadoAtualizacao", para, estado, motivo);
     const b = this.banco;
@@ -589,6 +654,8 @@ export async function montar(
     diagnostico?: () => Promise<Record<string, unknown>>;
     consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string; corrigidos?: number; naoDeu?: number }>;
     versoes?: import("../src/atualizar.js").FonteVersoes;
+    /** O projeto do Supabase (do endereço da nuvem): sem ele, o agente não publica funções e painel. */
+    refNuvem?: string | null;
   } = {},
 ): Promise<Montado> {
   const tmp = pastaTemporaria();
@@ -620,6 +687,7 @@ export async function montar(
     versoes: opcoes.versoes,
     node: "/falso/node",
     ambienteDoInstalador: { PATH: "/falso/bin" },
+    refNuvem: opcoes.refNuvem ?? null,
   });
   await agente.iniciar({ laços: false, ponte: false });
   const limpar = () => {

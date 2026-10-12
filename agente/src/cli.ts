@@ -16,6 +16,7 @@ import { guardaDoSistema, type Guarda } from "./cofre/guarda.js";
 import { doctor, textoDoctor, type DepsDoctor } from "./doctor.js";
 import { ambienteDoUsuario, consertar, instalarMod, pastaDoPrograma, resumoConserto } from "./conserto.js";
 import { GithubOficial } from "./atualizar.js";
+import { abrirTokens, AVISO_COMPLETA, cifrarTokens, conferirTokens, refDaNuvem, tokenValido, type Tokens } from "./completa.js";
 import { carregarEstado, type EstadoLocal } from "./estado.js";
 import { importar } from "./importar.js";
 import { iniciarCofre, lerChave, liberarComputadorNovo, pedirParaEntrar, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
@@ -42,6 +43,12 @@ export interface Ambiente {
   perguntar: (pergunta: string) => Promise<string>;
   env: NodeJS.ProcessEnv;
   script: string;
+  /** Pergunta sem mostrar o que se digita (token). Sem terminal, devolve vazio. */
+  perguntarSegredo?: (pergunta: string) => Promise<string>;
+  /** Toda a entrada padrão (os tokens que o instalador manda com --stdin). */
+  lerEntrada?: () => Promise<string>;
+  /** Para conferir os tokens (os testes trocam). */
+  fetch?: typeof fetch;
   /** Os testes trocam qualquer peça por um falso. */
   fabricas?: {
     cred?: () => Credenciais;
@@ -70,7 +77,50 @@ export function ambienteReal(): Ambiente {
       }),
     env: process.env,
     script: fileURLToPath(import.meta.url),
+    perguntarSegredo: segredoDoTerminal,
+    lerEntrada: () =>
+      new Promise((resolve, reject) => {
+        let d = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", (x: string) => {
+          d += x;
+          if (d.length > 64 * 1024) reject(new Error("entrada grande demais"));
+        });
+        process.stdin.on("end", () => resolve(d));
+        process.stdin.on("error", reject);
+      }),
   };
+}
+
+/** Lê um segredo do terminal em modo cru, mostrando só pontos (o readline ecoaria). Sem terminal: vazio. */
+function segredoDoTerminal(pergunta: string): Promise<string> {
+  if (!process.stdin.isTTY) return Promise.resolve("");
+  process.stderr.write(pergunta);
+  return new Promise((resolve) => {
+    let v = "";
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    const fim = () => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.off("data", ao);
+      process.stderr.write("\n");
+      resolve(v.trim());
+    };
+    const ao = (bloco: string) => {
+      for (const ch of bloco) {
+        if (ch === "\r" || ch === "\n" || ch === "\u0004") return fim();
+        if (ch === "\u0003") process.exit(130);
+        if (ch === "\u007f" || ch === "\b") v = v.slice(0, -1);
+        else {
+          v += ch;
+          process.stderr.write("•");
+        }
+      }
+    };
+    process.stdin.on("data", ao);
+  });
 }
 
 interface Args {
@@ -115,6 +165,9 @@ Uso: reveza <comando> [opções]
   importar --de <pasta>           copia contas, credenciais e histórico de outro gestor (nada é apagado)
   cofre iniciar                   cria a chave do cofre no primeiro computador
   nuvem entrar --url U --chave-publica K --email E    guarda a identidade deste computador (senha pelo stdin)
+  atualizacao-completa ligar|desligar|status [--stdin]
+                                  funções da nuvem e painel novos vão ao ar sozinhos: os tokens do Supabase e da Vercel
+                                  ficam na nuvem cifrados com a chave do cofre (desligada de fábrica; pede sem eco)
   rodar [--sombra] [--porta N] [--sem-nuvem]          o agente em si (o serviço chama este; no Windows, com --vigiar-pai)
 
   --sombra   lê e decide, mas não grava credencial, não pega posse e não responde comando; registra o que faria`;
@@ -644,6 +697,7 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     return null;
   });
   const log = logEmArquivo(amb.c.log, !!amb.env.REVEZA_ECO);
+  const identidade = await lerIdentidade(p.guarda).catch(() => null);
   const agente = new Agente({
     c: amb.c,
     sistema: amb.sistema,
@@ -661,6 +715,7 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     versoes: new GithubOficial(VERSAO),
     node: process.execPath,
     ambienteDoInstalador: ambienteDoUsuario(amb.env),
+    refNuvem: refDaNuvem(identidade?.url),
     diagnostico: async (): Promise<Record<string, unknown>> => {
       // a conferência periódica (agente_ola) só lê: nunca conserta sozinha
       const r = await doctor(depsDentro());
@@ -714,6 +769,8 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
       precisaNuvem: agente.travaNuvem ? { para: agente.travaNuvem.para } : null,
       // este agente entende o "assim que sair" (0.2.1); os de antes só o de madrugada (true)
       assimQueSair: true,
+      // publicando agora as funções e o painel da versão da nuvem (atualização completa, 0.3.0)
+      publicando: agente.publicando,
     };
   };
   await agente.iniciar();
@@ -746,6 +803,90 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
       }, 1000);
     }
   });
+  return 0;
+}
+
+/**
+ * `reveza atualizacao-completa ligar|desligar|status`: os tokens que publicam funções e painel, cifrados com a chave
+ * do cofre deste computador. Ligar pede os dois sem eco (ou lê --stdin, como o instalador manda), confere que eles
+ * alcançam o projeto e a conta, cifra e guarda. Nada dos tokens vai para a tela, o disco, o log ou um evento.
+ */
+async function cmdCompleta(amb: Ambiente, a: Args): Promise<number> {
+  const acao = a.pos[1];
+  if (acao !== "ligar" && acao !== "desligar" && acao !== "status") {
+    amb.erro("uso: reveza atualizacao-completa ligar|desligar|status");
+    return 2;
+  }
+  // só a guarda (chave do cofre e identidade): nada de assistente nem credencial de conta aqui
+  const p = { guarda: (await amb.fabricas?.guarda?.()) ?? (await guardaDoSistema(amb.sistema, amb.exec, amb.c.segredos)) };
+  const nuvem = await nuvemDe(amb, p.guarda, false);
+  if (!nuvem) {
+    amb.erro("este computador não está ligado a uma nuvem (instalação só local): não há o que atualizar");
+    return 1;
+  }
+  const k = await lerChave(p.guarda);
+  if (acao === "desligar") {
+    await nuvem.credenciaisApagar();
+    amb.saida("Atualização completa desligada: os tokens cifrados saíram da nuvem.");
+    amb.saida("Para tirar o acesso de vez, apague os tokens em https://supabase.com/dashboard/account/tokens e https://vercel.com/account/tokens.");
+    return 0;
+  }
+  if (acao === "status") {
+    const c = await nuvem.credenciaisLer();
+    const ligada = !!(c.supabase && c.vercel);
+    let abre = false;
+    if (ligada && k) {
+      try {
+        abrirTokens(k, c);
+        abre = true;
+      } catch {
+        abre = false;
+      }
+    }
+    const r = { ligada, gravadaEm: c.supabase?.gravadoEm ?? null, abreAqui: abre };
+    if (a.flags.json) amb.saida(JSON.stringify(r));
+    else if (!ligada) amb.saida("Atualização completa desligada. Para ligar: reveza atualizacao-completa ligar");
+    else amb.saida(`Atualização completa ligada desde ${r.gravadaEm ?? "?"}; ${abre ? "este computador abre os tokens" : "este computador NÃO abre os tokens (outra chave do cofre)"}.`);
+    return 0;
+  }
+  if (!k) {
+    amb.erro("este computador não tem a chave do cofre: ligue-o com `reveza ligar` antes");
+    return 1;
+  }
+  const id = await lerIdentidade(p.guarda);
+  const ref = refDaNuvem(id?.url);
+  if (!ref) {
+    amb.erro("não achei o projeto do Supabase desta instalação no endereço da nuvem");
+    return 1;
+  }
+  let tokens: Tokens;
+  if (a.flags.stdin) {
+    try {
+      const j = JSON.parse((await amb.lerEntrada?.()) ?? "") as Record<string, unknown>;
+      tokens = { supabase: String(j.supabase ?? ""), vercel: String(j.vercel ?? "") };
+    } catch {
+      amb.erro("os tokens não chegaram pela entrada padrão (JSON com supabase e vercel)");
+      return 2;
+    }
+  } else {
+    for (const l of AVISO_COMPLETA) amb.saida(l);
+    const pedir = amb.perguntarSegredo ?? (async () => "");
+    tokens = { supabase: (await pedir("Token do Supabase (não aparece na tela): ")).trim(), vercel: (await pedir("Token da Vercel (não aparece na tela): ")).trim() };
+  }
+  if (!tokenValido(tokens.supabase) || !tokenValido(tokens.vercel)) {
+    amb.erro("faltam os dois tokens (o do Supabase e o da Vercel), cada um numa linha só");
+    return 2;
+  }
+  const conferido = await conferirTokens(tokens, ref, amb.fetch ?? fetch);
+  if (!conferido.ok) {
+    amb.erro(`não liguei: ${conferido.erro}`);
+    return 1;
+  }
+  const c = cifrarTokens(k, tokens);
+  await nuvem.credenciaisGuardar(c.supabase, c.vercel, impressaoDaChave(k));
+  amb.saida("Atualização completa ligada: os tokens estão na nuvem cifrados com a chave do cofre.");
+  amb.saida("Quando a nuvem chegar a uma versão nova, um computador ligado e calmo publica as funções e o painel dela; depois, os computadores.");
+  amb.saida("Para desligar: reveza atualizacao-completa desligar (ou Desligar, no painel).");
   return 0;
 }
 
@@ -817,6 +958,8 @@ export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()
         return 2;
       case "nuvem":
         return await cmdNuvem(amb, a);
+      case "atualizacao-completa":
+        return await cmdCompleta(amb, a);
       case "rodar":
         return await cmdRodar(amb, a);
       case "versao":

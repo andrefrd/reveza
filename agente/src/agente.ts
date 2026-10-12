@@ -56,7 +56,8 @@ import {
   type ModoAtualizar,
 } from "./atualizar.js";
 import { compararVersao } from "./doctor.js";
-import { gravarJson, lerJson } from "./util/arquivos.js";
+import { abrirTokens, completaLigada, PUBLICA_DESDE, pendenteDaPublicacao, semSegredos } from "./completa.js";
+import { gravarAtomico, gravarJson, lerJson } from "./util/arquivos.js";
 
 export interface Dependencias {
   c: Caminhos;
@@ -86,7 +87,12 @@ export interface Dependencias {
   node?: string;
   /** O ambiente do instalador da versão nova: sem segredo nem token (sem token, só este computador é atualizado). */
   ambienteDoInstalador?: NodeJS.ProcessEnv;
+  /** O projeto do Supabase desta instalação (do endereço da nuvem): a publicação das funções e do painel precisa dele. */
+  refNuvem?: string | null;
 }
+
+/** A publicação das funções e do painel que não terminou nisso é dada como falha. */
+export const PUBLICACAO_VALIDA_MS = 40 * 60_000;
 
 const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_login", "atualizar", "diagnostico", "retomar_sessao", "ligar"]);
 
@@ -194,6 +200,12 @@ export class Agente {
   travaNuvem: TravaNuvem | null = null;
   /** Versão da trava que já virou evento (um por versão, não um a cada conferência). */
   private travaAvisada: string | null = null;
+  /** A versão cujas funções e painel este computador está publicando agora (atualização completa). */
+  publicando: string | null = null;
+  private publicacaoPedidaEm = 0;
+  private motivoSemPublicar: string | null = null;
+  /** O fim de uma publicação que a nuvem ainda não recebeu (sem rede na hora): vai na busca seguinte. */
+  private publicacaoAContar: { para: string; estado: "concluida" | "falhou"; motivo: string | null } | null = null;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -530,6 +542,8 @@ export class Agente {
       this.configNuvem = r.config ?? {};
       await this.vigiarAtualizacao();
       this.fundo(this.conferirVersaoNova());
+      // a ordem: a nuvem já está na versão nova; funções e painel (atualização completa) antes do programa daqui
+      await this.talvezPublicar();
       await this.talvezAtualizarSozinho();
       if (!this.d.sombra) this.aplicarConfig(r.config);
       await this.conferirImpressao(nuvem, r.config);
@@ -777,7 +791,7 @@ export class Agente {
     const cfg = this.configNuvem;
     const nuvem = this.d.nuvem;
     const modo = modoAtualizar(cfg.atualizar_sozinho);
-    if (modo === "desligada" || !nuvem || this.d.sombra || !this.d.versoes) return;
+    if (modo === "desligada" || !nuvem || this.d.sombra || !this.d.versoes || this.publicando) return;
     const para = this.versaoNova;
     if (!para || compararVersao(para, VERSAO) <= 0) return;
     const t = this.d.relogio.agora();
@@ -823,6 +837,8 @@ export class Agente {
     if (!this.d.versoes || !this.d.exec) return { ok: false, status: 501, erro: "este agente não se atualiza pelo painel" };
     const pendente = this.atualizacaoPendente();
     if (pendente) return { ok: false, status: 409, erro: `já há uma atualização em andamento (para a ${pendente.para})` };
+    // a publicação roda num processo deste agente: atualizar agora a derrubaria no meio
+    if (this.publicando) return { ok: false, status: 409, erro: `publicando as funções e o painel da ${this.publicando}: tente de novo daqui a pouco` };
     let publicadas: string[];
     try {
       publicadas = await this.d.versoes.publicadas();
@@ -1035,6 +1051,98 @@ export class Agente {
       fs.rmSync(p.pasta, { recursive: true, force: true });
     }
     if (this.d.sistema === "windows" && this.d.exec) await this.d.exec.rodar(["schtasks", "/Delete", "/F", "/TN", TAREFA_ATUALIZAR]).catch(() => undefined);
+  }
+
+  // ------------------------------------------------------------------------------------------------ atualização completa
+
+  /**
+   * Atualização completa (desligada de fábrica): com os tokens cifrados na nuvem, a nuvem já na versão nova e as funções
+   * ou o painel dela ainda fora do ar, o primeiro computador ligado e calmo que pegar a vez publica (um por vez, a vez
+   * é do banco). Qualquer sistema serve: é o instalador da versão nova, com o Node deste agente.
+   */
+  async talvezPublicar(): Promise<void> {
+    const nuvem = this.d.nuvem;
+    if (!nuvem || this.d.sombra || !this.d.versoes || !this.d.exec || !this.chave || this.publicando) return;
+    await this.contarPublicacao();
+    const cfg = this.configNuvem;
+    if (!completaLigada(cfg) || !this.d.refNuvem) return;
+    const p = pendenteDaPublicacao(cfg);
+    if (!p.versao || (!p.funcoes && !p.painel) || compararVersao(p.versao, PUBLICA_DESDE) < 0) return;
+    const vez = cfg.publicacao_vez as { para?: unknown; estado?: unknown } | undefined;
+    if (vez && vez.para === p.versao && vez.estado === "falhou") return; // parou: quem pede de novo é o administrador
+    if (this.atualizacaoPendente() || !this.momentoCalmo()) return;
+    const t = this.d.relogio.agora();
+    if (t - this.publicacaoPedidaEm < 300) return;
+    this.publicacaoPedidaEm = t;
+    const r = await nuvem.vezDePublicar(p.versao).catch(() => ({ pode: false, motivo: "sem rede", funcoes: false, painel: false }));
+    if (!r.pode) {
+      if (this.motivoSemPublicar !== r.motivo) this.d.log.info(`publicar funções e painel da ${p.versao}: ainda não (${r.motivo ?? "sem motivo"})`);
+      this.motivoSemPublicar = r.motivo;
+      return;
+    }
+    this.motivoSemPublicar = null;
+    const para = p.versao;
+    this.publicando = para;
+    this.fundo(
+      this.publicar(para, { funcoes: r.funcoes, painel: r.painel }).finally(() => {
+        this.publicando = null;
+      }),
+    );
+  }
+
+  /**
+   * Publica as funções e/ou o painel da versão `para` pelo instalador DELA (`--publicar-nuvem`): só versão publicada do
+   * repositório oficial, pacote da tag pelo endereço fixo, os tokens abertos com a chave do cofre na memória e entregues
+   * pela entrada padrão. O que o instalador escreve vai para o log sem nenhum pedaço dos tokens.
+   */
+  async publicar(para: string, partes: { funcoes: boolean; painel: boolean }): Promise<{ ok: boolean; motivo: string | null }> {
+    const nuvem = this.d.nuvem!;
+    let segredos: string[] = [];
+    let motivo: string | null = null;
+    let pasta: string | null = null;
+    try {
+      const tokens = abrirTokens(this.chave!, await nuvem.credenciaisLer());
+      segredos = [tokens.supabase, tokens.vercel];
+      const publicadas = await this.d.versoes!.publicadas();
+      if (!publicadas.includes(para)) throw new Error(`a ${para} não é uma versão publicada do Reveza`);
+      pasta = fs.mkdtempSync(path.join(os.tmpdir(), "reveza-publicar-"));
+      const pacote = path.join(pasta, `reveza-${para}.tar.gz`);
+      await this.d.versoes!.baixar(para, pacote);
+      extrairTarGz(pacote, path.join(pasta, "pacote"));
+      const instalador = acharInstalador(path.join(pasta, "pacote"), para);
+      const lista = [partes.funcoes && "funcoes", partes.painel && "painel"].filter(Boolean).join(",");
+      this.d.log.info(`publicando ${lista} da ${para} (atualização completa)`);
+      const r = await this.d.exec!.rodar([this.d.node ?? process.execPath, instalador, "--publicar-nuvem", "--ref", this.d.refNuvem!, "--partes", lista], {
+        entrada: JSON.stringify(tokens),
+        env: this.d.ambienteDoInstalador ?? {},
+        cwd: pasta,
+        timeoutMs: PUBLICACAO_VALIDA_MS,
+      });
+      const saida = semSegredos(`${r.saida}${r.erro}`, segredos).replace(/\x1b\[[0-9;]*m/g, "");
+      fs.mkdirSync(this.d.c.logs, { recursive: true, mode: 0o700 });
+      gravarAtomico(path.join(this.d.c.logs, `publicacao-${para}.log`), saida);
+      if (r.codigo !== 0) {
+        const linhas = saida.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        motivo = (linhas.reverse().find((l) => /Parei|Stopped|erro|falh/i.test(l)) ?? linhas[0] ?? `o instalador saiu com o código ${r.codigo}`).slice(0, 200);
+      }
+    } catch (e) {
+      motivo = semSegredos(String((e as Error).message ?? e), segredos).slice(0, 200);
+    } finally {
+      if (pasta) fs.rmSync(pasta, { recursive: true, force: true });
+    }
+    if (motivo) this.d.log.erro(`a publicação da ${para} não deu certo: ${motivo}`);
+    else this.d.log.info(`funções e painel da ${para} publicados`);
+    this.publicacaoAContar = { para, estado: motivo ? "falhou" : "concluida", motivo };
+    await this.contarPublicacao();
+    return { ok: !motivo, motivo };
+  }
+
+  /** Conta à nuvem como a publicação terminou (sem rede, tenta na busca seguinte). */
+  private async contarPublicacao(): Promise<void> {
+    const c = this.publicacaoAContar;
+    if (!c || !this.d.nuvem) return;
+    const ok = await this.d.nuvem.resultadoPublicacao(c.para, c.estado, c.motivo).then(() => true, () => false);
+    if (ok) this.publicacaoAContar = null;
   }
 
   // ------------------------------------------------------------------------------------------------ conserto

@@ -195,4 +195,19 @@ export interface Nuvem {
    * PGRST202/42883 quando ela é de antes da 0.2.1 (sem a função).
    */
   migracoesAplicadas(): Promise<string[] | null>;
+  /** Atualização completa (0021): guarda os dois tokens cifrados com a chave do cofre (com a impressão dela). */
+  credenciaisGuardar(supabase: TokenNuvem, vercel: TokenNuvem, impressao: string): Promise<{ ok: boolean }>;
+  /** Os tokens cifrados (só computador ativo lê; sem a chave do cofre, não abre). */
+  credenciaisLer(): Promise<{ supabase: (TokenNuvem & { gravadoEm: string | null }) | null; vercel: (TokenNuvem & { gravadoEm: string | null }) | null }>;
+  credenciaisApagar(): Promise<{ ok: boolean }>;
+  /** A vez de publicar as funções e o painel da versão em que a nuvem está (um computador por vez). */
+  vezDePublicar(para: string): Promise<{ pode: boolean; motivo: string | null; funcoes: boolean; painel: boolean }>;
+  /** Como terminou a publicação (concluída marca o que está no ar; falhou vira alerta e segura os computadores). */
+  resultadoPublicacao(para: string, estado: "concluida" | "falhou", motivo: string | null): Promise<{ ok: boolean }>;
+}
+
+/** Um token cifrado com a chave do cofre (AES-256-GCM; o dado associado diz qual token é). */
+export interface TokenNuvem {
+  cifrado: Buffer;
+  nonce: Buffer;
 }
