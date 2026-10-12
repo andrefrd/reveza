@@ -41,7 +41,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <TextoGradiente className="!justify-start truncate font-semibold">{t("app.nome")}</TextoGradiente>
                   <span className="truncate text-xs text-muted-foreground">
-                    {demo ? t("app.demo") : t("app.versaoPainel", { versao: __VERSAO_PAINEL__ })}
+                    {demo ? t("app.demo") : t("app.descricao")}
                   </span>
                 </div>
               </Link>
@@ -54,6 +54,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter>
         <NavUser eu={eu} />
+        {/* a versão do painel fica à vista embaixo (some com a barra recolhida, onde só há ícones) */}
+        <p className="truncate px-2 pb-1 text-[11px] text-muted-foreground tabular-nums group-data-[collapsible=icon]:hidden">
+          {t("app.versaoPainel", { versao: __VERSAO_PAINEL__ })}
+        </p>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
