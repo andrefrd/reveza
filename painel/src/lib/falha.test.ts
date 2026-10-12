@@ -64,7 +64,7 @@ describe("detalhes para copiar", () => {
     ].join("\n")
     const texto = detalhesDaFalha({
       erro,
-      componentes: "\n    at Alertas\n    at Suspense\n    at ProtecaoSecao",
+      componentes: "\n    at Alertas\n    at Suspense\n    at ProtecaoSecao (https://painel.reveza.ia.br/assets/index-Cy6747LR.js:9:1)",
       caminho: "/alertas?convite=segredo123#access_token=eyJabc.def",
       versao: "0.1.5",
       agora: new Date("2026-10-12T04:00:00Z"),
