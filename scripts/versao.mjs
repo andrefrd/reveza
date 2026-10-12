@@ -5,11 +5,12 @@
 //
 //   node scripts/versao.mjs conferir          tudo na mesma versão (o npm test roda)
 //   node scripts/versao.mjs lancar 0.1.2      sobe a versão (a entrada da CHANGELOG já precisa estar escrita), commita,
-//                                             publica, marca a tag e cria a release com o texto da CHANGELOG
+//                                             publica, marca a tag e cria a release com o texto da CHANGELOG; depois
+//                                             roda o comando de `git config reveza.posLancamento`, se houver
 //   node scripts/versao.mjs pre-push          (hook .githooks/pre-push) recusa empurrar para a main código mudado desde
 //                                             a última versão sem subir a versão
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -137,6 +138,27 @@ function lancar(nova) {
     stdio: "inherit",
   });
   console.log(`ok: versão ${nova} no repositório, com tag e release`);
+  posLancamento(nova);
+}
+
+/**
+ * O que mais anda junto com a versão nesta máquina (por exemplo, publicar o site com a versão nova) fica na
+ * configuração local do Git, fora do repositório: `git config reveza.posLancamento "<comando>"`. O comando recebe a
+ * versão. Se falhar, a release continua valendo e o aviso diz o que rodar à mão.
+ */
+function posLancamento(nova) {
+  let comando = "";
+  try {
+    comando = git("config", "--get", "reveza.posLancamento");
+  } catch {
+    return; // não configurado
+  }
+  if (!comando) return;
+  try {
+    execSync(`${comando} ${nova}`, { cwd: RAIZ, stdio: "inherit" });
+  } catch {
+    console.error(`aviso: a release ${nova} saiu, mas o pós-lançamento falhou. Rode à mão: ${comando} ${nova}`);
+  }
 }
 
 /** Hook de pre-push: o git passa "<ref local> <sha local> <ref remota> <sha remota>" por linha no stdin. */
