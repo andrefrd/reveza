@@ -68,8 +68,13 @@ async function analisar(script: string): Promise<Analise> {
 }
 
 test("janela de confirmação: o PowerShell lê o script sem erro, só chama o Add-Type e nada é interpretado", { skip: NAO_WINDOWS }, async () => {
-  for (const [idioma, trecho] of [["pt-BR", "Para liberar, digite o código de 6 caracteres"], ["en", "To release it, type the 6-character code"]] as const) {
-    const argv = comandoDaJanela("windows", idioma)!;
+  for (const [idioma, errou, trecho] of [
+    ["pt-BR", false, "Para liberar, digite o código de 8 caracteres"],
+    ["en", false, "To let it in, type the 8-character code"],
+    ["pt-BR", true, "O código não confere."],
+    ["en", true, "Check the 8-character code on the new computer's screen"],
+  ] as const) {
+    const argv = comandoDaJanela("windows", idioma, process.env, errou)!;
     assert.deepEqual(argv.slice(0, 4), ["powershell", "-NoProfile", "-NonInteractive", "-Command"]);
     const a = await analisar(argv.at(-1)!);
     assert.deepEqual(a.erros, [], idioma);

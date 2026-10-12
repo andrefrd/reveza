@@ -24,7 +24,7 @@ function textos(idioma: "pt-BR" | "en", errou: boolean) {
       titulo: "Reveza AI",
       texto: `${abre}. If you are not linking a computer right now, click Refuse.`,
       // a InputBox do Windows não troca o nome dos botões: são OK e Cancelar, na língua do Windows
-      textoWindows: `${abre} and click OK. If you are not linking a computer right now, click Cancel.`,
+      textoWindows: `${abre}, then click OK. If you are not linking a computer right now, click Cancel.`,
       sim: "Release",
       nao: "Refuse",
     };
@@ -35,7 +35,7 @@ function textos(idioma: "pt-BR" | "en", errou: boolean) {
   return {
     titulo: "Reveza AI",
     texto: `${abre}. Se você não está ligando um computador agora, clique em Recusar.`,
-    textoWindows: `${abre} e clique em OK. Se você não está ligando um computador agora, clique em Cancelar.`,
+    textoWindows: `${abre}, depois clique em OK. Se você não está ligando um computador agora, clique em Cancelar.`,
     sim: "Liberar",
     nao: "Recusar",
   };
