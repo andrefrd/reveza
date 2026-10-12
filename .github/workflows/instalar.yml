@@ -44,13 +44,14 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.ensaio != '' }}
         shell: bash
         env:
-          ENSAIO: ${{ inputs.ensaio }}
           DONO: ${{ github.repository_owner }}
         run: |
           # só o endereço "raw" de um gist do dono, no formato exato (nada de "..", "@" ou outro usuário no caminho), e sem
           # seguir redirecionamento
-          G='^https://gist\.githubusercontent\.com/([A-Za-z0-9-]+)/[0-9a-f]{20,40}/raw/[0-9a-f]{40}/[A-Za-z0-9._-]+$'
+          G='^https://gist\.githubusercontent\.com/([A-Za-z0-9-]+)/[0-9a-f]{20,40}/raw/[0-9a-f]{40}/[A-Za-z0-9][A-Za-z0-9._-]*$'
           A="$RUNNER_TEMP/ensaio.b64"
+          # a mudança é lida do evento, não de env: o que vai em env aparece no cabeçalho do passo, no log público
+          ENSAIO="$(jq -r '.inputs.ensaio // ""' "$GITHUB_EVENT_PATH")"
           if [[ "$ENSAIO" =~ $G ]] && [ "${BASH_REMATCH[1]}" = "$DONO" ]; then
             curl -fsS --proto =https --max-redirs 0 "$ENSAIO" -o "$A"
           elif [[ "$ENSAIO" == http* ]]; then
