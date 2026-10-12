@@ -7,6 +7,28 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.1.6 · 12/10/2026
+
+Cores por workspace e atualização que não perde nada. Quem tem a 0.1.5 atualiza com
+`npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.1.6.tar.gz --atualizar` (no computador que criou a
+instalação, com os tokens do Supabase e da Vercel para o painel subir junto).
+
+- **Contas do mesmo workspace com a mesma cor.** O workspace é a organização da conta ou, sem ela, o domínio do e-mail
+  (gmail.com, outlook.com e outros provedores públicos não juntam contas). A cor de cada workspace é a da conta mais
+  antiga dele, e dois workspaces não dividem cor enquanto houver cor livre.
+- **Nos gráficos, um tom por conta.** Em Uso por dia, na janela de 5 horas e nas sessões, cada conta aparece num tom da
+  cor do workspace, e as do mesmo workspace ficam juntas na pilha e na legenda.
+- **Trocar a cor vale para o workspace inteiro.** Na gaveta da conta, o campo virou "Cor do workspace", mostra o tom de
+  cada conta e põe cadeado nas cores que já são de outro workspace.
+- **Atualizar não perde nada.** Antes de mexer em qualquer coisa, o instalador copia contas, logins, uso, configuração e
+  identidade para `~/.reveza/copias` e confere a cópia arquivo a arquivo (ficam as 5 mais novas). Depois de atualizar,
+  confere que o agente da versão nova está rodando; se não estiver em 30 segundos, volta sozinho para a versão anterior,
+  com a configuração da cópia, e as contas e os logins ficam como estavam.
+- **Barra lateral do painel:** no topo, o que o Reveza é (antes aparecia o identificador do projeto no Supabase); a
+  versão do painel fica embaixo, no rodapé.
+- Demonstração e fotos do site com a versão de verdade do Reveza (antes apareciam 0.4.1 e 0.4.2 fixos).
+- O teste de ponta a ponta da instalação roda no GitHub a cada envio, nos dois jeitos de instalar.
+
 ## 0.1.5 · 12/10/2026
 
 Atualizar um computador ligado não pede mais token. Quem tem a 0.1.4 atualiza com
