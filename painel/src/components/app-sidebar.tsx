@@ -23,14 +23,6 @@ import { useT } from "@/i18n"
 import { comDemo, emDemo } from "@/lib/demo"
 import { Link } from "@/lib/rota"
 
-function nomeDaInstalacao(): string {
-  try {
-    const url = new URL(import.meta.env.VITE_SUPABASE_URL ?? "")
-    return url.hostname.split(".")[0]
-  } catch {
-    return ""
-  }
-}
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { t } = useT()
@@ -49,7 +41,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <TextoGradiente className="!justify-start truncate font-semibold">{t("app.nome")}</TextoGradiente>
                   <span className="truncate text-xs text-muted-foreground">
-                    {demo ? t("app.demo") : nomeDaInstalacao() || t("app.descricao")}
+                    {demo ? t("app.demo") : t("app.versaoPainel", { versao: __VERSAO_PAINEL__ })}
                   </span>
                 </div>
               </Link>

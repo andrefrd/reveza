@@ -5,6 +5,7 @@ export default secao({
     app: {
       nome: "Reveza AI",
       descricao: "Gestor de contas de assistente de código",
+      versaoPainel: "Painel v{versao}",
       carregando: "Carregando o painel…",
       erroCarregar: "Não deu para ler a nuvem agora.",
       secaoQuebrou: "Esta tela encontrou um dado que não soube mostrar. As outras seguem funcionando.",
@@ -237,6 +238,7 @@ export default secao({
     app: {
       nome: "Reveza AI",
       descricao: "Manager for coding assistant accounts",
+      versaoPainel: "Panel v{versao}",
       carregando: "Loading the panel…",
       erroCarregar: "Couldn't read the cloud right now.",
       secaoQuebrou: "This screen found data it couldn't show. The other screens keep working.",
