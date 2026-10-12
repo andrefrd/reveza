@@ -16,7 +16,8 @@ import { tocarSom } from "./som.js";
 import { pedirConfirmacao } from "./confirmar.js";
 import type { Executor } from "./util/executor.js";
 import { CICLO_S, COMANDO_VALIDO_S, FATOR_LEITURA_SOMBRA, FILA_VALIDA_S, LER_ATIVA_PERTO_S, LER_ATIVA_S, LER_ESTACIONADA_AVISO_S, LER_ESTACIONADA_S, MEDIDA_FRESCA_S, POSSE_S, VERSAO, VENCIDO_EM_S, type Caminhos, type Sistema } from "./config.js";
-import { expiraEm } from "./credenciais/blob.js";
+import { expiraEm, hashToken, temRenovacao } from "./credenciais/blob.js";
+import { PRINCIPAL } from "./credenciais/tipos.js";
 import { CredenciaisSombra } from "./credenciais/sombra.js";
 import type { Credenciais } from "./credenciais/tipos.js";
 import { agendarRodizio, candidata, decidir, gatilhoDeTroca, pctEfetivo, sorteioReal } from "./decisao.js";
@@ -49,6 +50,11 @@ export interface Dependencias {
   sorteio?: (xs: string[]) => string;
   aleatorio?: () => number;
   diagnostico?: () => Promise<Record<string, unknown>>;
+  /**
+   * O conserto do Corrigir do painel (a lista fechada de conserto.ts, rodando dentro do agente). Devolve o diagnóstico
+   * de depois, no formato do `diagnostico`, com o resultado de cada problema, e o resumo para o evento.
+   */
+  consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string }>;
   /** Para tocar o som da troca (sem ele, não toca). */
   exec?: Executor;
 }
@@ -102,6 +108,8 @@ export class Agente {
   private registroTentado = new Map<string, number>();
   /** Quanto levou a última conversa com a nuvem (o painel mostra em Saúde). */
   ultimaBuscaMs: number | null = null;
+  /** A última atribuição que a nuvem mandou (o conserto da credencial põe esta conta). */
+  ultimaAtribuicao: Atribuicao | null = null;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -431,6 +439,7 @@ export class Agente {
       if (!this.d.sombra) this.aplicarConfig(r.config);
       await this.conferirImpressao(nuvem, r.config);
       this.estado.nuvem.atribuicaoConta = r.atribuicao?.conta_id ?? null;
+      this.ultimaAtribuicao = r.atribuicao?.conta_id ? r.atribuicao : null;
       if (r.ligacao_pendente && !this.ligacaoAvisada) {
         this.ligacaoAvisada = true;
         this.d.log.info("há uma ligação de computador novo aberta (frase de 6 palavras válida por 10 minutos)");
@@ -552,15 +561,19 @@ export class Agente {
     }
   }
 
-  async aplicarAtribuicao(a: Atribuicao): Promise<void> {
-    if (!a.conta_id) return;
+  /**
+   * Aplica a conta que a nuvem atribuiu. `principalSemConta` (o conserto da credencial): o assistente está sem login,
+   * então a conta entra mesmo sendo a que já consta em uso, com a cópia mais nova do cofre, e sem a espera de 1 min.
+   */
+  async aplicarAtribuicao(a: Atribuicao, principalSemConta = false): Promise<{ ok: boolean; erro?: string }> {
+    if (!a.conta_id) return { ok: false, erro: "a nuvem não atribuiu conta" };
     this.estado.nuvem.atribuicaoConta = a.conta_id;
     const destino = this.posse!.porContaId(a.conta_id);
     const ativa = this.estado.ativa;
-    if (destino && destino === ativa) {
+    if (destino && destino === ativa && !principalSemConta) {
       this.estado.nuvem.atribuicaoVersao = Math.max(this.estado.nuvem.atribuicaoVersao, a.versao);
       this.estado.nuvem.atribuicaoConta = a.conta_id;
-      return;
+      return { ok: true };
     }
     if (this.d.sombra) {
       const chave = `${a.conta_id}#${a.versao}`;
@@ -569,25 +582,30 @@ export class Agente {
         const email = destino ? this.estado.contas[destino]!.email : a.conta_id;
         this.d.log.faria(`pegar a posse e trocar para ${email} (${a.motivo || "atribuição da nuvem"})`);
       }
-      return;
+      return { ok: false, erro: "modo sombra: o agente não troca" };
     }
     const chave = `${a.conta_id}#${a.versao}`;
-    if ((this.falhaAtribuicao.get(chave) ?? 0) > this.d.relogio.agora()) return;
+    if (!principalSemConta && (this.falhaAtribuicao.get(chave) ?? 0) > this.d.relogio.agora()) return { ok: false, erro: "tento de novo em 1 minuto" };
     const nuvem = this.d.nuvem!;
     const r = await nuvem.pegarPosse(a.conta_id, "uso", POSSE_S);
     if (!r.ok) {
       this.d.log.info(`a conta atribuída (${a.email ?? a.conta_id}) não veio: ${r.erro ?? "sem motivo"}; espero a nuvem`);
-      return;
+      return { ok: false, erro: `a nuvem não entregou a conta atribuída (${r.erro ?? "sem motivo"})` };
     }
     let id = destino;
     if (!id) {
       id = await this.posse!.materializar(a.conta_id, a.email, r.cofre, (pasta) => this.d.cli.renovar(pasta, 0));
       if (!id) {
         await nuvem.soltarPosse(a.conta_id).catch(() => undefined);
-        return;
+        return {
+          ok: false,
+          erro: this.chave
+            ? "o login da conta atribuída não abriu do cofre: entre de novo nela pelo painel (Contas, Entrar de novo)"
+            : "este computador não tem a chave do cofre: ligue-o pelo painel (Computadores, Ligar computador novo) ou com reveza ligar",
+        };
       }
     } else {
-      await this.posse!.sincronizar(id, r.cofre);
+      await this.posse!.sincronizar(id, r.cofre, principalSemConta);
     }
     const ja = this.posse!.posses.get(id);
     this.posse!.posses.set(id, "uso");
@@ -600,7 +618,7 @@ export class Agente {
         await this.posse!.devolver(id).catch(() => false);
         await this.posse!.soltar(id).catch(() => undefined);
       }
-      return;
+      return { ok: false, erro: res.erro };
     }
     this.falhaAtribuicao.delete(chave);
     this.estado.nuvem.atribuicaoVersao = a.versao;
@@ -611,6 +629,85 @@ export class Agente {
     }
     this.retomarHeadless();
     this.salvar();
+    return { ok: true };
+  }
+
+  // ------------------------------------------------------------------------------------------------ conserto
+
+  /**
+   * O conserto da credencial em uso (`reveza doctor` e o Corrigir do painel): o assistente está sem login, ou com um
+   * login morto. Com nuvem, entra a conta que ela atribuiu a este computador (do cofre, com a posse); sem nuvem, a conta
+   * em uso se ainda serve, senão a melhor livre. Sempre pelo trocador: nada de gravar credencial por fora dele.
+   */
+  async consertarCredencial(): Promise<{ ok: boolean; texto: string }> {
+    if (this.d.sombra) {
+      return { ok: false, texto: "modo sombra: o agente não troca conta (para sair da sombra: instalador com --atualizar --sair-da-sombra)" };
+    }
+    const antes = await this.principalComLogin();
+    if (antes) return { ok: true, texto: `o assistente já está com login (${antes})` };
+    let r: { ok: boolean; erro?: string };
+    if (this.d.nuvem && this.posse) {
+      // traz a atribuição mais nova; dentro de uma busca (o Corrigir do painel chega numa) não roda de novo
+      await this.busca();
+      const a = this.ultimaAtribuicao;
+      if (!a?.conta_id) {
+        return {
+          ok: false,
+          texto:
+            this.online === false
+              ? "o agente está sem falar com a nuvem, que é quem escolhe a conta: confira a internet e corrija de novo"
+              : "a nuvem ainda não mandou conta para este computador: escolha uma no painel (Computadores, Trocar conta agora)",
+        };
+      }
+      r = await this.aplicarAtribuicao(a, true);
+    } else {
+      const destino = this.contaParaConserto();
+      if (!destino) {
+        return { ok: false, texto: "nenhuma conta livre neste computador agora (no limite, pausadas ou sem login): entre de novo numa delas ou espere o reset" };
+      }
+      r = await this.trocador.trocar(destino, "conserto: o assistente estava sem login");
+    }
+    const depois = await this.principalComLogin();
+    if (depois) return { ok: true, texto: `o assistente voltou a ter login: ${depois}` };
+    if (r.ok) return { ok: false, texto: "a conta entrou, mas o login dela não vale mais: entre de novo nela pelo painel (Contas, Entrar de novo)" };
+    if (r.erro === "não consegui identificar a conta em uso") {
+      return {
+        ok: false,
+        texto: "o login em uso venceu e as sessões ainda podem renová-lo (ou falta rede para conferir): se o assistente seguir pedindo login, corrija de novo em 15 minutos",
+      };
+    }
+    if (r.erro === "conta sem login guardado") return { ok: false, texto: "a conta escolhida está sem login guardado: entre de novo nela pelo painel (Contas, Entrar de novo)" };
+    return { ok: false, texto: r.erro ?? "a troca não aconteceu" };
+  }
+
+  /** O e-mail da conta com login de pé na principal (dentro da validade, ou com renovação), ou null. */
+  private async principalComLogin(): Promise<string | null> {
+    const blob = await this.cred.ler(PRINCIPAL).catch(() => null);
+    const h = hashToken(blob);
+    if (!h || (expiraEm(blob) <= this.d.relogio.agora() && !temRenovacao(blob))) return null;
+    const ultima = this.trocador.ultimaPrincipal;
+    if (ultima && hashToken(ultima[1]) === h) return this.estado.contas[ultima[0]]?.email ?? null;
+    if (expiraEm(blob) <= this.d.relogio.agora()) return null; // vencido e de ninguém conhecido: a API não diz de quem é
+    const perfil = await this.trocador.identidade(blob).catch(() => null);
+    return perfil?.email ?? null;
+  }
+
+  /** Sem nuvem: a conta em uso se ainda serve; senão a melhor livre; senão a menos usada das que têm login. */
+  private contaParaConserto(): string | null {
+    const t = this.d.relogio.agora();
+    const e = this.estado;
+    const serve = (id: string) => {
+      const c = e.contas[id];
+      return !!c && !c.precisaLogin && !c.pausada && (pctEfetivo(c, t) ?? 0) < gatilhoDeTroca(e);
+    };
+    if (e.ativa && serve(e.ativa)) return e.ativa;
+    const livre = candidata(e, t);
+    if (livre) return livre;
+    return (
+      Object.keys(e.contas)
+        .filter(serve)
+        .sort((a, b) => (pctEfetivo(e.contas[a]!, t) ?? 0) - (pctEfetivo(e.contas[b]!, t) ?? 0))[0] ?? null
+    );
   }
 
   // ------------------------------------------------------------------------------------------------ comandos
@@ -715,6 +812,18 @@ export class Agente {
         await this.atualizarTudo();
         return { status: 200, corpo: { ok: true } };
       case "diagnostico": {
+        // Corrigir pelo painel: só o sim/não vem da nuvem; o que roda é a lista fechada de conserto.ts
+        if (corpo.corrigir === true) {
+          if (!this.d.consertar) return recusa(501, "este agente não conserta pelo painel");
+          const r = await this.d.consertar();
+          const texto = `Conserto pedido pelo painel: ${r.resumo}.`.slice(0, 300);
+          this.trocador.evento("info", texto);
+          // o evento "info" não sobe sozinho (aoEvento): o conserto vai à nuvem de propósito, para ficar registrado
+          await this.d.nuvem?.evento("info", texto, { conserto: true, comando: cmd.id ?? null }).catch(() => undefined);
+          // o próximo agente_ola leva o diagnóstico novo (só lido) para a tela Saúde
+          this.diagnosticoEm = 0;
+          return { status: 200, corpo: { ok: true, corrigir: true, diagnostico: r.diagnostico } };
+        }
         const diag = this.d.diagnostico ? await this.d.diagnostico() : {};
         return { status: 200, corpo: { ok: true, diagnostico: diag } };
       }
@@ -926,6 +1035,13 @@ export class Agente {
         const id = await this.trocador.conferirPrincipal();
         this.salvar();
         return { status: 200, corpo: { ok: !!id, conta: id ? this.estado.contas[id]!.email : null } };
+      },
+      consertar: async (corpo: Record<string, unknown>): Promise<Resposta> => {
+        // só os consertos que precisam do agente rodando, pelo nome (a lista fechada); o resto roda no terminal
+        if (corpo.item !== "credenciais") return { status: 400, corpo: { ok: false, erro: "conserto desconhecido" } };
+        const r = await this.consertarCredencial();
+        if (r.ok) this.trocador.evento("info", `Conserto pelo terminal: ${r.texto}.`);
+        return { status: 200, corpo: r };
       },
       som: async (corpo: Record<string, unknown>): Promise<Resposta> => {
         if (typeof corpo.ligado === "boolean") {

@@ -401,7 +401,17 @@ export interface Montado {
 }
 
 export async function montar(
-  opcoes: { nuvem?: Nuvem | null; sombra?: boolean; chave?: Buffer | null; cred?: CredenciaisFalsas; sistema?: Sistema; relogio?: RelogioFalso; exec?: Executor } = {},
+  opcoes: {
+    nuvem?: Nuvem | null;
+    sombra?: boolean;
+    chave?: Buffer | null;
+    cred?: CredenciaisFalsas;
+    sistema?: Sistema;
+    relogio?: RelogioFalso;
+    exec?: Executor;
+    diagnostico?: () => Promise<Record<string, unknown>>;
+    consertar?: () => Promise<{ diagnostico: Record<string, unknown>; resumo: string }>;
+  } = {},
 ): Promise<Montado> {
   const tmp = pastaTemporaria();
   const cred = opcoes.cred ?? new CredenciaisFalsas();
@@ -427,6 +437,8 @@ export async function montar(
     sorteio: (xs) => xs[xs.length - 1]!,
     aleatorio: () => 0.5,
     exec: opcoes.exec,
+    diagnostico: opcoes.diagnostico,
+    consertar: opcoes.consertar,
   });
   await agente.iniciar({ laços: false, ponte: false });
   const limpar = () => {

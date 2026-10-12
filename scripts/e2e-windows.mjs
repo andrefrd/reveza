@@ -208,7 +208,7 @@ const instalar = (...extra) => rodar(NODE, ["instalador/instalar.mjs", "--sim", 
   conferir("reveza status (pelo reveza.cmd, com acento no caminho) diz que o agente está rodando", st.codigo === 0 && /Agente: rodando na porta 7788/.test(st.saida), st.saida + st.erro);
   const ss = reveza("servico", "status");
   conferir("reveza servico status: instalado e rodando", ss.codigo === 0 && /instalado, rodando/.test(ss.saida), ss.saida + ss.erro);
-  const dr = reveza("doctor", "--json");
+  const dr = reveza("doctor", "--so-ver", "--json");
   guardar("3-doctor.json", dr.saida + dr.erro);
   let d = [];
   try { d = JSON.parse(dr.saida); } catch { /* fica vazio */ }

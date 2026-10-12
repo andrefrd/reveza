@@ -13,7 +13,8 @@ import { caminhos, PORTA_PADRAO, PORTA_SOMBRA, sistemaAtual, VERSAO, type Caminh
 import { credenciaisDoSistema } from "./credenciais/index.js";
 import type { Credenciais } from "./credenciais/tipos.js";
 import { guardaDoSistema, type Guarda } from "./cofre/guarda.js";
-import { doctor, textoDoctor } from "./doctor.js";
+import { doctor, textoDoctor, type DepsDoctor } from "./doctor.js";
+import { ambienteDoUsuario, consertar, instalarMod, pastaDoPrograma, resumoConserto } from "./conserto.js";
 import { carregarEstado, type EstadoLocal } from "./estado.js";
 import { importar } from "./importar.js";
 import { iniciarCofre, lerChave, publicarLigacao, receberLigacao, impressaoDaChave } from "./ligar.js";
@@ -102,7 +103,8 @@ Uso: reveza <comando> [opções]
   trocar <email> [--local]        troca a conta em uso (com nuvem, quem decide é o painel)
   som [ligar|desligar|testar]     som do sistema quando este computador troca de conta (ligado de fábrica)
   uso [--dias N] [--csv|--json]   tokens e custo equivalente por dia, conta, modelo e projeto
-  doctor [--json]                 confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões
+  doctor [--so-ver] [--json]      confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões, e conserta o que
+                                  tem conserto seguro (serviço, mod, conta em uso sem login); --so-ver só confere
   ligar [--frase "..."]           liga este computador ao cofre (ou mostra a frase para ligar outro)
   ligar --painel ligar|desligar  libera (ou não) a frase pelo painel sem perguntar; sem isso, uma janela pede o clique
   servico instalar|remover|status [--sombra]
@@ -377,32 +379,90 @@ async function cmdUso(amb: Ambiente, a: Args): Promise<number> {
   return 0;
 }
 
+/** O que a instalação lembra (instalacao.json, gravado pelo instalador): modo sombra e se foi sem serviço. */
+function lerInstalacao(c: Caminhos): { sombra?: boolean; semServico?: boolean } | null {
+  return lerJson<{ sombra?: boolean; semServico?: boolean }>(path.join(c.base, "instalacao.json"));
+}
+
+/** Depois de reinstalar o serviço: espera o agente responder na ponte e, com nuvem, a primeira conversa com ela. */
+async function esperarAgente(amb: Ambiente, porta: number, comNuvem: boolean, segundos = 30): Promise<boolean> {
+  let respondeu = false;
+  for (let i = 0; i < segundos; i++) {
+    const r = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
+    const corpo = (r?.status === 200 ? r.corpo : null) as { nuvem?: { online?: boolean | null } } | null;
+    if (corpo) {
+      respondeu = true;
+      if (!comNuvem || (corpo.nuvem?.online ?? null) !== null) return true;
+    }
+    await amb.relogio.dormir(1000);
+  }
+  return respondeu;
+}
+
 async function cmdDoctor(amb: Ambiente, a: Args): Promise<number> {
   const p = await pecas(amb);
   const porta = portaDe(amb, a);
-  const r = await doctor({
+  const oServico = opcoesServico(amb, a);
+  const instalado = servico.instalado(oServico);
+  const instalacao = lerInstalacao(amb.c);
+  const sombra = a.flags.sombra === true || !!instalado?.sombra || instalacao?.sombra === true || !!lerJson<InfoPonte>(arquivoPonte(amb.c))?.sombra;
+  const identidade = async () => {
+    const id = await lerIdentidade(p.guarda);
+    return id ? { url: id.url } : null;
+  };
+  const deps: DepsDoctor = {
     c: amb.c,
     cred: p.cred,
     guarda: p.guarda,
     cli: p.cli,
     api: p.api,
-    statusServico: () => servico.status(opcoesServico(amb, a)),
+    statusServico: () => servico.status(oServico),
     ponte: async () => {
       const x = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
       return x?.status === 200 ? (x.corpo as Record<string, unknown>) : null;
     },
-    nuvemConfigurada: async () => {
-      const id = await lerIdentidade(p.guarda);
-      return id ? { url: id.url } : null;
-    },
+    nuvemConfigurada: identidade,
     horaNuvem: async () => {
       const n = await nuvemDe(amb, p.guarda, false);
       return n ? n.horaDoServidor() : null;
     },
     agora: () => amb.relogio.agora(),
+    onde: "terminal",
+    sombra,
+    semServico: instalacao?.semServico === true,
+  };
+  if (a.flags["so-ver"]) {
+    const r = await doctor(deps);
+    amb.saida(a.flags.json ? JSON.stringify(r, null, 1) : textoDoctor(r));
+    return r.some((c) => c.situacao === "falha") ? 1 : 0;
+  }
+  const r = await consertar(deps, {
+    // o mesmo caminho de `reveza servico instalar`, sem tirar nem pôr o modo sombra e a porta de quem já estava instalado
+    servico: async () => {
+      const o = { ...oServico, sombra: instalado ? instalado.sombra : sombra, porta: instalado ? instalado.porta : oServico.porta };
+      await servico.instalar(o);
+      const voltou = await esperarAgente(amb, porta, !!(await identidade().catch(() => null)));
+      return voltou
+        ? { ok: true, texto: `reinstalei o serviço${o.sombra ? " (em modo sombra, como estava)" : ""} e o agente respondeu` }
+        : { ok: false, texto: `reinstalei o serviço, mas o agente não respondeu em 30 s: veja o log em ${amb.c.log}` };
+    },
+    // o mesmo caminho do instalador: o marketplace é a pasta do programa
+    mod: async () => {
+      const app = pastaDoPrograma(amb.script);
+      if (!app) return { ok: false, texto: "não achei a pasta do programa com o mod: rode o instalador com --atualizar" };
+      return instalarMod({ exec: amb.exec, assistente: p.cli.binario(), app, porta: instalado?.porta ?? PORTA_PADRAO, env: ambienteDoUsuario(amb.env) });
+    },
+    // a troca é do agente que está rodando (o trocador dele): pedida pela ponte
+    credenciais: async () => {
+      const x = await pedirPonte(porta, "POST", "/api/consertar", { item: "credenciais" }, chaveDaPonte(amb.c.ponteChave, false), 150_000);
+      if (!x) return { ok: false, texto: "o agente não está rodando: rode reveza servico instalar (ou reveza rodar) e corrija de novo" };
+      const c = x.corpo as { ok?: unknown; texto?: unknown; erro?: unknown };
+      return { ok: c.ok === true, texto: String(c.texto ?? c.erro ?? `o agente respondeu ${x.status}`) };
+    },
   });
-  amb.saida(a.flags.json ? JSON.stringify(r, null, 1) : textoDoctor(r));
-  return r.some((c) => c.situacao === "falha") ? 1 : 0;
+  amb.saida(a.flags.json ? JSON.stringify(r.depois, null, 1) : textoDoctor(r.depois));
+  if (r.feitos.length) logEmArquivo(amb.c.log, false).info(`reveza doctor consertou: ${resumoConserto(r.depois)}`);
+  return r.depois.some((c) => c.situacao === "falha") ? 1 : 0;
 }
 
 async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
@@ -539,21 +599,48 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
     porta,
     exec: amb.exec,
     diagnostico: async (): Promise<Record<string, unknown>> => {
-      const r = await doctor({
-        c: amb.c,
-        cred: agente.cred,
-        guarda: p.guarda,
-        cli: p.cli,
-        api: p.api,
-        statusServico: () => servico.status(opcoesServico(amb, a)),
-        ponte: async () => agente.publico(),
-        nuvemConfigurada: async () => ((await lerIdentidade(p.guarda)) ? { url: (await lerIdentidade(p.guarda))!.url } : null),
-        horaNuvem: async () => (nuvem ? nuvem.horaDoServidor() : null),
-        agora: () => amb.relogio.agora(),
-      });
-      // o formato que o painel lê: hora em ISO, versão e o tempo da última conversa com a nuvem
-      return { conferencias: r, em: new Date(amb.relogio.agora() * 1000).toISOString(), versao: VERSAO, atrasoBuscaMs: agente.ultimaBuscaMs };
+      // a conferência periódica (agente_ola) só lê: nunca conserta sozinha
+      const r = await doctor(depsDentro());
+      return paraPainel(r);
     },
+    consertar: async () => {
+      // o Corrigir do painel: a lista fechada, rodando dentro do agente (o serviço não se reinicia daqui)
+      const r = await consertar(depsDentro(), {
+        mod: async () => {
+          const app = pastaDoPrograma(amb.script);
+          if (!app) return { ok: false, texto: "não achei a pasta do programa com o mod: rode o instalador com --atualizar neste computador" };
+          return instalarMod({ exec: amb.exec, assistente: p.cli.binario(), app, porta, env: ambienteDoUsuario(amb.env) });
+        },
+        credenciais: () => agente.consertarCredencial(),
+      });
+      return { diagnostico: paraPainel(r.depois), resumo: resumoConserto(r.depois) };
+    },
+  });
+  const instalacao = lerInstalacao(amb.c);
+  const depsDentro = (): DepsDoctor => ({
+    c: amb.c,
+    cred: agente.cred,
+    guarda: p.guarda,
+    cli: p.cli,
+    api: p.api,
+    statusServico: () => servico.status(opcoesServico(amb, a)),
+    ponte: async () => agente.publico(),
+    nuvemConfigurada: async () => {
+      const id = await lerIdentidade(p.guarda);
+      return id ? { url: id.url } : null;
+    },
+    horaNuvem: async () => (nuvem ? nuvem.horaDoServidor() : null),
+    agora: () => amb.relogio.agora(),
+    onde: "agente",
+    sombra,
+    semServico: instalacao?.semServico === true,
+  });
+  // o formato que o painel lê: hora em ISO, versão e o tempo da última conversa com a nuvem
+  const paraPainel = (r: Awaited<ReturnType<typeof doctor>>): Record<string, unknown> => ({
+    conferencias: r,
+    em: new Date(amb.relogio.agora() * 1000).toISOString(),
+    versao: VERSAO,
+    atrasoBuscaMs: agente.ultimaBuscaMs,
   });
   await agente.iniciar();
   gravarJson(arquivoPonte(amb.c), { porta, pid: process.pid, sombra });

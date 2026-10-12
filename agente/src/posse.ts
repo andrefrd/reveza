@@ -96,12 +96,15 @@ export class PosseCofre {
     return login;
   }
 
-  /** A cópia do cofre entra no lugar da local quando é mais nova. Nunca para a conta em uso (a principal é a fonte). */
-  async sincronizar(id: string, cofre: CofreNuvem | null): Promise<void> {
+  /**
+   * A cópia do cofre entra no lugar da local quando é mais nova. Nunca para a conta em uso (a principal é a fonte),
+   * a não ser com `principalSemConta`: o assistente saiu da conta, e a principal deixou de ser a fonte de nada.
+   */
+  async sincronizar(id: string, cofre: CofreNuvem | null, principalSemConta = false): Promise<void> {
     const c = this.conta(id);
     if (!c || !cofre) return;
     this.versaoServidor.set(id, cofre.versao);
-    if (id === this.estado().ativa) return;
+    if (id === this.estado().ativa && !principalSemConta) return;
     const local = await this.cred.ler(c.pasta);
     if (c.versaoCofre !== null && cofre.versao <= c.versaoCofre && local) return;
     const k = this.chave();

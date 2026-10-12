@@ -72,6 +72,8 @@ export interface AlvoPonte {
   conectar(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   adotar(): Resposta | Promise<Resposta>;
   som(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
+  /** Conserto do `reveza doctor` que precisa do agente rodando (só os da lista fechada, pelo nome). */
+  consertar(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
 }
 
 const SESSAO = /^[A-Za-z0-9_-]{1,80}$/;
@@ -161,6 +163,7 @@ export function criarPonte(alvo: AlvoPonte, porta: number, chave: string | null 
         if (caminho === "/api/contas/conectar") return alvo.conectar(c);
         if (caminho === "/api/contas/adotar") return alvo.adotar();
         if (caminho === "/api/som") return alvo.som(c);
+        if (caminho === "/api/consertar") return alvo.consertar(c);
         const m = /^\/api\/fila\/([^/]+)\/(retomada|descartar)$/.exec(caminho);
         if (m) {
           const sessao = decodeURIComponent(m[1]!);
@@ -184,6 +187,8 @@ export async function pedirPonte(
   caminho: string,
   corpo?: unknown,
   chave: string | null = null,
+  /** Quanto esperar a resposta (o conserto da credencial pode renovar um login, que leva mais). */
+  esperaMs = 30_000,
 ): Promise<Resposta | null> {
   try {
     const cab = cabecalhosDaPonte(chave, metodo, caminho.split("?")[0] ?? "");
@@ -191,7 +196,7 @@ export async function pedirPonte(
       method: metodo,
       headers: { "Content-Type": "application/json", "X-Reveza": "1", ...cab },
       body: corpo === undefined ? undefined : JSON.stringify(corpo),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(esperaMs),
     });
     // resposta de sucesso só vale com a prova do agente (outro programa na porta não sabe a chave)
     if (chave && r.ok) {

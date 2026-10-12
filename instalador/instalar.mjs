@@ -478,7 +478,8 @@ async function prova(ctx) {
   titulo(t("8/8 Prova final", "8/8 Final check"));
   // o serviço acabou de subir: dá até 15 s para a ponte local responder antes do doctor
   for (let i = 0; i < 15 && !ctx.semServico && !(await portaOcupada(ctx.sombra ? 7789 : 7788)); i++) await new Promise((r) => setTimeout(r, 1000));
-  reveza(ctx, ["doctor", ...(ctx.sombra ? ["--sombra"] : [])], true);
+  // a prova só confere (--so-ver): consertar aqui esconderia o que a instalação deixou de fazer
+  reveza(ctx, ["doctor", "--so-ver", ...(ctx.sombra ? ["--sombra"] : [])], true);
   if (!ctx.gerencia || ctx.semServico || !ctx.emailComputador) return;
   let pc = null;
   for (let i = 0; i < 15 && !pc; i++) {
@@ -680,7 +681,7 @@ async function main() {
     await prova(ctx);
 
     gravarInstalacao(ARQ_INST, {
-      versao: VERSAO, app: ctx.app, sombra: !!ctx.sombra, atualizadoEm: new Date().toISOString(),
+      versao: VERSAO, app: ctx.app, sombra: !!ctx.sombra, semServico: !!ctx.semServico, atualizadoEm: new Date().toISOString(),
       instaladoEm: inst?.instaladoEm || new Date().toISOString(),
       nuvem: ctx.url ? { ref: ctx.ref, url: ctx.url, anon: ctx.anon, adminId: ctx.adminId, vapidPublica: ctx.vapidPublica } : ctx.ligado || inst?.nuvem || null,
       painel: ctx.site ? { url: ctx.site, urlVercel: ctx.urlVercel, projeto: ctx.projetoVercel, equipe: ctx.equipe, dominio: ctx.dominio || null } : inst?.painel || null,

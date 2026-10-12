@@ -320,6 +320,29 @@ export async function remover(o: OpcoesServico): Promise<string> {
   return `tarefa "${TAREFA}" removida`;
 }
 
+/**
+ * Como o serviço está instalado: em modo sombra? em outra porta? Lido do próprio arquivo do serviço (plist, unidade ou
+ * XML da tarefa), para quem reinstala (o conserto do `reveza doctor`) não tirar nem pôr o modo sombra por engano.
+ * Null quando não há serviço instalado.
+ */
+export function instalado(o: OpcoesServico): { sombra: boolean; porta: number | undefined } | null {
+  let texto: string;
+  try {
+    if (o.sistema === "macos") texto = fs.readFileSync(arquivoPlist(o), "utf8");
+    else if (o.sistema === "linux") texto = fs.readFileSync(arquivoUnidade(o), "utf8");
+    else {
+      const bruto = fs.readFileSync(arquivoTarefa(o));
+      texto = bruto[0] === 0xff && bruto[1] === 0xfe ? bruto.subarray(2).toString("utf16le") : bruto.toString("utf8");
+    }
+  } catch {
+    return null;
+  }
+  // plist: <string>--sombra</string>; unidade: "--sombra"; tarefa: --sombra no meio dos argumentos
+  const sombra = /(^|[\s>"])--sombra([\s<"]|$)/m.test(texto);
+  const porta = /--porta(?:<\/string>\s*<string>|"\s+"|\s+)(\d{2,5})/.exec(texto)?.[1];
+  return { sombra, porta: porta ? Number(porta) : undefined };
+}
+
 export async function status(o: OpcoesServico): Promise<StatusServico> {
   if (o.sistema === "macos") {
     const instalado = fs.existsSync(arquivoPlist(o));
