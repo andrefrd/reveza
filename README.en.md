@@ -71,9 +71,8 @@ Works with the accounts you already have. On every switch the computer plays a s
 
 ```mermaid
 flowchart LR
-  PC["💻 Your computer<br/>agent + session mod<br/>encrypted vault here"] -- "account usage, every 5 s" --> CLOUD[("☁️ Your cloud<br/>Supabase")]
-  CLOUD -- "which account to use" --> PC
-  DASH["📊 Your dashboard<br/>Vercel"] -- "sign-in + two-factor" --> CLOUD
+  PC["💻 Your computer<br/>agent and mod<br/>encrypted vault here"] <-- "usage every 5 s<br/>and which account to use" --> CLOUD[("☁️ Your cloud<br/>Supabase")]
+  CLOUD <-- "sign-in with<br/>two-factor" --> DASH["📊 Your dashboard<br/>Vercel"]
 ```
 
 1. **Connect your accounts.** The official sign-in for each account, once, on your computer. Reveza never asks for an account password.

@@ -71,9 +71,8 @@ Funciona com as contas que você já tem. A cada troca, o computador faz um som 
 
 ```mermaid
 flowchart LR
-  PC["💻 Seu computador<br/>agente + mod nas sessões<br/>cofre cifrado aqui"] -- "uso das contas, a cada 5 s" --> NUVEM[("☁️ Sua nuvem<br/>Supabase")]
-  NUVEM -- "qual conta usar" --> PC
-  PAINEL["📊 Seu painel<br/>Vercel"] -- "login + duas etapas" --> NUVEM
+  PC["💻 Seu computador<br/>agente e mod<br/>cofre cifrado aqui"] <-- "uso a cada 5 s<br/>e qual conta usar" --> NUVEM[("☁️ Sua nuvem<br/>Supabase")]
+  NUVEM <-- "login com<br/>duas etapas" --> PAINEL["📊 Seu painel<br/>Vercel"]
 ```
 
 1. **Conecte suas contas.** Login oficial de cada conta, uma vez, no seu computador. O Reveza não pede senha de conta.
