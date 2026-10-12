@@ -152,7 +152,8 @@ a dele, pelo instalador da própria versão nova, num processo separado, com a c
   5h no fuso) ou `"assim_que_sair"` (assim que o agente acha a versão nova). De madrugada continua `true` no banco para
   os agentes de antes da 0.2.1 entenderem. Nos dois jeitos ligados: só com o computador calmo (sem troca de conta em
   andamento nem sessão no limite) e um por vez (`atualizacao_vez`, 0018 e 0020); se um volta para a anterior, os
-  outros param e sai um alerta.
+  outros param e sai um alerta. O agente da 0.2.1 conta no diagnóstico que entende o "assim que sair"
+  (`assimQueSair`); os de antes só vão sozinhos de madrugada, e o painel deixa o Atualizar todos para eles.
 - **Trava de compatibilidade**: uma versão nova pode trazer migração da nuvem e painel novo, que só o computador
   principal aplica (com os tokens). Antes de rodar o instalador, o agente compara as migrações do pacote baixado
   (`nuvem/migracoes`) com os nomes que a nuvem já aplicou (`agente_migracoes()`, só a lista de nomes de

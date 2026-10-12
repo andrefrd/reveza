@@ -90,6 +90,8 @@ export interface Diagnostico {
   atualizacao?: { para: string; desde: string } | null
   /** A versão nova que a trava recusou: ela precisa da nuvem e do painel atualizados no computador principal primeiro. */
   precisaNuvem?: { para: string } | null
+  /** O agente entende o "assim que sair" (0.2.1 em diante); os de antes só se atualizam sozinhos de madrugada. */
+  assimQueSair?: boolean
 }
 
 export interface Atribuicao {

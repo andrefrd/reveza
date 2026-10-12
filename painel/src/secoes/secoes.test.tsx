@@ -399,8 +399,15 @@ describe("Computadores: o cartão de atualizações (Verificar, a escolha de com
     expect(marcado((await desenharComputadores([{ chave: "atualizar_sozinho", valor: "assim_que_sair" }])).html, "assim_que_sair")).toBe(true)
   })
 
-  it("o Verificar achou versão nova com 'Assim que sair': eles começam sozinhos, com o andamento, sem o Atualizar todos", async () => {
-    const { comecarConferencia, guardarLeitura, limparConferencia } = await import("@/lib/atualizar")
+  /** Os computadores da produção com o agente da 0.2.1 (entendem o "assim que sair"). */
+  const comAgenteNovo = () =>
+    linhas.tabelas.computadores.map((c) =>
+      c.id === "pc1" || c.id === "pc2"
+        ? { ...c, diagnostico: { em: Math.floor(Date.now() / 1000), conferencias: [], assimQueSair: true } }
+        : c
+    )
+  async function verificouComVersaoNova() {
+    const { comecarConferencia, guardarLeitura } = await import("@/lib/atualizar")
     comecarConferencia({ pc1: 501, pc2: 502 })
     for (const [id, pc] of [[501, "pc1"], [502, "pc2"]] as const) {
       guardarLeitura({
@@ -412,12 +419,34 @@ describe("Computadores: o cartão de atualizações (Verificar, a escolha de com
         resposta: { ok: true, conferido: true, atual: "0.1.4", mais_nova: "0.2.1", nova: true, atualizando: null, precisa_nuvem: false },
       })
     }
+  }
+
+  it("o Verificar achou versão nova, mas os computadores são de antes da 0.2.1: com 'Assim que sair', o Atualizar todos fica para eles", async () => {
+    const { limparConferencia } = await import("@/lib/atualizar")
+    await verificouComVersaoNova()
+    try {
+      const { html, erros } = await desenharComputadores([{ chave: "atualizar_sozinho", valor: "assim_que_sair" }])
+      expect(erros).toEqual([])
+      expect(html).toContain("Versão 0.2.1 disponível para 2 computador(es).")
+      expect(html).toContain("numa versão anterior à 0.2.1 só se atualizam sozinhos de madrugada")
+      expect(html).toMatch(/Atualizar todos \(2\)/)
+    } finally {
+      limparConferencia()
+    }
+  })
+
+  it("o Verificar achou versão nova com 'Assim que sair': eles começam sozinhos, com o andamento, sem o Atualizar todos", async () => {
+    const { limparConferencia } = await import("@/lib/atualizar")
+    await verificouComVersaoNova()
     try {
       const vez = { computador: "pc1", de: "0.1.4", para: "0.2.1", desde: new Date().toISOString(), estado: "em_andamento" }
-      const { html, erros } = await desenharComputadores([
-        { chave: "atualizar_sozinho", valor: "assim_que_sair" },
-        { chave: "atualizacao_vez", valor: vez },
-      ])
+      const { html, erros } = await desenharComputadores(
+        [
+          { chave: "atualizar_sozinho", valor: "assim_que_sair" },
+          { chave: "atualizacao_vez", valor: vez },
+        ],
+        comAgenteNovo()
+      )
       expect(erros).toEqual([])
       expect(html).toContain("Versão 0.2.1 disponível para 2 computador(es).")
       expect(html).toContain("eles começam sozinhos, um computador por vez")

@@ -39,6 +39,7 @@ import {
   assinarPedidos,
   comecarConferencia,
   conferenciaAtual,
+  entendeAssimQueSair,
   guardarLeitura,
   guardarPedido,
   painelAtras,
@@ -233,10 +234,12 @@ export function CartaoAtualizacoes() {
     if (ok) comecarConferencia(pedidos)
   }
 
+  // com "assim que sair", quem entende vai sozinho, um por vez: o Atualizar todos fica só para os de versão anterior
+  const manuais = comAtualizacao.filter((pc) => modo !== "assim_que_sair" || !entendeAssimQueSair(pc))
   const atualizarTodos = async () => {
     setEnviando(true)
     let pedidos = 0
-    for (const pc of comAtualizacao) {
+    for (const pc of manuais) {
       try {
         const c = await fonte.comando(pc.id, "atualizar", { ...PEDIDO_ATUALIZAR })
         guardarPedido(pc.id, c.id)
@@ -275,13 +278,14 @@ export function CartaoAtualizacoes() {
   const comoSegue =
     resultado?.fase === "disponivel" && !precisaNuvem
       ? modo === "assim_que_sair"
-        ? t("computadores.atualizacao.conferencia.comecaSozinho")
+        ? manuais.length
+          ? t("computadores.atualizacao.conferencia.antigosPeloBotao")
+          : t("computadores.atualizacao.conferencia.comecaSozinho")
         : modo === "madrugada"
           ? t("computadores.atualizacao.conferencia.esperaMadrugada")
           : null
       : null
-  // com "assim que sair", eles vão sozinhos, um por vez: o Atualizar todos (todos de uma vez) sai do caminho
-  const mostrarTodos = comAtualizacao.length > 0 && modo !== "assim_que_sair"
+  const mostrarTodos = manuais.length > 0
 
   return (
     <Card>
@@ -317,7 +321,7 @@ export function CartaoAtualizacoes() {
             {mostrarTodos ? (
               <Button size="sm" disabled={!pode || enviando} onClick={() => void atualizarTodos()}>
                 {enviando ? <Spinner /> : <DownloadIcon />}
-                {t("computadores.atualizacao.todos", { n: comAtualizacao.length })}
+                {t("computadores.atualizacao.todos", { n: manuais.length })}
               </Button>
             ) : null}
           </div>

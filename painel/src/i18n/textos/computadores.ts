@@ -38,6 +38,8 @@ export default secao({
           disponivel: "Versão {versao} disponível para {n} computador(es).",
           comecaSozinho: "Com “Assim que sair”, eles começam sozinhos, um computador por vez.",
           esperaMadrugada: "Com “De madrugada”, eles se atualizam sozinhos entre 3h e 5h. Para agora, use Atualizar todos.",
+          antigosPeloBotao:
+            "Os computadores numa versão anterior à 0.2.1 só se atualizam sozinhos de madrugada: para eles, use Atualizar todos; depois disso, eles vão sozinhos.",
         },
         precisaNuvem:
           "A versão {versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.",
@@ -197,6 +199,8 @@ export default secao({
           disponivel: "Version {versao} available for {n} computer(s).",
           comecaSozinho: "With “As soon as it comes out”, they start by themselves, one computer at a time.",
           esperaMadrugada: "With “Overnight”, they update by themselves between 3 and 5 a.m. To do it now, use Update all.",
+          antigosPeloBotao:
+            "Computers on a version before 0.2.1 only update by themselves overnight: for them, use Update all; after that, they go by themselves.",
         },
         precisaNuvem: "Version {versao} needs the cloud and the panel updated first: run the update on the main computer.",
         andamento: {

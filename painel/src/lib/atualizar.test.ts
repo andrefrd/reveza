@@ -7,6 +7,7 @@ import {
   assinarConferencia,
   comecarConferencia,
   conferenciaAtual,
+  entendeAssimQueSair,
   guardarLeitura,
   guardarPedido,
   limparConferencia,
@@ -220,13 +221,19 @@ describe("Verificar atualização", () => {
 
 describe("andamento de todos (o cartão de cima)", () => {
   it("cada computador: na versão, atualizando (a vez é dele), esperando a vez, falhou, esperando a nuvem", () => {
+    // agentes da 0.2.1 em diante (contam no diagnóstico que entendem o "assim que sair")
+    const novo = (versao: string, extra: Partial<Computador>) => {
+      const c = pc(versao, extra)
+      c.diagnostico = { ...c.diagnostico!, assimQueSair: true }
+      return c
+    }
     const pcs = [
-      pc("0.1.7", { id: "a", nome: "A" }),
-      pc("0.1.6", { id: "b", nome: "B" }),
-      pc("0.1.6", { id: "c", nome: "C" }),
-      pc("0.1.6", { id: "d", nome: "D" }),
-      pc("0.1.6", { id: "e", nome: "E" }),
-      pc("0.1.1", { id: "f", nome: "F", revogado: true }),
+      novo("0.1.7", { id: "a", nome: "A" }),
+      novo("0.1.6", { id: "b", nome: "B" }),
+      novo("0.1.6", { id: "c", nome: "C" }),
+      novo("0.1.6", { id: "d", nome: "D" }),
+      novo("0.1.6", { id: "e", nome: "E" }),
+      novo("0.1.1", { id: "f", nome: "F", revogado: true }),
     ]
     const eventos: Evento[] = [
       { ...ev(-1, { atualizacao: "falhou", para: "0.1.7", motivo: "voltou" }, "erro"), dados: { computador: "d", atualizacao: "falhou", para: "0.1.7", motivo: "voltou" } },
@@ -243,5 +250,12 @@ describe("andamento de todos (o cartão de cima)", () => {
     ])
     // desligada: quem está atrás só tem a versão disponível (ninguém vai sozinho)
     expect(andamentoDeTodos([pcs[2]!], "0.1.7", [], null, "desligada", AGORA)[0]!.estado).toBe("disponivel")
+  })
+
+  it("agente de antes da 0.2.1 não entende o 'assim que sair' (precisa do botão), mas vai sozinho de madrugada", () => {
+    const antigo = pc("0.1.6", { id: "g", nome: "G" })
+    expect(entendeAssimQueSair(antigo)).toBe(false)
+    expect(andamentoDeTodos([antigo], "0.1.7", [], null, "assim_que_sair", AGORA)[0]!.estado).toBe("disponivel")
+    expect(andamentoDeTodos([antigo], "0.1.7", [], null, "madrugada", AGORA)[0]!.estado).toBe("na_fila")
   })
 })

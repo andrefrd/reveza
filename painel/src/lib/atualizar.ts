@@ -244,6 +244,14 @@ export function resultadoDaConferencia(c: Conferencia, computadores: Computador[
 
 // ------------------------------------------------------------------------------------------------ andamento de todos
 
+/**
+ * O agente deste computador entende o "assim que sair" (conta no diagnóstico, 0.2.1 em diante). Os de antes só se
+ * atualizam sozinhos de madrugada: com "assim que sair", eles precisam do botão.
+ */
+export function entendeAssimQueSair(pc: Computador): boolean {
+  return pc.diagnostico?.assimQueSair === true
+}
+
 export type EstadoNaAtualizacao = "em_dia" | "atualizando" | "na_fila" | "falhou" | "precisa_nuvem" | "disponivel"
 
 /**
@@ -265,6 +273,7 @@ export function andamentoDeTodos(
     if (a?.fase === "falhou") return { pc, estado: "falhou" as const }
     if (a?.fase === "precisa_nuvem") return { pc, estado: "precisa_nuvem" as const }
     if (vez?.estado === "em_andamento" && vez.computadorId === pc.id) return { pc, estado: "atualizando" as const }
-    return { pc, estado: modo === "desligada" ? ("disponivel" as const) : ("na_fila" as const) }
+    const vaiSozinho = modo === "madrugada" || (modo === "assim_que_sair" && entendeAssimQueSair(pc))
+    return { pc, estado: vaiSozinho ? ("na_fila" as const) : ("disponivel" as const) }
   })
 }

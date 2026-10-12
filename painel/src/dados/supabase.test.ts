@@ -101,6 +101,9 @@ describe("diagnóstico do agente", () => {
     expect(paraDiagnostico({ em: 1791700000, conferencias: [], precisaNuvem: { para: "0.2.1" } }, "0.2.0")?.precisaNuvem).toEqual({ para: "0.2.1" })
     expect(paraDiagnostico({ em: 1791700000, conferencias: [], precisaNuvem: { para: "<b>" } }, "0.2.0")?.precisaNuvem).toBeNull()
     expect(paraDiagnostico({ em: 1791700000, conferencias: [] }, "0.2.0")?.precisaNuvem).toBeNull()
+    // o agente da 0.2.1 conta que entende o "assim que sair"; o de antes, não
+    expect(paraDiagnostico({ em: 1791700000, conferencias: [], assimQueSair: true }, "0.2.1")?.assimQueSair).toBe(true)
+    expect(paraDiagnostico({ em: 1791700000, conferencias: [] }, "0.2.0")?.assimQueSair).toBe(false)
   })
 })
 

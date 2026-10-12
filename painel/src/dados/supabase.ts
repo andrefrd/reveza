@@ -254,6 +254,7 @@ export function paraDiagnostico(bruto: unknown, versao: string): Computador["dia
     versaoNova: semver(d.versaoNova),
     atualizacao,
     precisaNuvem,
+    assimQueSair: d.assimQueSair === true,
   }
 }
 

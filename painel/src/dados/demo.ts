@@ -449,6 +449,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     atrasoBuscaMs: atraso,
     // a mais nova publicada, que o agente leu no GitHub oficial (na demonstração, a versão do pacote)
     versaoNova: versao,
+    assimQueSair: true,
     itens: [
       { id: "agente", ok: true, detalhe: `versão ${doComputador}, Node 22.12.0` },
       { id: "servico", ok: true, detalhe: "rodando" },
