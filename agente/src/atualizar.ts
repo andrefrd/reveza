@@ -148,17 +148,36 @@ export class GithubOficial implements FonteVersoes {
       if (r.status >= 300 && r.status < 400) {
         const proximo = new URL(r.headers.get("location") ?? "", url);
         if (proximo.protocol !== "https:" || !HOSTS_DO_PACOTE.has(proximo.hostname)) throw new Error("o download do pacote foi mandado para fora do GitHub");
+        // e só dentro do repositório oficial (um repositório renomeado ou transferido não leva o download para outro)
+        if (!proximo.pathname.toLowerCase().startsWith(`/${REPOSITORIO.toLowerCase()}/`)) throw new Error("o download do pacote foi mandado para fora do repositório oficial");
         url = proximo.toString();
         continue;
       }
       if (!r.ok) throw new Error(`o GitHub respondeu ${r.status} ao pacote da ${versao}`);
-      const dados = Buffer.from(await r.arrayBuffer());
-      if (dados.length > PACOTE_MAXIMO) throw new Error("o pacote é grande demais");
-      fs.writeFileSync(arquivo, dados, { mode: 0o600 });
+      fs.writeFileSync(arquivo, await lerComLimite(r, PACOTE_MAXIMO), { mode: 0o600 });
       return;
     }
     throw new Error("redirecionamentos demais no download do pacote");
   }
+}
+
+/** O corpo inteiro, parando no limite enquanto chega (o codeload manda sem content-length). */
+export async function lerComLimite(r: Response, maximo: number): Promise<Buffer> {
+  if (!r.body) return Buffer.alloc(0);
+  const leitor = r.body.getReader();
+  const partes: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.length;
+    if (total > maximo) {
+      await leitor.cancel().catch(() => undefined);
+      throw new Error("o pacote é grande demais");
+    }
+    partes.push(Buffer.from(value));
+  }
+  return Buffer.concat(partes, total);
 }
 
 // ------------------------------------------------------------------------------------------------ pacote
@@ -197,6 +216,8 @@ export function extrairTarGz(arquivo: string, destino: string): string[] {
     const soma = h.reduce((s, b, i) => s + (i >= 148 && i < 156 ? 32 : b), 0);
     if (soma !== parseInt(campo(148, 8).trim(), 8)) throw new Error("pacote corrompido (soma do cabeçalho)");
     const tamanho = parseInt(campo(124, 12).trim() || "0", 8);
+    // tamanho que não lê (base 256, negativo, lixo): pacote recusado (negativo voltava ao mesmo cabeçalho para sempre)
+    if (!Number.isSafeInteger(tamanho) || tamanho < 0) throw new Error("pacote corrompido (tamanho no cabeçalho)");
     const tipo = String.fromCharCode(h[156] || 48);
     pos += 512;
     const conteudo = dados.subarray(pos, pos + tamanho);

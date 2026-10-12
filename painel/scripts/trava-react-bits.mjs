@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 // Trava do painel: recusa commit que leve código do React Bits (a licença não deixa redistribuir). Pega pela pasta
 // react-bits e também pelo nome do arquivo (CountUp.tsx em qualquer lugar), além do texto de origem do registro.
 // O pre-commit do repositório chama esta trava depois da trava geral (scripts/trava.mjs, na raiz).
@@ -33,7 +35,17 @@ function git(...args) {
   return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return false
+  }
+}
+
+if (chamadoDireto()) {
   const todos = process.argv.includes("--todos")
   const raiz = git("rev-parse", "--show-toplevel").trim()
   const lista = (

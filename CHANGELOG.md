@@ -7,6 +7,27 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.3.2 · 12/10/2026
+
+Correções da auditoria de segurança da 0.2.0 à 0.3.1 (skill da Cloudflare, rodada 3). Traz uma mudança pequena no banco:
+a nuvem se atualiza sozinha (ou pelo Atualizar a nuvem do painel); os computadores, depois dela.
+
+- **Atualização do banco:** quando uma migração antiga muda, as seguintes rodam de novo junto. Na subida da 0.3.0 para
+  a 0.3.1 só a 0020 rodou, e uma função voltou ao corpo antigo (a vez de atualizar perdia o portão da publicação, que só
+  vale com a atualização completa ligada). Esta versão devolve o corpo certo.
+- **Instalador mais velho que a nuvem** não mexe mais nela nem no painel (antes, voltava migrações para trás).
+- **Chave do cofre:** a impressão da chave é conferida a cada busca; um computador com chave diferente da instalação
+  para de mandar login para o cofre e avisa. `reveza cofre iniciar` que perde a corrida para outro computador apaga a
+  chave recém-criada.
+- **Publicação automática:** sem ninguém olhando, o painel não troca o domínio próprio pelo endereço da Vercel quando o
+  DNS não responde na hora; guardar os tokens de novo ou desligar não tira a vez de quem está publicando.
+- **Revogar computador** com a atualização completa ligada avisa para trocar os tokens do Supabase e da Vercel.
+- **Downloads da atualização** (nuvem e agente): só do repositório oficial, com o limite de tamanho valendo enquanto o
+  pacote chega, e pacote com cabeçalho estragado recusado (um tamanho negativo travava o agente).
+- **Windows e pastas com espaço ou acento:** seis scripts saíam calados sem fazer nada (inclusive o que gera os
+  cabeçalhos de segurança do painel e as travas contra publicar segredo ou código do React Bits). Agora rodam.
+- Para quem desenvolve: o ensaio do CI lê a mudança do evento (antes ela aparecia no log público).
+
 ## 0.3.1 · 12/10/2026
 
 Correções da revisão de código da 0.2.1 e da 0.3.0. Traz uma mudança pequena no banco (a nuvem se atualiza sozinha, ou

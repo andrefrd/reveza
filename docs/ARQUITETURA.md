@@ -140,7 +140,10 @@ e o texto que o mod põe no prompt é fixo.
 
 `reveza_migracoes(nome, hash)`: migração nova entra; arquivo marcado `-- reaplicável` (só funções, políticas e
 índices idempotentes) roda de novo quando muda; migração de tabela que mudou depois de aplicada é recusada (vai numa
-migração nova); as permissões (0099) fecham qualquer aplicação. As chaves do push (VAPID) nascem uma vez. A mesma
+migração nova); depois da primeira que entra, todas as reaplicáveis seguintes rodam de novo, na ordem (uma função
+definida em mais de um arquivo fica sempre com o corpo do último: na subida da 0.3.0 para a 0.3.1, só a 0020 rodou e a
+`agente_vez_de_atualizar` voltou ao corpo dela, sem o portão da publicação da 0021; corrigido na 0.3.2); as permissões
+(0099) fecham qualquer aplicação. Instalador mais velho que a nuvem não mexe nela. As chaves do push (VAPID) nascem uma vez. A mesma
 regra vale nos dois caminhos: o instalador (Management API, com o token) e, desde a 0.3.0, a própria nuvem (7e), que
 aplica cada migração numa transação. Por isso migração nova não pode controlar a própria transação nem usar
 `concurrently` ou `vacuum` (a nuvem recusa antes de começar e diz por quê).

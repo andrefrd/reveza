@@ -19,6 +19,7 @@ import {
   GithubOficial,
   lerPedido,
   MAIS_NOVA,
+  lerComLimite,
   migracoesDoPacote,
   resumosDoPacote,
   modoAtualizar,
@@ -245,6 +246,21 @@ describe("o GitHub oficial", () => {
     await assert.rejects(new GithubOficial("0.1.0", mau.f).baixar("0.1.7", arq), /para fora do GitHub/);
     const http = fetchFalso({ [fixo]: () => new Response(null, { status: 302, headers: { location: "http://codeload.github.com/x" } }) });
     await assert.rejects(new GithubOficial("0.1.0", http.f).baixar("0.1.7", arq), /para fora do GitHub/);
+    // no GitHub, mas fora do repositório oficial (renomeado ou transferido): recusado
+    const outro = fetchFalso({ [fixo]: () => new Response(null, { status: 302, headers: { location: "https://codeload.github.com/outra/reveza/tar.gz/v0.1.7" } }) });
+    await assert.rejects(new GithubOficial("0.1.0", outro.f).baixar("0.1.7", arq), /fora do repositório oficial/);
+  });
+
+  test("o corpo do pacote para no limite enquanto chega (sem content-length)", async () => {
+    const pedacos = (n: number, tam: number) =>
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          for (let i = 0; i < n; i++) c.enqueue(new Uint8Array(tam));
+          c.close();
+        },
+      });
+    assert.equal((await lerComLimite(new Response(pedacos(3, 10)), 30)).length, 30);
+    await assert.rejects(lerComLimite(new Response(pedacos(4, 10)), 30), /grande demais/);
   });
 });
 
@@ -281,6 +297,18 @@ describe("extrair o pacote com o Node", () => {
       assert.throws(() => extrairTarGz(arq, path.join(tmp!.dir, "y")), /inválido|link/, mau.nome);
     }
     assert.equal(fs.existsSync(path.join(tmp.dir, "fora.txt")), false);
+    // tamanho negativo ou que não lê no cabeçalho: recusado (o negativo voltava ao mesmo cabeçalho para sempre)
+    for (const tamanho of ["-0001000\0", "\x80\0\0\0\0\0\0\0\0\0\0\x10", "xyz\0"]) {
+      const h = cabecalho("reveza-0.1.7/a.txt", 0);
+      h.fill(0, 124, 136);
+      h.write(tamanho, 124, "latin1");
+      h.write("        ", 148);
+      const soma = h.reduce((s, b) => s + b, 0);
+      h.write(soma.toString(8).padStart(6, "0") + "\0 ", 148);
+      const arq = path.join(tmp.dir, "tamanho.tgz");
+      fs.writeFileSync(arq, zlib.gzipSync(Buffer.concat([h, Buffer.alloc(1024)])));
+      assert.throws(() => extrairTarGz(arq, path.join(tmp!.dir, "z")), /tamanho no cabeçalho/, JSON.stringify(tamanho));
+    }
   });
 
   test("o pacote de verdade (git archive do repositório, como o GitHub monta) se extrai inteiro", (t) => {

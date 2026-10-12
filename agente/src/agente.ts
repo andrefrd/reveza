@@ -241,6 +241,7 @@ export class Agente {
       this.posse = new PosseCofre(() => this.estado, this.trocador, this.cred, d.nuvem, () => this.chave, this.cj, d.relogio, d.log, () =>
         this.salvar(),
       );
+      this.posse.semEscrita = () => (this.chaveDaInstalacao === false ? "a chave do cofre deste computador não é a da instalação" : null);
     }
   }
 
@@ -491,17 +492,26 @@ export class Agente {
   // ------------------------------------------------------------------------------------------------ nuvem
 
   /**
-   * A chave deste computador é a da instalação? A primeira chave registra a impressão; com outra, este computador não
-   * responde a pedido de ligação (passaria adiante uma chave que divide o cofre).
+   * A chave deste computador é a da instalação? A primeira chave registra a impressão. Confere a cada busca (a impressão
+   * vem na configuração): com outra chave, este computador não responde a pedido de ligação (passaria adiante uma chave
+   * que divide o cofre) e não cifra login nenhum para o cofre (quem trocou a impressão no banco leria o que ele mandasse).
    */
   private async conferirImpressao(nuvem: Nuvem, config: Record<string, unknown> | null | undefined): Promise<void> {
-    if (!this.chave || this.impressaoConferida) return;
+    if (!this.chave) return;
     const minha = impressaoDaChave(this.chave);
-    const daNuvem = typeof config?.cofre_impressao === "string" ? config.cofre_impressao : await nuvem.cofreImpressao(minha).catch(() => null);
+    let daNuvem = typeof config?.cofre_impressao === "string" ? config.cofre_impressao : null;
+    if (!daNuvem && !this.impressaoConferida) daNuvem = await nuvem.cofreImpressao(minha).catch(() => null);
     if (!daNuvem) return;
     this.impressaoConferida = true;
+    const antes = this.chaveDaInstalacao;
     this.chaveDaInstalacao = daNuvem === minha;
-    if (!this.chaveDaInstalacao) this.trocador.evento("erro", "A chave do cofre deste computador não é a da instalação; ligue-o de novo com `reveza ligar`.");
+    if (!this.chaveDaInstalacao && antes !== false) {
+      this.trocador.evento(
+        "erro",
+        "A chave do cofre deste computador não é a da instalação (a impressão na nuvem é outra): este computador parou de mandar login para o cofre. Se você não religou a instalação, alguém mexeu direto no banco; confira e ligue este computador de novo com `reveza ligar`.",
+        { motivo: "impressao_diferente" },
+      );
+    }
   }
 
   /** A chave do cofre pode chegar depois de o agente ligar (`reveza ligar` roda em outro processo). */

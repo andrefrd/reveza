@@ -12,7 +12,7 @@ import { ClaudeCli, type Cli } from "./claudecli.js";
 import { caminhos, PORTA_PADRAO, PORTA_SOMBRA, sistemaAtual, VERSAO, type Caminhos, type Sistema } from "./config.js";
 import { credenciaisDoSistema } from "./credenciais/index.js";
 import type { Credenciais } from "./credenciais/tipos.js";
-import { guardaDoSistema, type Guarda } from "./cofre/guarda.js";
+import { guardaDoSistema, SEGREDO_COFRE, type Guarda } from "./cofre/guarda.js";
 import { doctor, textoDoctor, type DepsDoctor } from "./doctor.js";
 import { ambienteDoUsuario, consertar, instalarMod, pastaDoPrograma, resumoConserto } from "./conserto.js";
 import { GithubOficial } from "./atualizar.js";
@@ -953,7 +953,16 @@ export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()
           }
           const criou = await iniciarCofre(p.guarda);
           const k = await lerChave(p.guarda);
-          if (criou && nuvem && k) await nuvem.cofreImpressao(impressaoDaChave(k)).catch(() => undefined);
+          if (criou && nuvem && k) {
+            const daInstalacao = await nuvem.cofreImpressao(impressaoDaChave(k)).catch(() => undefined);
+            // outro computador criou a chave no mesmo instante e a impressão dele ficou: esta, recém-criada e sem nada
+            // cifrado com ela, sai (ficar com ela dividiria o cofre)
+            if (daInstalacao && daInstalacao !== impressaoDaChave(k)) {
+              await p.guarda.apagar(SEGREDO_COFRE);
+              amb.erro("outro computador criou a chave do cofre desta instalação primeiro: receba-a com `reveza ligar`");
+              return 1;
+            }
+          }
           amb.saida(criou ? "Chave do cofre criada neste computador." : "Este computador já tem a chave do cofre.");
           return 0;
         }

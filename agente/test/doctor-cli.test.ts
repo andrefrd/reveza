@@ -165,6 +165,24 @@ describe("linha de comando", () => {
     assert.deepEqual(a.saidas, ["Chave do cofre criada neste computador.", "Este computador já tem a chave do cofre."]);
   });
 
+  test("cofre iniciar que perde a corrida (outro computador gravou a impressão primeiro) apaga a chave nova e recusa", async () => {
+    tmp = pastaTemporaria();
+    const banco = new BancoFalso();
+    const guarda = new GuardaFalsa();
+    const a = ambiente();
+    a.fabricas!.guarda = async () => guarda;
+    a.fabricas!.nuvem = async () => {
+      const n = new NuvemFalsa(banco, "pc-1");
+      let vez = 0;
+      // na conferência antes de criar, ainda não há impressão; na gravação depois, a do outro já está lá
+      n.cofreImpressao = async () => (vez++ === 0 ? null : "f".repeat(32));
+      return n;
+    };
+    assert.equal(await executarCli(["cofre", "iniciar"], a), 1);
+    assert.match(a.erros.join("\n"), /outro computador criou a chave do cofre desta instalação primeiro/);
+    assert.equal(await guarda.ler(SEGREDO_COFRE), null, "a chave que perdeu sai");
+  });
+
   test("nuvem entrar guarda a identidade (senha pelo ambiente, nunca no argv)", async () => {
     tmp = pastaTemporaria();
     const guarda = new GuardaFalsa();

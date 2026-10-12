@@ -148,6 +148,24 @@ test("o pacote: segue só para o GitHub, tem tamanho máximo; o .tar recusa link
   const ok = L.lerTar(await L.gunzip(tarGz({ "r/a.txt": "um", [`r/${"p".repeat(90)}/${"q".repeat(60)}.sql`]: "longo" })));
   assert.equal(new TextDecoder().decode(ok.get("r/a.txt")), "um");
   assert.ok([...ok.keys()].some((k) => k.endsWith(`${"q".repeat(60)}.sql`)), "nome longo pelo prefixo do ustar");
+  // no GitHub, mas fora do repositório oficial (renomeado ou transferido): recusado
+  const outroRepo = async () => new Response(null, { status: 302, headers: { location: "https://codeload.github.com/outra/reveza/tar.gz/refs/tags/v0.3.0" } });
+  await assert.rejects(L.baixarPacote(outroRepo, "0.3.0"), /fora do repositório oficial/);
+  // sem content-length (o codeload manda assim): o limite vale enquanto o corpo chega
+  const pedacos = (n, tam) => new ReadableStream({ start(c) { for (let i = 0; i < n; i++) c.enqueue(new Uint8Array(tam)); c.close(); } });
+  assert.equal((await L.lerComLimite(new Response(pedacos(3, 10)), 30)).length, 30);
+  await assert.rejects(L.lerComLimite(new Response(pedacos(4, 10)), 30), /grande demais/);
+  // tamanho negativo ou que não lê no cabeçalho: recusado, nunca lido pela metade
+  for (const tamanho of ["-0001000\0", "\x80\0\0\0\0\0\0\0\0\0\0\x10", "xyz\0"]) {
+    const h = cabecalho("r/a.txt", 0);
+    h.fill(0, 124, 136);
+    h.write(tamanho, 124, "latin1");
+    h.write("        ", 148);
+    let soma = 0;
+    for (const x of h) soma += x;
+    h.write(soma.toString(8).padStart(6, "0") + "\0 ", 148);
+    assert.throws(() => L.lerTar(new Uint8Array(Buffer.concat([h, Buffer.alloc(1024)]))), /tamanho no cabeçalho/, JSON.stringify(tamanho));
+  }
 });
 
 test("o pacote tem de ser o Reveza na versão pedida", async () => {
@@ -170,7 +188,8 @@ test("o plano das migrações é o do instalador (mesmos nomes, mesma ordem, mes
   const daqui = (await L.planoMigracoes(daFuncao, feitas)).map((m) => [m.nome, m.hash]);
   const dele = planoDoInstalador(doRepo, feitas, true).map((m) => [m.nome, m.hash]);
   assert.deepEqual(daqui, dele);
-  assert.deepEqual(daqui.map(([n]) => n), ["0005_cron.supabase.sql", "0021_atualizar_nuvem.sql", "0022_atualizar_nuvem_agenda.supabase.sql", "0099_permissoes.sql"]);
+  // a 0005 mudou: ela e todas as reaplicáveis depois dela (a 0021 e a 0022 faltavam), a 0099 por último
+  assert.deepEqual(daqui.map(([n]) => n), doRepo.map((m) => m.nome).filter((n) => n >= "0005"));
   // migração de tabela que mudou depois de aplicada: recusada, como no instalador
   feitas.set("0001_base.sql", "2".repeat(64));
   await assert.rejects(L.planoMigracoes(daFuncao, feitas), /0001_base\.sql mudou depois de aplicada/);
@@ -194,6 +213,11 @@ test("toda migração de hoje cabe numa transação; as que não cabem são recu
   assert.match(L.foraDeTransacao({ nome: "x.sql", sql: "begin;\ncreate table t();\ncommit;" }), /própria transação/);
   assert.match(L.foraDeTransacao({ nome: "x.sql", sql: "create index concurrently i on t (a);" }), /concurrently/);
   assert.match(L.foraDeTransacao({ nome: "x.sql", sql: "vacuum full public.t;" }), /vacuum/);
+  for (const sql of ["abort;", "commit and chain;", "rollback and no chain;", "commit work;", "begin transaction;", "begin isolation level serializable;", "end work;"]) {
+    assert.match(L.foraDeTransacao({ nome: "x.sql", sql: `create table t();\n${sql}` }), /própria transação/, sql);
+  }
+  // o begin de um corpo plpgsql não conta
+  assert.equal(L.foraDeTransacao({ nome: "x.sql", sql: "create function f() returns void language plpgsql as $$\nbegin\n  perform 1;\nend $$;" }), null);
 });
 
 test("os resumos das partes: teste e arquivo oculto não contam; mexer no painel muda só o do painel", async () => {
@@ -326,6 +350,22 @@ test("toda migração de hoje roda numa transação própria, pelo caminho da fu
   const job = (await db.query("select schedule, command from cron.job where jobname = 'reveza-atualizar-nuvem'")).rows[0];
   assert.equal(job.schedule, "7 * * * *");
   assert.match(job.command, /functions\/v1\/atualizar-nuvem[\s\S]*x-reveza-cron[\s\S]*"acao": "sozinho"[\s\S]*timeout_milliseconds := 150000/);
+});
+
+test("uma reaplicável antiga que mudou roda com as seguintes pelo caminho da função (a 0020 da 0.3.1 tirava o portão da 0021)", async () => {
+  const db = await nuvemDe030();
+  // a nuvem registrou a 0020 de antes (outro conteúdo); todo o resto está em dia
+  await db.exec("update public.reveza_migracoes set hash = repeat('0', 64) where nome = '0020_atualizar_escolha.sql'");
+  await db.exec(`insert into public.config (chave, valor) values ('publicado', '{"funcoes": "0.3.0", "painel": "0.3.0"}')`);
+  const g = github({ versoes: ["0.3.1", "0.3.0"], pacotes: { "0.3.1": pacoteDe("0.3.1"), "0.3.0": pacoteDe("0.3.0") } });
+  const r = await L.atualizarNuvem({ banco: conexao(db), fetch: g.f, por: "painel" });
+  assert.equal(r.estado, "atualizada", JSON.stringify(r));
+  // a 0020 e as reaplicáveis seguintes (a 0021 refaz a agente_vez_de_atualizar), mesmo já registradas, e a 0099 no fim
+  assert.equal(r.aplicadas[0], "0020_atualizar_escolha.sql");
+  assert.ok(r.aplicadas.includes("0021_atualizar_nuvem.sql"), r.aplicadas.join(", "));
+  assert.equal(r.aplicadas.at(-1), "0099_permissoes.sql");
+  const [{ tem }] = (await db.query("select position('rvz_completa_ligada' in prosrc) > 0 as tem from pg_proc where proname = 'agente_vez_de_atualizar'")).rows;
+  assert.equal(tem, true, "o corpo da 0021, com o portão da publicação");
 });
 
 test("a nuvem da 0.3.0 vai para a 0.3.1 sozinha: a migração nova e as permissões entram como o papel dono, e tudo fica registrado", async () => {

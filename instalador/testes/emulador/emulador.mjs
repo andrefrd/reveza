@@ -3,7 +3,7 @@
 // Não é um Supabase: só o que o instalador e o agente usam, com as mesmas regras de papel e de token.
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
@@ -206,7 +206,17 @@ export async function iniciarEmulador({ porta = 0, ref = "emuladorreveza000001" 
   return { url, ref, db, estado, fechar: () => new Promise((ok) => servidor.close(ok)) };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (chamadoDireto()) {
   const e = await iniciarEmulador({ porta: Number(process.argv[2] || 0) });
   console.log(e.url);
 }

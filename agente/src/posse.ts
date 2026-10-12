@@ -51,6 +51,24 @@ export function abrirCofreComOrigem(chave: Buffer, contaId: string, email: strin
 }
 
 export class PosseCofre {
+  /**
+   * Quando não cifrar nada para o cofre (o motivo), mesmo com a chave: o agente diz que a chave deste computador não é a
+   * da instalação. Cifrar assim mandaria o login para quem plantou a chave (auditoria de segurança run-3).
+   */
+  semEscrita: () => string | null = () => null;
+  private semEscritaAvisado = false;
+
+  private recusarEscrita(): boolean {
+    const motivo = this.semEscrita();
+    if (!motivo) {
+      this.semEscritaAvisado = false;
+      return false;
+    }
+    if (!this.semEscritaAvisado) this.log.erro(`não mando login para o cofre: ${motivo}`);
+    this.semEscritaAvisado = true;
+    return true;
+  }
+
   /** Contas (id local) cuja posse este computador tem, com o motivo. */
   posses = new Map<string, MotivoPosse>();
   /** Contas que saíram de uso e voltam ao cofre a partir de um horário (depois da conferência da troca). */
@@ -141,7 +159,7 @@ export class PosseCofre {
   async devolver(id: string, { silencioso = false }: { silencioso?: boolean } = {}): Promise<boolean> {
     const c = this.conta(id);
     const k = this.chave();
-    if (!c?.contaId || !k || !this.posses.has(id)) return false;
+    if (!c?.contaId || !k || !this.posses.has(id) || this.recusarEscrita()) return false;
     const blob = await this.cred.ler(id === this.estado().ativa ? PRINCIPAL : c.pasta);
     if (!oauth(blob).refreshToken) return false;
     const anterior = this.versaoServidor.get(id) ?? c.versaoCofre ?? 0;
@@ -247,7 +265,7 @@ export class PosseCofre {
   async registrarNaNuvem(id: string): Promise<boolean> {
     const c = this.conta(id);
     const k = this.chave();
-    if (!c || !k) return false;
+    if (!c || !k || this.recusarEscrita()) return false;
     const ativa = id === this.estado().ativa;
     const blob = await this.cred.ler(ativa ? PRINCIPAL : c.pasta);
     if (!oauth(blob).refreshToken) return false;

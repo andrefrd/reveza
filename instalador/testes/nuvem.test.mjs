@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { banco } from "../../nuvem/testes/apoio.mjs";
 import { comoAdmin, texto, uuid } from "../lib/sql.mjs";
-import { computadorDoEmail, esperarComando, pedirComando, salvarAlerta, salvarTroca } from "../lib/nuvem.mjs";
+import { computadorDoEmail, esperarComando, maisNova, pedirComando, salvarAlerta, salvarTroca } from "../lib/nuvem.mjs";
 
 async function montar() {
   const b = await banco();
@@ -68,4 +68,13 @@ test("comando de prova: vai para o computador da identidade e o estado é lido",
   assert.equal((await esperarComando(consultar, id, { tentativas: 1, esperar: async () => {} })), null, "pendente ainda não é resposta");
   await b.sql("update public.comandos set estado = 'feito', http = 200 where id = $1", [id]);
   assert.deepEqual(await esperarComando(consultar, id, { tentativas: 1, esperar: async () => {} }), { estado: "feito", http: 200 });
+});
+
+test("instalador mais velho que a nuvem não mexe nela: a comparação de versões", () => {
+  assert.equal(maisNova("0.3.2", "0.3.1"), true);
+  assert.equal(maisNova("0.10.0", "0.9.9"), true, "número, não texto");
+  assert.equal(maisNova("0.3.1", "0.3.1"), false);
+  assert.equal(maisNova("0.3.0", "0.3.1"), false);
+  assert.equal(maisNova(null, "0.3.1"), false, "nuvem de antes da 0.3.0 (sem versão): segue como antes");
+  assert.equal(maisNova("x.y.z", "0.3.1"), false);
 });

@@ -8,7 +8,7 @@
 //   node scripts/vercel-json.mjs --supabase https://<ref>.supabase.co [--dominio painel.exemplo.com --vercel x.vercel.app]
 //   node scripts/vercel-json.mjs [--conferir]   só confere o arquivo existente (o build roda assim); saída 0 = ok
 
-import { readFileSync, writeFileSync } from "node:fs"
+import { readFileSync, writeFileSync, realpathSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -113,7 +113,17 @@ export function conferir(texto, url = process.env.VITE_SUPABASE_URL) {
   return null
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return false
+  }
+}
+
+if (chamadoDireto()) {
   const supabase = argumento("supabase")
   if (!supabase) {
     let texto = ""

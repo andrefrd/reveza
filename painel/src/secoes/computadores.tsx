@@ -264,7 +264,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
         aberto={revogar}
         aoFechar={() => setRevogar(false)}
         titulo={t("computadores.revogar.titulo", { computador: pc.nome })}
-        texto={t("computadores.revogar.texto")}
+        texto={t("computadores.revogar.texto") + (estado.config.nuvem?.completa ? t("computadores.revogar.textoCompleta") : "")}
         botao={t("computadores.revogar.botao")}
         botaoSegurar={t("computadores.revogar.botaoSegurar")}
         aoConfirmar={() =>

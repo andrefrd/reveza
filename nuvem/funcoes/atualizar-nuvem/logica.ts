@@ -90,6 +90,31 @@ export async function versaoMaisNova(f: typeof fetch): Promise<string> {
 }
 
 /** O pacote da tag, pelo endereço montado aqui; o redirecionamento só segue para o GitHub. */
+/** O corpo inteiro, parando no limite (o codeload manda sem content-length: o limite vale enquanto chega). */
+export async function lerComLimite(r: Response, maximo: number): Promise<Uint8Array> {
+  if (!r.body) return new Uint8Array(0);
+  const leitor = r.body.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.length;
+    if (total > maximo) {
+      await leitor.cancel().catch(() => undefined);
+      throw new Error("o pacote é grande demais");
+    }
+    partes.push(value);
+  }
+  const dados = new Uint8Array(total);
+  let pos = 0;
+  for (const p of partes) {
+    dados.set(p, pos);
+    pos += p.length;
+  }
+  return dados;
+}
+
 export async function baixarPacote(f: typeof fetch, versao: string): Promise<Uint8Array> {
   let url = urlDoPacote(versao);
   for (let i = 0; i < 5; i++) {
@@ -97,15 +122,15 @@ export async function baixarPacote(f: typeof fetch, versao: string): Promise<Uin
     if (r.status >= 300 && r.status < 400) {
       const proximo = new URL(r.headers.get("location") ?? "", url);
       if (proximo.protocol !== "https:" || !HOSTS_DO_PACOTE.has(proximo.hostname)) throw new Error("o download do pacote foi mandado para fora do GitHub");
+      // e só dentro do repositório oficial (um repositório renomeado ou transferido não leva o download para outro)
+      if (!proximo.pathname.toLowerCase().startsWith(`/${REPOSITORIO.toLowerCase()}/`)) throw new Error("o download do pacote foi mandado para fora do repositório oficial");
       url = proximo.toString();
       continue;
     }
     if (!r.ok) throw new Error(`o GitHub respondeu ${r.status} ao pacote da ${versao}`);
     const tamanho = Number(r.headers.get("content-length") ?? "0");
     if (tamanho > PACOTE_MAXIMO) throw new Error("o pacote é grande demais");
-    const dados = new Uint8Array(await r.arrayBuffer());
-    if (dados.length > PACOTE_MAXIMO) throw new Error("o pacote é grande demais");
-    return dados;
+    return await lerComLimite(r, PACOTE_MAXIMO);
   }
   throw new Error("redirecionamentos demais no download do pacote");
 }
@@ -169,6 +194,8 @@ export function lerTar(dados: Uint8Array): Map<string, Uint8Array> {
     for (let i = 0; i < 512; i++) soma += i >= 148 && i < 156 ? 32 : h[i]!;
     if (soma !== parseInt(campo(148, 8).trim(), 8)) throw new Error("pacote corrompido (soma do cabeçalho)");
     const tamanho = parseInt(campo(124, 12).trim() || "0", 8);
+    // tamanho que não lê (base 256, negativo, lixo): pacote recusado, nunca lido pela metade
+    if (!Number.isSafeInteger(tamanho) || tamanho < 0) throw new Error("pacote corrompido (tamanho no cabeçalho)");
     const tipo = String.fromCharCode(h[156] || 48);
     pos += 512;
     const conteudo = dados.subarray(pos, pos + tamanho);
@@ -248,21 +275,28 @@ export async function hashesAceitos(sql: string): Promise<string[]> {
 }
 export const reaplicavel = (m: Migracao) => /^-- reaplicável/m.test(m.sql);
 
+/** Uma migração do plano; `denovo`: já registrada com este conteúdo, roda de novo de propósito (vem depois de uma que entra). */
+export type Planejada = Migracao & { hash: string; denovo?: boolean };
+
 /** O que aplicar (a regra do instalador, provisionar.mjs), com o resumo de cada uma. */
-export async function planoMigracoes(todas: Migracao[], feitas: Map<string, string>): Promise<(Migracao & { hash: string })[]> {
+export async function planoMigracoes(todas: Migracao[], feitas: Map<string, string>): Promise<Planejada[]> {
   if (!feitas.size) throw new Error("a nuvem não tem o registro das migrações: atualize pelo instalador no computador que criou a instalação");
-  const aplicar: (Migracao & { hash: string })[] = [];
+  const aplicar: Planejada[] = [];
+  let depoisDeUma = false;
   for (const m of todas) {
     const antes = feitas.get(m.nome);
     const hash = await hashDe(m.sql);
-    if (antes !== undefined && (await hashesAceitos(m.sql)).includes(antes)) continue;
-    if (antes !== undefined && !reaplicavel(m)) {
+    const igual = antes !== undefined && (await hashesAceitos(m.sql)).includes(antes);
+    // depois da primeira que roda, as reaplicáveis seguintes rodam de novo (a mesma regra do instalador)
+    if (igual && !(depoisDeUma && reaplicavel(m))) continue;
+    if (!igual && antes !== undefined && !reaplicavel(m)) {
       throw new Error(`${m.nome} mudou depois de aplicada e mexe em tabela: a mudança precisa ir numa migração nova`);
     }
-    aplicar.push({ ...m, hash });
+    aplicar.push(igual ? { ...m, hash, denovo: true } : { ...m, hash });
+    depoisDeUma = true;
   }
   const perm = todas.find((m) => m.nome.startsWith("0099"));
-  if (aplicar.length && perm && !aplicar.some((m) => m.nome === perm.nome)) aplicar.push({ ...perm, hash: await hashDe(perm.sql) });
+  if (aplicar.length && perm && !aplicar.some((m) => m.nome === perm.nome)) aplicar.push({ ...perm, hash: await hashDe(perm.sql), denovo: true });
   return aplicar;
 }
 
@@ -271,7 +305,9 @@ export async function planoMigracoes(todas: Migracao[], feitas: Map<string, stri
  * atualização para antes de começar e diz por quê.
  */
 export function foraDeTransacao(m: Migracao): string | null {
-  if (/^\s*(begin|commit|rollback|start\s+transaction|end\s+transaction)\s*;/im.test(m.sql)) return `${m.nome} controla a própria transação`;
+  if (/^\s*(begin|commit|rollback|abort|start\s+transaction|end\s+transaction|end\s+work)\s*;/im.test(m.sql)) return `${m.nome} controla a própria transação`;
+  if (/^\s*(begin|commit|rollback|abort)\s+(work|transaction|and\s+(no\s+)?chain|isolation\s+level)\b/im.test(m.sql)) return `${m.nome} controla a própria transação`;
+  if (/^\s*(commit|rollback)\s+(work|transaction)?\s*and\s+(no\s+)?chain\b/im.test(m.sql)) return `${m.nome} controla a própria transação`;
   if (/\bconcurrently\b/i.test(m.sql)) return `${m.nome} cria índice concurrently, que não roda numa transação`;
   if (/^\s*vacuum\b/im.test(m.sql)) return `${m.nome} roda vacuum, que não roda numa transação`;
   return null;
@@ -360,14 +396,16 @@ export async function migracoesFeitas(banco: Banco): Promise<Map<string, string>
  * esta mesma versão do arquivo. Espera trava por até 15 s (o pg_cron do Reveza roda a cada minuto); trava ocupada tenta
  * mais duas vezes.
  */
-export async function aplicarUma(banco: Banco, m: Migracao & { hash: string }): Promise<boolean> {
+export async function aplicarUma(banco: Banco, m: Planejada): Promise<boolean> {
   if (!/^[0-9a-z_.]+$/.test(m.nome) || !/^[0-9a-f]{64}$/.test(m.hash)) throw new Error("migração com nome inesperado");
   for (let tentativa = 1; ; tentativa++) {
     await banco.executar("begin");
     try {
       await banco.executar(`set local lock_timeout = '15s'; set local statement_timeout = '120s'; select pg_advisory_xact_lock(${TRAVA_MIGRACOES})`);
       const [ja] = await banco.consulta("select hash from public.reveza_migracoes where nome = $1", [m.nome]);
-      if (ja && (await hashesAceitos(m.sql)).includes(String(ja.hash))) {
+      // outra rodada já aplicou esta versão do arquivo: não aplica de novo. A que roda de novo de propósito (`denovo`, já
+      // registrada antes do plano) passa: pular deixaria o corpo velho que a anterior pôs (auditoria run-3, verificador)
+      if (!m.denovo && ja && (await hashesAceitos(m.sql)).includes(String(ja.hash))) {
         await banco.executar("rollback");
         return false;
       }

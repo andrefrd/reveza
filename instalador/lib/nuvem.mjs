@@ -113,3 +113,13 @@ export async function lerPublicacao(consultar) {
     painel: p && typeof p === "object" ? { projeto: p.projeto, equipe: p.equipe ?? null, dominio: p.dominio ?? null, url: p.url, urlVercel: p.url_vercel ?? null, vapid: p.vapid ?? null } : null,
   };
 }
+
+/** A versão `a` é mais nova que `b`? (X.Y.Z; fora do formato, não.) */
+export function maisNova(a, b) {
+  const p = (v) => (/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(String(v || "")) ? String(v).split(".").map(Number) : null);
+  const x = p(a);
+  const y = p(b);
+  if (!x || !y) return false;
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  return false;
+}

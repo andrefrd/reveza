@@ -85,7 +85,7 @@ test("banco de antes do registro: não recria as tabelas e roda de novo as funç
   assert.ok(!chamadas.some((c) => c.url.endsWith("/auth/v1/admin/users")), "atualização sem computador novo");
 });
 
-test("atualização com o registro em dia não aplica nada; arquivo de função mudado roda de novo com as permissões", async () => {
+test("atualização com o registro em dia não aplica nada; arquivo de função mudado roda de novo com as seguintes e as permissões", async () => {
   const registro = new Map();
   const primeira = falso({ registro });
   await provisionar({ gerencia: new Gerencia("t", { fetch: primeira.f, esperar: async () => {} }), ref: "ref1",
@@ -101,7 +101,9 @@ test("atualização com o registro em dia não aplica nada; arquivo de função 
   await provisionar({ gerencia: new Gerencia("t", { fetch: terceira.f, esperar: async () => {} }), ref: "ref1",
     site: "https://p.exemplo.com", log: () => {}, fetch: terceira.f, computador: false });
   const nomes = migracoesAplicadas(terceira.chamadas).map((q) => q.match(/· (\d{4})/)[1]);
-  assert.deepEqual(nomes, ["0003", "0099"]);
+  // a 0003 e todas as reaplicáveis depois dela (uma função redefinida adiante não volta ao corpo antigo), a 0099 por último
+  const depois = migracoes().map((m) => m.nome.slice(0, 4)).filter((n) => n >= "0003");
+  assert.deepEqual(nomes, depois);
 });
 
 test("migração de tabela que mudou depois de aplicada é recusada", () => {

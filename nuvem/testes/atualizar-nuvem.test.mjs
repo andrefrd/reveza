@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { banco } from "./apoio.mjs";
+import { hashesAceitos, migracoes, planoMigracoes } from "../provisionar.mjs";
 
 const B64 = (n, v = 7) => Buffer.alloc(n, v).toString("base64");
 const IMPRESSAO = "impressao-da-chave-do-cofre";
@@ -220,4 +221,47 @@ test("as funções da nuvem não estão liberadas para ninguém de fora; as nova
   await b.config("painel_publicacao", { projeto: "reveza", equipe: "team_x", url: "https://reveza.vercel.app" });
   assert.deepEqual((await b.rpc(pc1, "agente_painel_publicacao")).painel.projeto, "reveza");
   await assert.rejects(b.rpc(admin, "agente_painel_publicacao"), /só computador/);
+});
+
+test("uma reaplicável antiga que muda não derruba o que as seguintes redefinem (a 0020 da 0.3.1 tirava o portão da 0021)", async () => {
+  const { b, pc1, pc2 } = await preparar();
+  await b.config("nuvem_versao", "0.3.1");
+  await b.config("publicado", { funcoes: "0.3.0", painel: "0.3.0" });
+  await b.config("atualizar_sozinho", "assim_que_sair");
+  await guardar(b, pc1);
+  const vez = () => b.rpc(pc2, "agente_vez_de_atualizar", { p_de: "0.3.0", p_para: "0.3.1" });
+  assert.deepEqual(await vez(), { pode: false, motivo: "publicacao" });
+  // a nuvem tem tudo registrado, menos a 0020 (que mudou na versão nova): o plano roda a 0020 e as reaplicáveis seguintes
+  const todas = migracoes().filter((m) => !m.nome.endsWith(".supabase.sql"));
+  const feitas = new Map(todas.map((m) => [m.nome, hashesAceitos(m.sql)[0]]));
+  feitas.set("0020_atualizar_escolha.sql", "0".repeat(64));
+  const plano = planoMigracoes(todas, feitas, true);
+  const nomes = plano.map((m) => m.nome);
+  assert.equal(nomes[0], "0020_atualizar_escolha.sql");
+  assert.ok(nomes.includes("0021_atualizar_nuvem.sql"), `a 0021 roda de novo: ${nomes.join(", ")}`);
+  assert.equal(nomes.at(-1), "0099_permissoes.sql");
+  for (const m of plano) await b.db.exec(m.sql);
+  assert.deepEqual(await vez(), { pode: false, motivo: "publicacao" }, "o portão da publicação continua de pé");
+  const [{ tem }] = await b.sql("select position('rvz_completa_ligada' in prosrc) > 0 as tem from pg_proc where proname = 'agente_vez_de_atualizar'");
+  assert.equal(tem, true);
+});
+
+test("guardar tokens de novo ou desligar no meio de uma publicação não tira a vez de quem está publicando", async () => {
+  const { b, admin, pc1, pc2 } = await preparar();
+  await b.config("nuvem_versao", "0.3.1");
+  await b.config("publicado", { funcoes: "0.3.0", painel: "0.3.0" });
+  await guardar(b, pc1);
+  assert.equal((await vezPublicar(b, pc1, "0.3.1")).pode, true);
+  // outro computador guarda os tokens de novo: a vez em andamento fica, e ele não publica junto
+  await guardar(b, pc2);
+  assert.equal((await cfg(b, "publicacao_vez")).estado, "em_andamento");
+  assert.equal((await vezPublicar(b, pc2, "0.3.1")).pode, false);
+  // desligar também não apaga a vez em andamento; quem publica ainda conta o fim
+  await b.rpc(admin, "painel_credenciais_apagar");
+  assert.equal((await cfg(b, "publicacao_vez")).estado, "em_andamento");
+  assert.deepEqual(await resultado(b, pc1, "0.3.1", "concluida"), { ok: true });
+  // a vez parada sai ao guardar de novo (tokens novos tentam de novo)
+  await b.config("publicacao_vez", { computador: pc1.pc, para: "0.3.1", desde: new Date().toISOString(), estado: "falhou" });
+  await guardar(b, pc1);
+  assert.equal(await cfg(b, "publicacao_vez"), null);
 });

@@ -4,7 +4,7 @@
 //   node provisionar.mjs --ref <projeto> --site https://painel.exemplo.com --admin <email>
 // O token de acesso vem de SUPABASE_ACCESS_TOKEN. Nada de segredo é escrito em disco ou no log.
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { randomBytes, generateKeyPairSync, createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,8 +80,9 @@ revoke all on public.reveza_migracoes from anon, authenticated;`;
 
 /**
  * O que aplicar: migração nova entra; migração que mudou entra de novo se for reaplicável (só funções), e é recusada
- * se cria tabela (mudança de tabela vai numa migração nova). Banco de antes do registro: as de tabela contam como
- * feitas e as reaplicáveis rodam de novo. As permissões (0099) fecham qualquer aplicação.
+ * se cria tabela (mudança de tabela vai numa migração nova); depois da primeira que entra, as reaplicáveis seguintes
+ * entram também. Banco de antes do registro: as de tabela contam como feitas e as reaplicáveis rodam de novo. As
+ * permissões (0099) fecham qualquer aplicação.
  */
 export function planoMigracoes(todas, feitas, bancoExiste) {
   const conhecidas = new Map(feitas);
@@ -89,14 +90,20 @@ export function planoMigracoes(todas, feitas, bancoExiste) {
     for (const m of todas) if (!reaplicavel(m)) conhecidas.set(m.nome, hashDe(m.sql));
   }
   const aplicar = [];
+  // Depois da primeira que roda, as reaplicáveis seguintes rodam de novo, em ordem: uma função definida em mais de uma
+  // migração (a agente_vez_de_atualizar está na 0018, na 0020 e na 0021) voltaria ao corpo antigo se só a anterior
+  // mudada rodasse. Foi o que a 0.3.1 fez: rodou só a 0020 e tirou da 0021 o portão da publicação (auditoria run-3).
+  let depoisDeUma = false;
   for (const m of todas) {
     const antes = conhecidas.get(m.nome);
     const hash = hashDe(m.sql);
-    if (antes !== undefined && hashesAceitos(m.sql).includes(antes)) continue;
-    if (antes !== undefined && !reaplicavel(m)) {
+    const igual = antes !== undefined && hashesAceitos(m.sql).includes(antes);
+    if (igual && !(depoisDeUma && reaplicavel(m))) continue;
+    if (!igual && antes !== undefined && !reaplicavel(m)) {
       throw new Error(`${m.nome} mudou depois de aplicada e mexe em tabela: a mudança precisa ir numa migração nova`);
     }
     aplicar.push({ ...m, hash });
+    depoisDeUma = true;
   }
   const perm = todas.find((m) => m.nome.startsWith("0099"));
   if (aplicar.length && perm && !aplicar.some((m) => m.nome === perm.nome)) aplicar.push({ ...perm, hash: hashDe(perm.sql) });
@@ -324,7 +331,17 @@ async function criarUsuario(f, url, servico, email, senha) {
 }
 
 // Uso direto (o instalador importa as funções acima).
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (chamadoDireto()) {
   const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
   const ref = arg("--ref");
   const site = arg("--site");

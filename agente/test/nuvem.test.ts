@@ -63,6 +63,19 @@ describe("partida com nuvem", () => {
     assert.equal((await abrir(contaId)).claudeAiOauth?.accessToken, "A1");
   });
 
+  test("chave que não é a da instalação (impressão diferente na nuvem): nenhum login vai ao cofre, e o agente avisa uma vez", async () => {
+    await preparar();
+    banco.cofreImpressao = "f".repeat(32);
+    banco.config = { ...banco.config, cofre_impressao: "f".repeat(32) };
+    await m.agente.busca();
+    await ativaEm(m, "A", 10);
+    await m.agente.esperar();
+    await m.agente.busca();
+    assert.equal(fns("registrarConta").length, 0, "nada cifrado com a chave que não é a da instalação");
+    assert.equal(fns("devolverCofre").length, 0);
+    assert.equal(e().eventos.filter((x) => (x.dados as { motivo?: string } | undefined)?.motivo === "impressao_diferente").length, 1);
+  });
+
   test("sem a chave do cofre, a conta fica só neste computador e o agente avisa", async () => {
     await preparar({ chave: null });
     await ativaEm(m, "A", 10);

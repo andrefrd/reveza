@@ -32,7 +32,7 @@ import { fileURLToPath } from "node:url";
 import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioPedido, dominioValido, passosDns } from "./lib/dominio.mjs";
-import { computadorDoEmail, esperarComando, lerPublicacao, pedirComando, registrarPublicacao, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
+import { computadorDoEmail, esperarComando, lerPublicacao, maisNova, pedirComando, registrarPublicacao, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { etapasDoCaminho, manterNuvemPrevisto, numeroDaEtapa } from "./lib/etapas.mjs";
 import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
@@ -222,6 +222,18 @@ async function nuvem(ctx) {
     } else ctx.ref = lista[i - 1].ref;
   }
   if (!/^[a-z0-9]{20}$/.test(ctx.ref || "")) throw new Error(t("projeto do Supabase inválido", "invalid Supabase project"));
+
+  // a nuvem já se atualizou sozinha para uma versão mais nova que este instalador: não volta para trás (as migrações
+  // reaplicáveis antigas passariam por cima das novas, e o "publicado" ficaria com a versão de antes)
+  if (ctx.atualizar && !ctx.nuvemNova) {
+    const daNuvem = await lerPublicacao(consultar(ctx)).then((c) => c.versao, () => null);
+    if (maisNova(daNuvem, VERSAO)) {
+      nao(t(`a nuvem já está na ${daNuvem}, mais nova que este instalador (${VERSAO}): a nuvem e o painel ficam como estão. Para mexer neles, use o instalador da ${daNuvem} ou mais novo.`,
+        `the cloud is already on ${daNuvem}, newer than this installer (${VERSAO}): the cloud and the panel stay as they are. To change them, use the ${daNuvem} installer or newer.`));
+      ctx.manterNuvem = true;
+      return;
+    }
+  }
 
   if (ctx.nuvemNova) {
     titulo(t("  Administrador do painel", "  Panel administrator"));
@@ -419,6 +431,14 @@ async function painel(ctx) {
   if (ctx.dominio && vercelAntes) {
     reg = await ctx.vercel.adicionarDominio(proj, ctx.dominio);
     pronto = reg.configurado || (await dnsPronto(ctx.dominio, reg.registro));
+    // sem ninguém olhando (publicação da atualização completa, --sim), o endereço do painel não muda sozinho: se a
+    // conferência do DNS falhar agora, segue o domínio que já era o do painel. Antes ele voltava para o da Vercel e
+    // trocava o endereço do login e o CORS das funções (auditoria de segurança run-3).
+    if (!pronto && ctx.semPerguntas && ctx.inst?.painel?.dominio === ctx.dominio) {
+      nao(t(`não consegui conferir agora o DNS de ${ctx.dominio}; o painel continua nele (nada muda de endereço sem você)`,
+        `could not check the ${ctx.dominio} DNS right now; the panel stays on it (no address changes without you)`));
+      pronto = true;
+    }
   }
   let pub = await publicar(pronto ? ctx.dominio : null, pronto ? new URL(vercelAntes).host : null);
   // atualização: o endereço do projeto na Vercel é o mesmo de antes (a implantação nova vai para ele)

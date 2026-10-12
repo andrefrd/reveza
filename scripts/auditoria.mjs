@@ -6,7 +6,7 @@
 // Uso: node scripts/auditoria.mjs   (consulta o registro do npm: precisa de internet)
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -71,4 +71,14 @@ function principal() {
   if (ruim) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) principal();
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (chamadoDireto()) principal();

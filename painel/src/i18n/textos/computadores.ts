@@ -152,6 +152,8 @@ export default secao({
         titulo: "Revogar {computador}?",
         texto:
           "Ele perde o acesso à nuvem na hora: as contas que estavam com ele voltam ao revezamento e os pedidos pendentes expiram. Para ele voltar, é preciso ligá-lo de novo. O que já está gravado nele (os logins das contas e a chave do cofre) só sai se alguém apagar lá; se ele foi perdido ou roubado, entre de novo nas contas que ele usou.",
+        textoCompleta:
+          " Com a atualização completa ligada, ele também pode ter aberto os tokens do Supabase e da Vercel: troque os dois (apague no Supabase e na Vercel e ligue a atualização completa de novo).",
         botao: "Revogar",
         botaoSegurar: "Segure para revogar",
         feito: "{computador} revogado",
@@ -357,6 +359,8 @@ export default secao({
         titulo: "Revoke {computador}?",
         texto:
           "It loses cloud access immediately: its accounts go back into rotation and pending requests expire. To bring it back, link it again. What is already stored on it (account logins and the vault key) stays until someone deletes it there; if it was lost or stolen, sign in again to the accounts it used.",
+        textoCompleta:
+          " With the full update on, it may also have opened the Supabase and Vercel tokens: replace both (delete them in Supabase and Vercel and turn the full update on again).",
         botao: "Revoke",
         botaoSegurar: "Hold to revoke",
         feito: "{computador} revoked",

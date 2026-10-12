@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 // Trava do repositório público: recusa commit que leve segredo, dado pessoal ou componente do React Bits.
 //
 // - Segredo: chaves de serviço, tokens, chaves privadas, arquivos .env.
@@ -116,4 +118,14 @@ function principal() {
   if (todos) console.log(`ok: ${lista.length} arquivos versionados, nenhum segredo, dado pessoal ou React Bits`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) principal();
+// Chamado direto (e não importado)? Pelo caminho de verdade dos dois lados: a comparação de import.meta.url com
+// `file://${argv[1]}` falhava calada no Windows e em pasta com espaço ou acento, e o script saía sem fazer nada.
+function chamadoDireto() {
+  try {
+    return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (chamadoDireto()) principal();

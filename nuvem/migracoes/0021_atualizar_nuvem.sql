@@ -1,5 +1,8 @@
 -- Reveza AI · 0021 · a nuvem e o painel também se atualizam sozinhos (pedido do Paulo, 12/10/2026, para a 0.3.0).
 -- reaplicável: tabela "if not exists", restrição recriada, permissões e funções (create or replace).
+-- 0.3.2: roda de novo para devolver o corpo de agente_vez_de_atualizar com o portão da publicação. Na subida da 0.3.0
+-- para a 0.3.1, o plano rodou só a 0020 (que mudou) e a versão dela, mais antiga, ficou por cima da desta. O plano agora
+-- roda também as reaplicáveis seguintes à primeira que muda (auditoria de segurança run-3).
 --
 -- 1. A nuvem aplica as próprias migrações, sem credencial guardada: a Edge Function `atualizar-nuvem` usa a conexão que
 --    a plataforma dá às funções (SUPABASE_DB_URL), só aceita versão oficial publicada e mais nova, e chama as funções
@@ -219,7 +222,8 @@ begin
   insert into public.config (chave, valor, mudado_em)
   values ('atualizacao_completa', jsonb_build_object('ligada', true, 'em', now(), 'computador', v_pc), now())
   on conflict (chave) do update set valor = excluded.valor, mudado_em = now();
-  delete from public.config where chave = 'publicacao_vez';
+  -- a vez parada sai (tokens novos tentam de novo); a que está em andamento fica com quem publica (0.3.2, auditoria run-3)
+  delete from public.config where chave = 'publicacao_vez' and valor ->> 'estado' is distinct from 'em_andamento';
   perform public.rvz_evento('info',
     format('A atualização completa (funções e painel) foi ligada em %s: os tokens ficam cifrados com a chave do cofre.', coalesce(v_nome, 'um computador')),
     jsonb_build_object('atualizacao_completa', 'ligada', 'computador', v_pc));
@@ -252,7 +256,7 @@ begin
   insert into public.config (chave, valor, mudado_em)
   values ('atualizacao_completa', jsonb_build_object('ligada', false, 'em', now(), 'computador', p_pc), now())
   on conflict (chave) do update set valor = excluded.valor, mudado_em = now();
-  delete from public.config where chave = 'publicacao_vez';
+  delete from public.config where chave = 'publicacao_vez' and valor ->> 'estado' is distinct from 'em_andamento';
   perform public.rvz_evento('info',
     format('A atualização completa foi desligada (%s): os tokens cifrados saíram da nuvem. Para tirar o acesso de vez, apague os tokens no Supabase e na Vercel.', p_quem),
     jsonb_build_object('atualizacao_completa', 'desligada', 'computador', p_pc));
