@@ -1,10 +1,11 @@
 // FonteDemo: dados de exemplo gerados no próprio navegador (?demo=1). Nada vai para a nuvem.
-// 5 contas fictícias com nomes genéricos (3 delas no mesmo workspace, para a cor por workspace aparecer), 2 computadores,
-// 30 dias de uso, sessões, eventos e o resto do painel.
+// 5 contas fictícias com nomes genéricos (3 delas no mesmo workspace, para a cor por workspace aparecer), 2 computadores
+// na versão do pacote (um deles uma atrás, para o aviso de atualização), 30 dias de uso, sessões, eventos e o resto.
 // O gerador é determinístico pela semente: a mesma semente e o mesmo "agora" dão os mesmos dados (os testes contam com isso).
 
 import { abrirEnvelope, cifrarParaNavegador, codigoDeAcesso, codigoDeConfirmacao, criarPedido } from "@/lib/ligacao"
 import { proximaCorLivre } from "@/lib/cores"
+import { versao as versaoDoInstalador } from "@/lib/instalador"
 import { localizarDemo } from "./demo-idioma"
 import { rotuloDestino } from "./rotulos"
 import { ErroPainel, type CamposConta, type Fonte, type Recursos } from "./fonte"
@@ -173,7 +174,6 @@ const COMPUTADORES_BASE = [
     id: "pc-notebook",
     nome: "Notebook",
     sistema: "macos" as const,
-    versao: "0.4.2",
     projetos: ["loja-online", "api-pagamentos", "estudos"],
     fator: 1,
   },
@@ -181,11 +181,28 @@ const COMPUTADORES_BASE = [
     id: "pc-desktop",
     nome: "Desktop",
     sistema: "linux" as const,
-    versao: "0.4.1",
     projetos: ["app-mobile", "site-institucional", "scripts"],
     fator: 0.7,
   },
 ]
+
+/**
+ * A versão que os computadores da demonstração mostram: a do pacote, a mesma que o painel recebe no build
+ * (VITE_REVEZA_VERSAO, que o instalador preenche) ou, sem ela, a do package.json do painel.
+ */
+export function versaoDemo(): string {
+  const v = versaoDoInstalador() ?? (typeof __VERSAO_PAINEL__ === "string" ? __VERSAO_PAINEL__ : "")
+  return /^\d+\.\d+\.\d+$/.test(v) ? v : "0.1.0"
+}
+
+/** A versão anterior a esta, para um computador ficar uma atrás: 0.1.5 -> 0.1.4, 0.2.0 -> 0.1.0, 1.0.0 -> 0.0.0. */
+export function versaoAnterior(v: string): string | null {
+  const [maior, menor, correcao] = v.split(".").map((x) => parseInt(x, 10) || 0)
+  if (correcao > 0) return `${maior}.${menor}.${correcao - 1}`
+  if (menor > 0) return `${maior}.${menor - 1}.0`
+  if (maior > 0) return `${maior - 1}.0.0`
+  return null
+}
 
 /** Conta em uso por computador, hora a hora (h = horas atrás). As últimas horas seguem a história dos eventos. */
 function contaNaHora(pc: string, h: number, sorteio: () => number): string | null {
@@ -216,6 +233,8 @@ function atividade(t: Date, fator: number): number {
 }
 
 export interface DadosDemo {
+  /** A versão do pacote que os computadores mostram (o "atualizar" leva até ela). */
+  versao: string
   eu: Eu
   contas: Conta[]
   computadores: Computador[]
@@ -234,7 +253,7 @@ export interface DadosDemo {
   historico: PontoHistorico[]
 }
 
-export function gerarDemo(agora: Date, semente = 7): DadosDemo {
+export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): DadosDemo {
   const sorteio = criarSorteio(semente)
   const iso = (ms: number) => new Date(ms).toISOString()
   const t0 = agora.getTime()
@@ -432,9 +451,9 @@ export function gerarDemo(agora: Date, semente = 7): DadosDemo {
   }
 
   // ── computadores ──────────────────────────────────────────────────────
-  const diagnostico = (versao: string, atraso: number, avisoVersao: boolean): Diagnostico => ({
+  const diagnostico = (doComputador: string, atraso: number, avisoVersao: boolean): Diagnostico => ({
     em: iso(t0 - 4 * MIN),
-    versao,
+    versao: doComputador,
     atrasoBuscaMs: atraso,
     itens: [
       { id: "chaveiro", ok: true },
@@ -444,30 +463,32 @@ export function gerarDemo(agora: Date, semente = 7): DadosDemo {
       { id: "relogio", ok: true, detalhe: "0,3 s" },
       { id: "mod", ok: true },
       { id: "transcricoes", ok: true },
-      { id: "versao", ok: avisoVersao ? false : true, detalhe: avisoVersao ? "0.4.2" : undefined },
+      { id: "versao", ok: avisoVersao ? false : true, detalhe: avisoVersao ? versao : undefined },
     ],
   })
+  // o Desktop fica uma versão atrás (se houver anterior), para o aviso de atualização aparecer
+  const anterior = versaoAnterior(versao)
   const computadores: Computador[] = [
     {
       id: "pc-notebook",
       nome: "Notebook",
       sistema: "macos",
-      versao: "0.4.2",
+      versao,
       vistoEm: iso(t0 - 3000),
       revogado: false,
       criadoEm: iso(t0 - 41 * DIA),
-      diagnostico: diagnostico("0.4.2", 180, false),
+      diagnostico: diagnostico(versao, 180, false),
       atribuicao: { contaId: "conta-trabalho", motivo: "limite", decididoEm: iso(t0 - 2 * H - 4 * MIN) },
     },
     {
       id: "pc-desktop",
       nome: "Desktop",
       sistema: "linux",
-      versao: "0.4.1",
+      versao: anterior ?? versao,
       vistoEm: iso(t0 - 4000),
       revogado: false,
       criadoEm: iso(t0 - 12 * DIA),
-      diagnostico: diagnostico("0.4.1", 420, true),
+      diagnostico: diagnostico(anterior ?? versao, 420, anterior !== null),
       atribuicao: { contaId: "conta-pessoal", motivo: "rodizio", decididoEm: iso(t0 - 6 * H - 11 * MIN) },
     },
   ]
@@ -630,6 +651,7 @@ export function gerarDemo(agora: Date, semente = 7): DadosDemo {
     },
   ]
   return {
+    versao,
     eu,
     contas,
     computadores,
@@ -670,6 +692,8 @@ export interface OpcoesDemo {
   relogio?: boolean
   /** Idioma dos textos de exemplo (nomes, projetos, e-mails). */
   idioma?: Idioma
+  /** Versão do pacote que os computadores mostram (padrão: versaoDemo()). */
+  versao?: string
 }
 
 export class FonteDemo implements Fonte {
@@ -695,7 +719,7 @@ export class FonteDemo implements Fonte {
     this.atrasoMs = opcoes.atrasoMs ?? 350
     this.comRelogio = opcoes.relogio ?? true
     this.idioma = opcoes.idioma ?? "pt-BR"
-    this.d = gerarDemo(this.agora(), opcoes.semente ?? 7)
+    this.d = gerarDemo(this.agora(), opcoes.semente ?? 7, opcoes.versao ?? versaoDemo())
   }
 
   /** O idioma da tela: em inglês, os textos de exemplo (nomes, projetos, e-mails) saem em inglês. */
@@ -907,9 +931,9 @@ export class FonteDemo implements Fonte {
         pc.diagnostico.atrasoBuscaMs = 150 + Math.floor(Math.random() * 300)
       }
       if (acao === "atualizar") {
-        pc.versao = "0.4.2"
+        pc.versao = this.d.versao
         if (pc.diagnostico) {
-          pc.diagnostico.versao = "0.4.2"
+          pc.diagnostico.versao = this.d.versao
           pc.diagnostico.itens = pc.diagnostico.itens.map((i) => (i.id === "versao" ? { id: "versao", ok: true } : i))
         }
       }

@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { coresPorWorkspace } from "@/lib/cores"
 import { fraseValida } from "@/lib/ligacao"
-import { FonteDemo, PALAVRAS, gerarDemo } from "./demo"
+import { FonteDemo, PALAVRAS, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
+import { faixasDeAlerta } from "./derivados"
 import { ErroPainel } from "./fonte"
+import PACOTE from "../../package.json"
+
+afterEach(() => vi.unstubAllEnvs())
 
 const AGORA = new Date("2026-10-08T15:20:00-03:00")
 const nova = () => new FonteDemo({ agora: () => AGORA, atrasoMs: 0, relogio: false })
@@ -127,6 +131,53 @@ describe("FonteDemo", () => {
     expect(new Set(empresa.map((c) => c.cor)).size).toBe(1)
     expect(new Set(empresa.map((c) => c.tom)).size).toBe(empresa.length)
     expect(new Set([...cores.values()].map((c) => c.cor)).size).toBe(new Set(d.contas.map((c) => c.organizacao)).size)
+  })
+
+  it("os computadores mostram a versão do pacote, um deles uma atrás (o aviso de atualização aparece)", async () => {
+    vi.stubEnv("VITE_REVEZA_VERSAO", "")
+    expect(versaoDemo()).toBe(PACOTE.version)
+    const e = await nova().carregar()
+    const versoes = e.computadores.map((c) => c.versao)
+    expect(versoes).toContain(PACOTE.version)
+    expect(versoes).toContain(versaoAnterior(PACOTE.version) ?? PACOTE.version)
+    expect(faixasDeAlerta(e, AGORA).some((f) => f.tipo === "versao_antiga")).toBe(
+      versaoAnterior(PACOTE.version) !== null
+    )
+  })
+
+  it("com a versão que o instalador passa no build, ela vale; a anterior sai dela, sem número fixo", async () => {
+    vi.stubEnv("VITE_REVEZA_VERSAO", "0.1.5")
+    const e = await nova().carregar()
+    expect(e.computadores.map((c) => c.versao).sort()).toEqual(["0.1.4", "0.1.5"])
+    const desktop = e.computadores.find((c) => c.versao === "0.1.4")!
+    expect(desktop.diagnostico?.itens.find((i) => i.id === "versao")).toMatchObject({ ok: false, detalhe: "0.1.5" })
+    expect(faixasDeAlerta(e, AGORA)).toContainEqual(
+      expect.objectContaining({ tipo: "versao_antiga", computadorId: desktop.id })
+    )
+  })
+
+  it("versão anterior: correção, versão menor, maior, e nenhuma antes da 0.0.0", () => {
+    expect(versaoAnterior("0.1.5")).toBe("0.1.4")
+    expect(versaoAnterior("0.1.10")).toBe("0.1.9")
+    expect(versaoAnterior("0.2.0")).toBe("0.1.0")
+    expect(versaoAnterior("1.0.0")).toBe("0.0.0")
+    expect(versaoAnterior("0.0.0")).toBeNull()
+  })
+
+  it("atualizar leva o computador atrasado até a versão do pacote", async () => {
+    vi.useFakeTimers({ now: AGORA })
+    try {
+      const f = new FonteDemo({ agora: () => AGORA, atrasoMs: 0, relogio: false, versao: "2.3.0" })
+      const antes = await f.carregar()
+      const atrasado = antes.computadores.find((c) => c.versao === "2.2.0")!
+      await f.comando(atrasado.id, "atualizar")
+      await vi.runAllTimersAsync()
+      const depois = await f.carregar()
+      expect(depois.computadores.map((c) => c.versao)).toEqual(["2.3.0", "2.3.0"])
+      expect(faixasDeAlerta(depois, AGORA).some((x) => x.tipo === "versao_antiga")).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("avisa quem assinou quando algo muda", async () => {
