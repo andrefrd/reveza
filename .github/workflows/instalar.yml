@@ -8,6 +8,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      ensaio:
+        description: "endereço raw de um gist secreto do dono com a mudança a ensaiar (git diff | gzip | base64); vazio = a main"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -25,6 +30,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      # ensaio de uma mudança ainda não publicada (scripts/ensaio.mjs): aplica e commita aqui, porque o passo da
+      # instalação empacota com `git archive HEAD`
+      - name: Ensaio (só no disparo manual com mudança)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.ensaio != '' }}
+        shell: bash
+        env:
+          ENSAIO: ${{ inputs.ensaio }}
+          DONO: ${{ github.repository_owner }}
+        run: |
+          case "$ENSAIO" in
+            "https://gist.githubusercontent.com/$DONO/"*) curl -fsSL "$ENSAIO" ;;
+            *) echo "só gist do dono do repositório" >&2; exit 1 ;;
+          esac | base64 -d | gunzip | git apply -v --whitespace=nowarn
+          git add -A
+          git -c user.name=ensaio -c user.email=ensaio@exemplo.invalid commit -q -m "ensaio"
 
       - name: Testes do agente
         working-directory: agente

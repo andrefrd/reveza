@@ -39,10 +39,11 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.ensaio != '' }}
         env:
           ENSAIO: ${{ inputs.ensaio }}
+          DONO: ${{ github.repository_owner }}
         # mudança grande não cabe no disparo (65 mil caracteres): ela vai num gist secreto do dono e aqui chega o endereço
         run: |
           case "$ENSAIO" in
-            https://gist.githubusercontent.com/dantaspaulo/*) curl -fsSL "$ENSAIO" ;;
+            "https://gist.githubusercontent.com/$DONO/"*) curl -fsSL "$ENSAIO" ;;
             https://*|http://*) echo "só gist do dono do repositório" >&2; exit 1 ;;
             *) printf '%s' "$ENSAIO" ;;
           esac | base64 -d | gunzip | git apply -v --whitespace=nowarn
