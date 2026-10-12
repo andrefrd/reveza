@@ -1,9 +1,10 @@
 import * as React from "react"
-import { CloudOffIcon, FlaskConicalIcon, LogOutIcon, RefreshCwIcon, UserXIcon } from "lucide-react"
+import { CloudOffIcon, FlaskConicalIcon, LogOutIcon, RefreshCwIcon, RotateCwIcon, UserXIcon } from "lucide-react"
 
 import { AuthDemo, type Autenticacao } from "@/auth/auth"
 import { SessaoProvider, useSessao } from "@/auth/sessao"
 import { AppSidebar } from "@/components/app-sidebar"
+import { BotaoCopiar } from "@/components/painel/copiar"
 import { Logo } from "@/components/painel/logo"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -15,25 +16,28 @@ import { FonteDemo } from "@/dados/demo"
 import { ErroPainel, type Fonte } from "@/dados/fonte"
 import { idiomaGuardado, useT } from "@/i18n"
 import { comDemo, emDemo, temNuvem } from "@/lib/demo"
+import { comRecarga, detalhesDaFalha, ehFalhaDeCarga, telaPreguicosa } from "@/lib/falha"
 import { useRota } from "@/lib/rota"
 import { ROTAS_AUTH, secaoDoCaminho, type IdSecao } from "@/secoes/rotas"
 
+// Cada seção é um pedaço do build carregado quando a tela abre. Uma aba aberta antes de uma versão nova pede pedaços
+// que não existem mais: telaPreguicosa recarrega a página uma vez em vez de mostrar a tela quebrada.
 const SECOES: Record<IdSecao, React.LazyExoticComponent<React.ComponentType>> = {
-  visao: React.lazy(() => import("@/secoes/visao-geral")),
-  contas: React.lazy(() => import("@/secoes/contas")),
-  computadores: React.lazy(() => import("@/secoes/computadores")),
-  uso: React.lazy(() => import("@/secoes/uso")),
-  plano: React.lazy(() => import("@/secoes/plano")),
-  troca: React.lazy(() => import("@/secoes/troca")),
-  alertas: React.lazy(() => import("@/secoes/alertas")),
-  integracoes: React.lazy(() => import("@/secoes/integracoes")),
-  time: React.lazy(() => import("@/secoes/time")),
-  minhaConta: React.lazy(() => import("@/secoes/minha-conta")),
-  comoFunciona: React.lazy(() => import("@/secoes/como-funciona")),
-  saude: React.lazy(() => import("@/secoes/saude")),
+  visao: telaPreguicosa(() => import("@/secoes/visao-geral")),
+  contas: telaPreguicosa(() => import("@/secoes/contas")),
+  computadores: telaPreguicosa(() => import("@/secoes/computadores")),
+  uso: telaPreguicosa(() => import("@/secoes/uso")),
+  plano: telaPreguicosa(() => import("@/secoes/plano")),
+  troca: telaPreguicosa(() => import("@/secoes/troca")),
+  alertas: telaPreguicosa(() => import("@/secoes/alertas")),
+  integracoes: telaPreguicosa(() => import("@/secoes/integracoes")),
+  time: telaPreguicosa(() => import("@/secoes/time")),
+  minhaConta: telaPreguicosa(() => import("@/secoes/minha-conta")),
+  comoFunciona: telaPreguicosa(() => import("@/secoes/como-funciona")),
+  saude: telaPreguicosa(() => import("@/secoes/saude")),
 }
 
-const TelasAuth = React.lazy(() => import("@/auth/telas"))
+const TelasAuth = telaPreguicosa(() => import("@/auth/telas"))
 
 export default function App() {
   const demo = emDemo()
@@ -44,9 +48,9 @@ export default function App() {
   React.useEffect(() => {
     if (demo || !temNuvem()) return
     // O cliente do Supabase só carrega quando há nuvem (a demonstração não baixa nada dele).
-    void Promise.all([import("@/auth/auth-supabase"), import("@/dados/supabase")]).then(([a, f]) =>
-      setNucleo({ auth: new a.AuthSupabase(), fonte: new f.FonteSupabase() })
-    )
+    void comRecarga(() => Promise.all([import("@/auth/auth-supabase"), import("@/dados/supabase")]))()
+      .then(([a, f]) => setNucleo({ auth: new a.AuthSupabase(), fonte: new f.FonteSupabase() }))
+      .catch((e) => console.error("carregar o painel", e))
   }, [demo])
 
   return <ComNucleo nucleo={nucleo} demo={demo} />
@@ -181,38 +185,87 @@ function Painel() {
 }
 
 /** Uma tela que quebra (por um dado inesperado vindo de um computador, por exemplo) não derruba o painel inteiro. */
-class ProtecaoSecao extends React.Component<{ children: React.ReactNode }, { quebrou: boolean }> {
-  state = { quebrou: false }
-  static getDerivedStateFromError() {
-    return { quebrou: true }
+class ProtecaoSecao extends React.Component<
+  { children: React.ReactNode },
+  { erro: unknown; componentes: string | null; quebrou: boolean }
+> {
+  state = { erro: null as unknown, componentes: null as string | null, quebrou: false }
+  static getDerivedStateFromError(erro: unknown) {
+    return { erro, quebrou: true }
   }
-  componentDidCatch(erro: unknown) {
+  componentDidCatch(erro: unknown, info: React.ErrorInfo) {
     console.error("tela do painel", erro)
+    this.setState({ componentes: info.componentStack ?? null })
   }
   render() {
     return this.state.quebrou ? (
-      <SecaoQuebrou aoTentar={() => this.setState({ quebrou: false })} />
+      <SecaoQuebrou
+        erro={this.state.erro}
+        componentes={this.state.componentes}
+        aoTentar={() => this.setState({ erro: null, componentes: null, quebrou: false })}
+      />
     ) : (
       this.props.children
     )
   }
 }
 
-function SecaoQuebrou({ aoTentar }: { aoTentar: () => void }) {
+/**
+ * A caixa da tela quebrada: a mensagem do erro e "Copiar detalhes" (mensagem, pilha curta, rota e versão, sem dado
+ * sensível), para a pessoa mandar o que quebrou. Pedaço do build que não existe mais (versão nova publicada com a aba
+ * aberta): pede para recarregar, que é o que resolve.
+ */
+export function SecaoQuebrou({
+  erro,
+  componentes,
+  aoTentar,
+}: {
+  erro: unknown
+  componentes?: string | null
+  aoTentar: () => void
+}) {
   const { t } = useT()
+  const versaoNova = ehFalhaDeCarga(erro)
+  const mensagem = erro instanceof Error ? erro.message : String(erro ?? "")
+  // a rota e a hora de quando a tela quebrou
+  const detalhes = React.useMemo(
+    () =>
+      detalhesDaFalha({
+        erro,
+        componentes,
+        caminho: window.location.pathname,
+        versao: __VERSAO_PAINEL__,
+        navegador: typeof navigator === "undefined" ? undefined : navigator.userAgent,
+      }),
+    [erro, componentes]
+  )
   return (
-    <Empty className="m-4 border md:m-6">
-      <EmptyHeader>
+    <Empty className="m-4 border md:m-6" role="alert">
+      <EmptyHeader className="max-w-lg">
         <EmptyMedia variant="icon">
           <CloudOffIcon />
         </EmptyMedia>
-        <EmptyTitle>{t("app.secaoQuebrou")}</EmptyTitle>
+        <EmptyTitle>{versaoNova ? t("app.versaoNovaTitulo") : t("app.secaoQuebrou")}</EmptyTitle>
+        <EmptyDescription>{versaoNova ? t("app.versaoNovaTexto") : t("app.secaoQuebrouDica")}</EmptyDescription>
+        {mensagem ? (
+          <code className="mt-1 max-w-full rounded-md bg-muted px-2 py-1 font-mono text-xs break-words text-muted-foreground">
+            {mensagem.length > 240 ? `${mensagem.slice(0, 240)}…` : mensagem}
+          </code>
+        ) : null}
       </EmptyHeader>
-      <EmptyContent>
-        <Button variant="outline" onClick={aoTentar}>
-          <RefreshCwIcon data-icon="inline-start" />
-          {t("app.tentarDeNovo")}
-        </Button>
+      <EmptyContent className="flex-row flex-wrap justify-center">
+        {versaoNova ? (
+          <Button onClick={() => window.location.reload()}>
+            <RotateCwIcon data-icon="inline-start" />
+            {t("app.recarregar")}
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={aoTentar}>
+            <RefreshCwIcon data-icon="inline-start" />
+            {t("app.tentarDeNovo")}
+          </Button>
+        )}
+        <BotaoCopiar texto={detalhes} rotulo={t("app.copiarDetalhes")} className="h-8" />
       </EmptyContent>
     </Empty>
   )

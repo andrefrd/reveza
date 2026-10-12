@@ -28,6 +28,6 @@ export default defineConfig({
     environment: "node",
     // datas nos testes em fuso fixo: o resultado não depende de onde a máquina está
     env: { TZ: "America/Sao_Paulo" },
-    include: ["src/**/*.test.ts", "scripts/**/*.test.mjs"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
   },
 })

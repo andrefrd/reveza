@@ -98,6 +98,31 @@ export function DadosProvider({ fonte, children }: { fonte: Fonte; children: Rea
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }
 
+/** Um instantâneo fixo, sem leitura nem tempo real: os testes das telas montam cada seção com ele. */
+export function DadosFixos({
+  fonte,
+  estado,
+  children,
+}: {
+  fonte: Fonte
+  estado: Instantaneo
+  children: React.ReactNode
+}) {
+  const valor = React.useMemo<ContextoDados>(
+    () => ({
+      fonte,
+      estado,
+      erro: null,
+      recarregar: async () => {},
+      atualizadoEm: new Date(estado.agora),
+      latenciaMs: 0,
+      online: true,
+    }),
+    [fonte, estado]
+  )
+  return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
+}
+
 export function useDados() {
   const c = React.useContext(Contexto)
   if (!c) throw new Error("useDados fora do DadosProvider")
