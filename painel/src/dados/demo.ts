@@ -451,19 +451,33 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
   }
 
   // ── computadores ──────────────────────────────────────────────────────
-  const diagnostico = (doComputador: string, atraso: number, avisoVersao: boolean): Diagnostico => ({
+  // as mesmas conferências do `reveza doctor`; o Desktop tem problemas, dois com conserto automático (o Corrigir)
+  const diagnostico = (doComputador: string, atraso: number, comProblema: boolean): Diagnostico => ({
     em: iso(t0 - 4 * MIN),
     versao: doComputador,
     atrasoBuscaMs: atraso,
     itens: [
-      { id: "chaveiro", ok: true },
-      { id: "credencial", ok: true },
-      { id: "cofre", ok: true },
-      { id: "posse", ok: true },
-      { id: "relogio", ok: true, detalhe: "0,3 s" },
-      { id: "mod", ok: true },
-      { id: "transcricoes", ok: true },
-      { id: "versao", ok: avisoVersao ? false : true, detalhe: avisoVersao ? versao : undefined },
+      { id: "agente", ok: true, detalhe: `versão ${doComputador}, Node 22.12.0` },
+      { id: "servico", ok: true, detalhe: "rodando" },
+      { id: "ponte", ok: true, detalhe: "o agente responde na porta local" },
+      comProblema
+        ? { id: "mod", ok: null, detalhe: "o mod não está carregado nas sessões (uso ao vivo e retomada ficam sem)", conserto: true }
+        : { id: "mod", ok: true, detalhe: "plugin instalado (reveza@reveza)" },
+      comProblema
+        ? { id: "credenciais", ok: false, detalhe: "nenhum login em /home/ana/.claude/.credentials.json", conserto: true }
+        : { id: "credenciais", ok: true, detalhe: "trabalho@exemplo.com; token vence em 312 min" },
+      { id: "contas", ok: true, detalhe: "5 conta(s)" },
+      { id: "chaveiro", ok: true, detalhe: "keychain, chave do cofre presente" },
+      { id: "nuvem", ok: true, detalhe: "https://reveza-exemplo.supabase.co responde" },
+      comProblema
+        ? {
+            id: "relogio",
+            ok: false,
+            detalhe: "diferença de 412 s para o servidor",
+            fazer: "acerte a data e a hora do sistema (ligue o acerto automático pela internet); o Reveza não mexe nisso",
+          }
+        : { id: "relogio", ok: true, detalhe: "diferença de 0 s para o servidor" },
+      { id: "assistente", ok: true, detalhe: "versão 2.1.293" },
     ],
   })
   // o Desktop fica uma versão atrás (se houver anterior), para o aviso de atualização aparecer
@@ -929,13 +943,40 @@ export class FonteDemo implements Fonte {
       if (acao === "diagnostico" && pc.diagnostico) {
         pc.diagnostico.em = this.agora().toISOString()
         pc.diagnostico.atrasoBuscaMs = 150 + Math.floor(Math.random() * 300)
+        if (corpo.corrigir === true) {
+          // como o agente: só o que tem conserto automático muda; a resposta vem no formato do `reveza doctor`
+          const consertado = (id: string) =>
+            id === "mod"
+              ? { detalhe: "plugin instalado (reveza@reveza)", texto: "mod reinstalado (vale nas sessões novas)" }
+              : id === "credenciais"
+                ? { detalhe: "pessoal@exemplo.com; token vence em 288 min", texto: "o assistente voltou a ter login: pessoal@exemplo.com" }
+                : null
+          const conferencias = pc.diagnostico.itens.map((i) => {
+            const c = i.ok !== true && i.conserto ? consertado(i.id) : null
+            return {
+              id: i.id,
+              situacao: c ? "ok" : i.ok === true ? "ok" : i.ok === false ? "falha" : "aviso",
+              detalhe: c?.detalhe ?? i.detalhe ?? "",
+              ...(c ? { consertado: { resultado: "corrigido", texto: c.texto } } : {}),
+              ...(!c && i.ok !== true && i.fazer ? { fazer: i.fazer } : {}),
+            }
+          })
+          pc.diagnostico.itens = pc.diagnostico.itens.map((i) => {
+            const c = i.ok !== true && i.conserto ? consertado(i.id) : null
+            return c ? { id: i.id, ok: true, detalhe: c.detalhe } : i
+          })
+          cmd.resposta = {
+            ok: true,
+            corrigir: true,
+            diagnostico: { conferencias, em: pc.diagnostico.em, versao: pc.versao, atrasoBuscaMs: pc.diagnostico.atrasoBuscaMs },
+          }
+          const corrigidos = conferencias.filter((c) => c.consertado).length
+          this.evento("info", "conserto", { computador: computadorId, conserto: true, corrigidos, nao_deu: 0 })
+        }
       }
       if (acao === "atualizar") {
         pc.versao = this.d.versao
-        if (pc.diagnostico) {
-          pc.diagnostico.versao = this.d.versao
-          pc.diagnostico.itens = pc.diagnostico.itens.map((i) => (i.id === "versao" ? { id: "versao", ok: true } : i))
-        }
+        if (pc.diagnostico) pc.diagnostico.versao = this.d.versao
       }
       if (acao === "entrar_de_novo" || acao === "conectar") {
         const email = String(corpo.email ?? "").toLowerCase()
@@ -975,7 +1016,7 @@ export class FonteDemo implements Fonte {
           this.evento("conexao", "login", { conta: c.id, computador: computadorId })
         }
       }
-      cmd.resposta = { ok: true }
+      cmd.resposta ??= { ok: true }
       this.emitir()
     }, 2600)
     return cmd

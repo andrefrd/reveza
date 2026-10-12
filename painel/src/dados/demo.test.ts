@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { coresPorWorkspace } from "@/lib/cores"
+import { andamentoDoConserto, podeCorrigir } from "@/lib/conserto"
 import { fraseValida } from "@/lib/ligacao"
 import { FonteDemo, PALAVRAS, gerarDemo, versaoAnterior, versaoDemo } from "./demo"
 import { faixasDeAlerta } from "./derivados"
@@ -150,7 +151,7 @@ describe("FonteDemo", () => {
     const e = await nova().carregar()
     expect(e.computadores.map((c) => c.versao).sort()).toEqual(["0.1.4", "0.1.5"])
     const desktop = e.computadores.find((c) => c.versao === "0.1.4")!
-    expect(desktop.diagnostico?.itens.find((i) => i.id === "versao")).toMatchObject({ ok: false, detalhe: "0.1.5" })
+    expect(desktop.diagnostico?.versao).toBe("0.1.4")
     expect(faixasDeAlerta(e, AGORA)).toContainEqual(
       expect.objectContaining({ tipo: "versao_antiga", computadorId: desktop.id })
     )
@@ -175,6 +176,35 @@ describe("FonteDemo", () => {
       const depois = await f.carregar()
       expect(depois.computadores.map((c) => c.versao)).toEqual(["2.3.0", "2.3.0"])
       expect(faixasDeAlerta(depois, AGORA).some((x) => x.tipo === "versao_antiga")).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("Corrigir: o Desktop tem problema com conserto; o conserto resolve o mod e a conta e o relógio segue com o que fazer", async () => {
+    vi.useFakeTimers()
+    try {
+      const f = nova()
+      const antes = (await f.carregar()).computadores
+      expect(podeCorrigir(antes.find((c) => c.id === "pc-notebook")!.diagnostico)).toBe(false)
+      expect(podeCorrigir(antes.find((c) => c.id === "pc-desktop")!.diagnostico)).toBe(true)
+      const cmd = await f.comando("pc-desktop", "diagnostico", { corrigir: true })
+      expect(andamentoDoConserto(await f.lerComando(cmd.id)).fase).toBe("pedido")
+      await vi.advanceTimersByTimeAsync(800)
+      expect(andamentoDoConserto(await f.lerComando(cmd.id)).fase).toBe("consertando")
+      await vi.advanceTimersByTimeAsync(2000)
+      const a = andamentoDoConserto(await f.lerComando(cmd.id))
+      expect(a).toMatchObject({ fase: "feito", corrigidos: 2, naoDeu: 0 })
+      if (a.fase !== "feito") return
+      expect(a.itens.map((i) => [i.id, i.consertado?.resultado ?? i.fazer?.slice(0, 6)])).toEqual([
+        ["mod", "corrigido"],
+        ["credenciais", "corrigido"],
+        ["relogio", "acerte"],
+      ])
+      const e = await f.carregar()
+      expect(podeCorrigir(e.computadores.find((c) => c.id === "pc-desktop")!.diagnostico)).toBe(false)
+      expect(e.eventos[0]).toMatchObject({ tipo: "info", dados: { conserto: true, corrigidos: 2 } })
+      expect((await f.auditoria(1))[0]).toMatchObject({ acao: "comando" })
     } finally {
       vi.useRealTimers()
     }

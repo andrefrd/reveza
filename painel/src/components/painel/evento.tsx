@@ -109,6 +109,11 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
       else if (d.motivo === "revogado") titulo = t("evento.revogado", vars)
       else if (d.motivo === "teste_webhook") titulo = t("evento.testeWebhook")
       else if (d.motivo === "leitura") titulo = t("evento.leitura", vars)
+      else if (d.conserto === true) {
+        titulo = t("evento.conserto", vars)
+        const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0)
+        detalhe = t("evento.consertoResumo", { corrigidos: n(d.corrigidos), naoDeu: n(d.nao_deu) })
+      }
       else if (chaves.length === 1 && chaves[0] === "computador") titulo = t("evento.ligacao", vars)
       else titulo = d.computador ? `${t("evento.info")} · ${vars.computador}` : t("evento.info")
     }

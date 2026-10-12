@@ -1,9 +1,10 @@
 // Saúde: o diagnóstico de cada computador (itens do `reveza doctor`), o atraso da busca, as versões e o estado do
-// próprio painel.
+// próprio painel. Problema com conserto automático ganha o Corrigir (só administrador); o resto diz o que fazer.
 
 import * as React from "react"
 import { ActivityIcon, PlayIcon } from "lucide-react"
 
+import { BotaoCorrigir, nomeDoItem, ResultadoConserto, useCorrigir } from "@/components/painel/conserto"
 import { Pagina } from "@/components/painel/pagina"
 import { MarcaEstado } from "@/components/rb"
 import { Badge } from "@/components/ui/badge"
@@ -38,7 +39,7 @@ export default function Saude() {
 }
 
 function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
-  const { t, tx, idioma } = useT()
+  const { t, tn, tx, idioma } = useT()
   const agora = useAgora(5000)
   const { fonte } = useDados()
   const acao = useAcao()
@@ -51,6 +52,7 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
   const d = pc.diagnostico
   const atrasada = nova && compararVersao(pc.versao, nova) < 0
   const atraso = d?.atrasoBuscaMs ?? null
+  const corrigir = useCorrigir(pc)
   return (
     <Card>
       <CardHeader>
@@ -127,35 +129,45 @@ function CartaoSaude({ pc, nova }: { pc: Computador; nova: string | null }) {
             <p className="text-sm text-muted-foreground">{t("saude.semDiagnostico")}</p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {d.itens.map((it) => {
-                const chave = `saude.itens.${it.id}`
-                const nome = tx(chave) === chave ? it.id : tx(chave)
-                return (
-                  <li key={it.id}>
-                    <MarcaEstado
-                      estado={
-                        rodando
-                          ? "rodando"
-                          : it.ok === true
-                            ? "feito"
-                            : it.ok === false
-                              ? it.id === "versao"
-                                ? "atencao"
-                                : "falhou"
-                              : "pendente"
-                      }
-                      rotulo={
-                        <>
-                          {nome}
+              {d.itens.map((it) => (
+                <li key={it.id}>
+                  <MarcaEstado
+                    estado={
+                      rodando || (corrigir.rodando && it.conserto)
+                        ? "rodando"
+                        : it.ok === true
+                          ? "feito"
+                          : it.ok === false
+                            ? "falhou"
+                            : "atencao"
+                    }
+                    rotulo={
+                      <span className="flex min-w-0 flex-col">
+                        <span className="break-words">
+                          {nomeDoItem(it, tx)}
                           {it.detalhe ? <span className="text-muted-foreground"> · {it.detalhe}</span> : null}
-                        </>
-                      }
-                    />
-                  </li>
-                )
-              })}
+                        </span>
+                        {it.ok !== true && it.fazer ? (
+                          <span className="text-xs break-words text-muted-foreground">
+                            {t("saude.conserto.oQueFazer", { texto: it.fazer })}
+                          </span>
+                        ) : it.ok !== true && it.conserto ? (
+                          <span className="text-xs text-muted-foreground">{t("saude.conserto.temConserto")}</span>
+                        ) : null}
+                      </span>
+                    }
+                  />
+                </li>
+              ))}
             </ul>
           )}
+          {corrigir.quantos ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-2.5">
+              <span className="text-sm text-muted-foreground">{tn("saude.conserto.chamada", corrigir.quantos)}</span>
+              <BotaoCorrigir corrigir={corrigir} />
+            </div>
+          ) : null}
+          <ResultadoConserto andamento={corrigir.andamento} className="mt-3" />
         </div>
       </CardContent>
     </Card>

@@ -1,0 +1,45 @@
+// O Corrigir da tela Saúde: o painel só pede (comando "diagnostico" com { corrigir: true }) e mostra o que o computador
+// respondeu, item a item. Quem decide o que consertar é o agente, numa lista fechada; nada daqui vira comando lá.
+
+import { paraDiagnostico } from "@/dados/supabase"
+import type { Comando, Diagnostico, ItemDiagnostico } from "@/dados/tipos"
+
+/** O corpo do pedido: só o sim. */
+export const PEDIDO_CORRIGIR = { corrigir: true } as const
+
+/** Os itens com problema que o Corrigir tenta consertar. */
+export function consertaveis(d: Diagnostico | null | undefined): ItemDiagnostico[] {
+  return (d?.itens ?? []).filter((i) => i.ok !== true && i.conserto)
+}
+
+/** Mostra o botão Corrigir: há problema com conserto automático (agente que não conserta não manda `conserto`). */
+export function podeCorrigir(d: Diagnostico | null | undefined): boolean {
+  return consertaveis(d).length > 0
+}
+
+export type AndamentoConserto =
+  | { fase: "pedido" }
+  | { fase: "consertando" }
+  | { fase: "feito"; itens: ItemDiagnostico[]; corrigidos: number; naoDeu: number }
+  | { fase: "falhou"; motivo: string }
+
+/** Em que pé está o pedido de conserto, lendo o comando (e a resposta que o computador deu). */
+export function andamentoDoConserto(cmd: Comando | null, versao = ""): AndamentoConserto {
+  if (!cmd || cmd.estado === "pendente") return { fase: "pedido" }
+  if (cmd.estado === "reservado") return { fase: "consertando" }
+  const resposta = cmd.resposta ?? {}
+  if (cmd.estado !== "feito") {
+    const erro = typeof resposta.erro === "string" ? resposta.erro.slice(0, 300) : ""
+    return { fase: "falhou", motivo: erro || cmd.estado }
+  }
+  // agente que ainda não conserta responde só o diagnóstico (sem "corrigir"): nada foi tentado
+  if (resposta.corrigir !== true) return { fase: "falhou", motivo: "sem_conserto" }
+  const d = paraDiagnostico(resposta.diagnostico, versao)
+  const itens = (d?.itens ?? []).filter((i) => i.consertado || (i.ok !== true && i.fazer))
+  return {
+    fase: "feito",
+    itens,
+    corrigidos: itens.filter((i) => i.consertado?.resultado === "corrigido").length,
+    naoDeu: itens.filter((i) => i.consertado?.resultado === "nao_deu").length,
+  }
+}

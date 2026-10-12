@@ -61,7 +61,7 @@ describe("diagnóstico do agente", () => {
     )!
     expect(d.em).toBe(new Date(1791700000 * 1000).toISOString())
     expect(d.itens.map((i) => i.ok)).toEqual([true, null, false])
-    expect(d.itens[0]!.detalhe).toBe("Agente: versão 0.1.0")
+    expect(d.itens[0]).toMatchObject({ nome: "Agente", detalhe: "versão 0.1.0" })
     expect(paraDiagnostico({ em: "lixo" }, "1")).toBeNull()
     // escrito por um computador comprometido: não derruba o painel de ninguém
     expect(paraDiagnostico({ em: 1e20 }, "1")).toBeNull()

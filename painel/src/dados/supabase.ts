@@ -25,6 +25,7 @@ import type {
   Idioma,
   Instantaneo,
   Intervalo,
+  ItemDiagnostico,
   Janela,
   Ligacao,
   LinhaUso,
@@ -192,12 +193,21 @@ export function paraDiagnostico(bruto: unknown, versao: string): Computador["dia
   const objetos = (lista as unknown[]).filter(
     (i): i is Record<string, unknown> => !!i && typeof i === "object" && !Array.isArray(i)
   )
+  // texto escrito por um computador: só texto, curto (a tela nunca interpreta nada daqui)
+  const curto = (v: unknown, max = 400) => (typeof v === "string" && v.trim() ? v.slice(0, max) : undefined)
   const itens = objetos.slice(0, 50).map((i) => {
     const situacao = typeof i.situacao === "string" ? i.situacao : null
     const ok = typeof i.ok === "boolean" ? i.ok : situacao === "ok" ? true : situacao === "falha" ? false : null
-    const nome = typeof i.nome === "string" ? i.nome : null
-    const detalhe = typeof i.detalhe === "string" ? (nome ? `${nome}: ${i.detalhe}` : i.detalhe) : (nome ?? undefined)
-    return { id: String(i.id ?? nome ?? "?"), ok, detalhe }
+    const nome = curto(i.nome, 80)
+    const item: ItemDiagnostico = { id: String(i.id ?? nome ?? "?").slice(0, 40), ok, nome, detalhe: curto(i.detalhe) }
+    if (ok !== true && (i.conserto === true || (typeof i.conserto === "string" && i.conserto))) item.conserto = true
+    const fazer = ok !== true ? curto(i.fazer) : undefined
+    if (fazer) item.fazer = fazer
+    const c = i.consertado as Record<string, unknown> | null | undefined
+    if (c && typeof c === "object" && (c.resultado === "corrigido" || c.resultado === "nao_deu")) {
+      item.consertado = { resultado: c.resultado, texto: curto(c.texto) ?? "" }
+    }
+    return item
   })
   const atraso = typeof d.atrasoBuscaMs === "number" ? d.atrasoBuscaMs : null
   return { em, versao: typeof d.versao === "string" ? d.versao : versao, atrasoBuscaMs: atraso, itens }

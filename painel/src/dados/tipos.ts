@@ -61,8 +61,17 @@ export interface Conta {
 
 export interface ItemDiagnostico {
   id: string
+  /** true: ok; null: aviso; false: falha. */
   ok: boolean | null
+  /** O nome que o agente dá à conferência (as telas preferem a tradução pelo id). */
+  nome?: string
   detalhe?: string
+  /** O problema tem conserto automático seguro (o Corrigir do painel roda). */
+  conserto?: boolean
+  /** Problema sem conserto automático: o que fazer, em uma linha. */
+  fazer?: string
+  /** Depois do Corrigir: o que aconteceu com este problema. */
+  consertado?: { resultado: "corrigido" | "nao_deu"; texto: string }
 }
 
 export interface Diagnostico {

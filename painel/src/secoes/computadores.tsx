@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { BarraUso, NomeConta, SeloEstado } from "@/components/painel/conta"
+import { BotaoCorrigir, ResultadoConserto, useCorrigir } from "@/components/painel/conserto"
 import { Codigo } from "@/components/painel/copiar"
 import { Confirmar } from "@/components/painel/confirmar"
 import { AvisoPermissao, Pagina } from "@/components/painel/pagina"
@@ -137,6 +138,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
   const desatualizado = !!nova && compararVersao(pc.versao, nova) < 0
   const itens = pc.diagnostico?.itens ?? []
   const okItens = itens.filter((i) => i.ok === true).length
+  const corrigir = useCorrigir(pc)
   return (
     <Card>
       <CardHeader>
@@ -220,6 +222,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
             </dd>
           </div>
         </dl>
+        <ResultadoConserto andamento={corrigir.andamento} compacto />
       </CardContent>
       <CardFooter className="flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={!pode} onClick={() => trocar.abrir()}>
@@ -240,6 +243,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
           <ActivityIcon />
           {t("computadores.acoes.diagnostico")}
         </Button>
+        {corrigir.quantos ? <BotaoCorrigir corrigir={corrigir} variant="outline" /> : null}
         {desatualizado ? (
           <Button
             variant="outline"
