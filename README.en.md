@@ -11,6 +11,7 @@
 <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.1-1F1E1D?style=for-the-badge" alt="Version 0.1.1" /></a>
 <img src="https://img.shields.io/badge/license-MIT-1F1E1D?style=for-the-badge" alt="MIT license" />
 <a href="README.md"><img src="https://img.shields.io/badge/Portugu%C3%AAs-1F1E1D?style=for-the-badge" alt="Português" /></a>
+<a href="#-support-the-project"><img src="https://img.shields.io/badge/support-%F0%9F%92%9B-1F1E1D?style=for-the-badge" alt="Support the project" /></a>
 
 <br/><br/>
 
@@ -193,6 +194,26 @@ npm ci && npm test                          # installer and guards
 cd painel && npm ci && npm run react-bits && npm run dev   # dashboard at http://localhost:5173/?demo=1
 npm run auditoria                           # npm audit on every lockfile
 ```
+
+<br/>
+
+## 💛 Support the project
+
+Reveza is free and open source. If it saved you from stops at the limit, a contribution helps keep up development,
+security reviews and new versions.
+
+<div align="center">
+
+<a href="https://www.asaas.com/000/c/fymw4xl2f5b3n05b"><img src="https://img.shields.io/badge/Support%20with%20R%24%20100-D97757?style=for-the-badge&logo=githubsponsors&logoColor=1F1E1D" alt="Support with R$ 100" /></a>
+<a href="https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//github.com/dantaspaulo/reveza"><img src="https://img.shields.io/badge/Share%20on%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Share on WhatsApp" /></a>
+
+</div>
+
+- **R$ 100 through Asaas**, by Pix, card or boleto (Brazilian reais): [support the project](https://www.asaas.com/000/c/fymw4xl2f5b3n05b).
+- **Larger amounts, straight by Pix**, any amount you like. Key (phone): `84988942848`.
+- **Know someone who keeps hitting the limit?** [Send them Reveza on WhatsApp](https://wa.me/?text=Reveza%20AI%20switches%20your%20Claude%20Code%20account%20before%20the%20limit%20and%20the%20session%20goes%20on.%20Free%20and%20open%20source%3A%20https%3A//github.com/dantaspaulo/reveza).
+
+<sub>Contributions go to PSD Software, which maintains the project. Supporting is optional: Reveza stays free and open for everyone.</sub>
 
 <br/>
 

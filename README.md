@@ -11,6 +11,7 @@
 <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/vers%C3%A3o-0.1.1-1F1E1D?style=for-the-badge" alt="Versão 0.1.1" /></a>
 <img src="https://img.shields.io/badge/licen%C3%A7a-MIT-1F1E1D?style=for-the-badge" alt="Licença MIT" />
 <a href="README.en.md"><img src="https://img.shields.io/badge/English-1F1E1D?style=for-the-badge" alt="English" /></a>
+<a href="#-apoie-o-projeto"><img src="https://img.shields.io/badge/apoie-%F0%9F%92%9B-1F1E1D?style=for-the-badge" alt="Apoie o projeto" /></a>
 
 <br/><br/>
 
@@ -193,6 +194,26 @@ npm ci && npm test                          # instalador e travas
 cd painel && npm ci && npm run react-bits && npm run dev   # painel em http://localhost:5173/?demo=1
 npm run auditoria                           # npm audit em todas as travas
 ```
+
+<br/>
+
+## 💛 Apoie o projeto
+
+O Reveza é grátis e de código aberto. Se ele te poupou de paradas no limite, uma contribuição ajuda a manter o
+desenvolvimento, a revisão de segurança e as versões novas.
+
+<div align="center">
+
+<a href="https://www.asaas.com/000/c/fymw4xl2f5b3n05b"><img src="https://img.shields.io/badge/Apoiar%20com%20R%24%20100-D97757?style=for-the-badge&logo=githubsponsors&logoColor=1F1E1D" alt="Apoiar com R$ 100" /></a>
+<a href="https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//github.com/dantaspaulo/reveza"><img src="https://img.shields.io/badge/Compartilhar%20no%20WhatsApp-1F1E1D?style=for-the-badge&logo=whatsapp&logoColor=25D366" alt="Compartilhar no WhatsApp" /></a>
+
+</div>
+
+- **R$ 100 pelo Asaas**, no Pix, no cartão ou no boleto: [apoiar o projeto](https://www.asaas.com/000/c/fymw4xl2f5b3n05b).
+- **Valores maiores, direto no Pix**, com o valor que quiser. Chave (celular): `84988942848`.
+- **Conhece alguém que vive batendo no limite?** [Mande o Reveza no WhatsApp](https://wa.me/?text=O%20Reveza%20AI%20troca%20a%20conta%20do%20Claude%20Code%20antes%20do%20limite%20e%20a%20sess%C3%A3o%20continua.%20Gr%C3%A1tis%20e%20de%20c%C3%B3digo%20aberto%3A%20https%3A//github.com/dantaspaulo/reveza).
+
+<sub>As contribuições vão para a PSD Software, que mantém o projeto. Apoiar é opcional: o Reveza segue grátis e aberto para todo mundo.</sub>
 
 <br/>
 
