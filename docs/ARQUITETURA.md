@@ -141,6 +141,27 @@ e o texto que o mod põe no prompt é fixo.
 índices idempotentes) roda de novo quando muda; migração de tabela que mudou depois de aplicada é recusada (vai numa
 migração nova); as permissões (0099) fecham qualquer aplicação. As chaves do push (VAPID) nascem uma vez.
 
+## 7d. Atualizar o programa dos computadores
+
+O painel só pede (`atualizar` com `{ versao: "mais_nova" }`, ou `{ conferir: true }` no Verificar atualização); quem
+escolhe, baixa e instala é o agente (`agente/src/atualizar.ts`): só versão publicada do repositório oficial e maior que
+a dele, pelo instalador da própria versão nova, num processo separado, com a cópia do estado e a volta sozinha.
+- **Verificar atualização** (0.2.1): cada computador ligado lê a versão publicada na hora (no máximo uma vez por minuto;
+  no ciclo normal, a cada 6 horas) e responde `{ atual, mais_nova, nova, atualizando, precisa_nuvem }`.
+- **Atualizar sozinho** (`config.atualizar_sozinho`): desligada (`false`, o padrão), de madrugada (`true`, das 3h às
+  5h no fuso) ou `"assim_que_sair"` (assim que o agente acha a versão nova). De madrugada continua `true` no banco para
+  os agentes de antes da 0.2.1 entenderem. Nos dois jeitos ligados: só com o computador calmo (sem troca de conta em
+  andamento nem sessão no limite) e um por vez (`atualizacao_vez`, 0018 e 0020); se um volta para a anterior, os
+  outros param e sai um alerta.
+- **Trava de compatibilidade**: uma versão nova pode trazer migração da nuvem e painel novo, que só o computador
+  principal aplica (com os tokens). Antes de rodar o instalador, o agente compara as migrações do pacote baixado
+  (`nuvem/migracoes`) com os nomes que a nuvem já aplicou (`agente_migracoes()`, só a lista de nomes de
+  `reveza_migracoes`; o computador não lê a tabela). Faltando alguma, ou com a nuvem sem a função ou sem o registro,
+  não atualiza: o painel mostra "A versão Y precisa da nuvem e do painel atualizados primeiro: rode a atualização no
+  computador principal", e o agente confere a nuvem de 5 em 5 minutos (sem baixar de novo) até poder seguir. Por isso
+  mudança de banco que uma versão exige vai sempre num arquivo novo de migração: a trava compara nomes, e um arquivo
+  reaplicável que muda com o mesmo nome não é visto por ela.
+
 ## 8. Autenticação e acesso
 
 - Supabase Auth com senha + verificação em duas etapas (TOTP) para `admin`: quem ativou precisa do código em toda
@@ -188,7 +209,8 @@ Menu lateral, nada empilhado numa tela só:
 2. **Contas**: lista, cor, prioridade, reserva, agenda, teto semanal, conectar (gera o pedido ao computador), entrar
    de novo, pausar.
 3. **Computadores**: lista, sistema, versão, visto há, conta em uso, ligar computador novo (o código aparece nele e é
-   digitado num computador que já usa o Reveza; o painel só acompanha), revogar.
+   digitado num computador que já usa o Reveza; o painel só acompanha), revogar; atualizações (Verificar atualização,
+   Atualizar todos, como atualizar sozinho e o andamento, seção 7d).
 4. **Uso**: custo equivalente, tokens, agentes, sessões por dia, conta, modelo, projeto e computador; mapa de calor;
    ranking; previsão de esgotar; exportar planilha.
 5. **Plano da semana**: cota semanal por conta dividida pelos dias, quanto já foi, alerta de ritmo.
