@@ -58,7 +58,7 @@ jobs:
           else
             printf '%s' "$ENSAIO" > "$A"
           fi
-          base64 -d "$A" | gunzip | git apply -v --whitespace=nowarn
+          base64 -d < "$A" | gunzip | git apply -v --whitespace=nowarn
           # commita aqui: os testes que empacotam com `git archive HEAD` precisam ver a mudança (o ensaio da 0.2.1 no
           # Windows ficou vermelho só por isso: a migração nova estava na pasta e não no HEAD)
           git add -A
