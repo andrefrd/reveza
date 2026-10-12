@@ -6,7 +6,7 @@ export default secao({
       atualizacao: {
         titulo: "Atualizações",
         descricao:
-          "O programa de cada computador se atualiza por aqui: só com versão oficial publicada e mais nova que a dele, pelo instalador da própria versão, que guarda uma cópia do estado antes e volta sozinho para a anterior se a nova não subir.",
+          "A nuvem, o painel e o programa de cada computador se atualizam por aqui, nessa ordem: só com versão oficial publicada e mais nova. Cada computador usa o instalador da própria versão, que guarda uma cópia do estado antes e volta sozinho para a anterior se a nova não subir.",
         disponiveis: "Versão nova disponível para {n} computador(es).",
         emDia: "Os computadores estão na versão mais nova que conhecem.",
         todos: "Atualizar todos ({n})",
@@ -201,7 +201,7 @@ export default secao({
       atualizacao: {
         titulo: "Updates",
         descricao:
-          "Each computer's program is updated from here: only with an official published version newer than its own, through that version's installer, which keeps a copy of the state first and goes back to the previous one by itself if the new one does not start.",
+          "The cloud, the panel and each computer's program are updated from here, in that order: only with an official published, newer version. Each computer uses that version's installer, which keeps a copy of the state first and goes back to the previous one by itself if the new one does not start.",
         disponiveis: "New version available for {n} computer(s).",
         emDia: "The computers are on the newest version they know of.",
         todos: "Update all ({n})",
