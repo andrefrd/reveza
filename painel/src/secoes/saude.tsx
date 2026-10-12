@@ -185,7 +185,7 @@ function Painel() {
   const { latenciaMs } = useDados()
   const estado = useEstado()
   const demo = emDemo()
-  const atras = painelAtras(__VERSAO_PAINEL__, estado.computadores)
+  const atras = painelAtras(__VERSAO_PAINEL__, estado.computadores, estado.config.nuvem)
   const cacheado = typeof navigator !== "undefined" && !!navigator.serviceWorker?.controller
   const linhas: [string, React.ReactNode][] = [
     [t("saude.painel.versao"), <span className="font-mono">{__VERSAO_PAINEL__}</span>],

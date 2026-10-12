@@ -70,3 +70,23 @@ describe("textoEvento da ligação de computador novo", () => {
     expect(lixo.detalhe).toContain("evento.ligacaoMotivo.recusado_na_tela")
   })
 })
+
+describe("textoEvento da nuvem e do painel (0.3.0)", () => {
+  it("a nuvem atualizada, a publicação e as falhas de cada parte, com o computador pelo nome", async () => {
+    const { textoEvento } = await import("./evento")
+    const t = ((k: string, v?: Record<string, unknown>) => `[${k}${v ? ` ${JSON.stringify(v)}` : ""}]`) as never
+    const estado = { contas: [], computadores: [{ id: "pc-1", nome: "Desktop" } as never] }
+    const ev = (tipo: string, dados: Record<string, unknown>) =>
+      textoEvento({ id: 1, em: "2026-10-12T10:00:00.000Z", tipo: tipo as never, texto: "texto do banco", dados }, estado, { t, tx: t, idioma: "pt-BR" } as never)
+    expect(ev("info", { atualizacao_nuvem: "concluida", para: "0.3.1", aplicadas: 2 }).titulo).toBe('[evento.nuvemAtualizada {"para":"0.3.1"}]')
+    expect(ev("info", { publicacao: "concluida", para: "0.3.1", computador: "pc-1" }).titulo).toBe('[evento.publicacaoConcluida {"para":"0.3.1","computador":"Desktop"}]')
+    expect(ev("alerta", { motivo: "atualizacao_falhou", parte: "nuvem", para: "0.3.1", erro: "x" })).toEqual({
+      titulo: '[evento.nuvemFalhou {"para":"0.3.1"}]',
+      detalhe: "x",
+    })
+    expect(ev("alerta", { motivo: "atualizacao_falhou", parte: "publicacao", para: "0.3.1", computador: "pc-1" }).titulo).toBe(
+      '[evento.publicacaoFalhou {"para":"0.3.1","computador":"Desktop"}]'
+    )
+    expect(ev("info", { atualizacao_completa: "desligada", computador: null }).titulo).toMatch(/evento\.completaDesligada/)
+  })
+})

@@ -130,8 +130,35 @@ export interface ConfigTroca {
   atualizarSozinho: ModoAtualizar
   /** Só leitura: de quem é a vez de atualizar sozinho agora (config `atualizacao_vez`, um computador por vez). */
   atualizacaoVez?: VezAtualizacao | null
+  /** Só leitura: a nuvem e o painel (0.3.0): a versão da nuvem, o que está no ar e o andamento. */
+  nuvem?: EstadoNuvem | null
   /** Só leitura: quando o banco marcou o próximo rodízio. */
   proximoRodizioEm: string | null
+}
+
+/**
+ * A nuvem e o painel (0.3.0, migração 0021): a nuvem aplica as próprias migrações (sem token); as funções e o painel vão
+ * ao ar pelo instalador (passo manual) ou, com a atualização completa ligada, por um computador da instalação.
+ */
+export interface EstadoNuvem {
+  /** A versão cujas migrações a nuvem tem (null: nuvem de antes da 0.3.0). */
+  versao: string | null
+  /** A última atualização da nuvem. */
+  atualizacao: {
+    estado: "atualizando" | "atualizada" | "falhou"
+    de: string | null
+    para: string | null
+    desde: string | null
+    motivo: string | null
+  } | null
+  /** O que está no ar. */
+  publicado: { funcoes: string | null; painel: string | null }
+  /** O resumo das funções e do painel de cada versão (a nuvem calcula ao se atualizar). */
+  impressoes: Record<string, { funcoes?: string; painel?: string }>
+  /** Os tokens cifrados guardados (nunca os tokens): funções e painel vão sozinhos. */
+  completa: boolean
+  /** Quem está publicando funções e painel (um computador por vez). */
+  publicacao: { computadorId: string | null; para: string; estado: "em_andamento" | "concluida" | "falhou"; desde: string | null; motivo: string | null } | null
 }
 
 /** A vez de atualizar sozinho (um computador por vez): quem, para qual versão e como está. */

@@ -37,6 +37,15 @@ export interface Recursos {
   push: boolean
 }
 
+/** O que volta do Atualizar a nuvem (a Edge Function atualizar-nuvem). */
+export interface ResultadoNuvem {
+  ok: boolean
+  /** atualizada, em_dia, atualizando (outra rodada com a vez), falhou (com o motivo) ou parada. */
+  estado: string
+  para: string | null
+  motivo: string | null
+}
+
 export interface Fonte {
   readonly demo: boolean
   readonly recursos: Recursos
@@ -70,6 +79,13 @@ export interface Fonte {
   /** O andamento da ligação de um computador novo (o painel pergunta de tempos em tempos). */
   estadoLigacao(computadorNovoId: string): Promise<EstadoLigacao>
   revogarComputador(id: string): Promise<void>
+  /**
+   * Atualizar a nuvem (administrador): a nuvem aplica as migrações da versão oficial mais nova, sem token; com a
+   * atualização completa ligada, funções e painel vêm depois, por um computador. Também destrava a publicação parada.
+   */
+  atualizarNuvem(): Promise<ResultadoNuvem>
+  /** Desliga a atualização completa (administrador): os tokens cifrados saem da nuvem. Ligar é só num computador. */
+  desligarAtualizacaoCompleta(): Promise<void>
 
   criarAlerta(alerta: NovoAlerta): Promise<void>
   mudarAlerta(alerta: Alerta, campos: { ativo?: boolean; eventos?: EventoAlerta[] }): Promise<void>

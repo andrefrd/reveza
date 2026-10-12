@@ -9,7 +9,7 @@ import { versao as versaoDoInstalador } from "@/lib/instalador"
 import { localizarDemo } from "./demo-idioma"
 import { compararVersao } from "./derivados"
 import { rotuloDestino } from "./rotulos"
-import { ErroPainel, type CamposConta, type Fonte, type Recursos } from "./fonte"
+import { ErroPainel, type CamposConta, type Fonte, type Recursos, type ResultadoNuvem } from "./fonte"
 import type {
   AcaoComando,
   Alerta,
@@ -569,6 +569,15 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     exigirDuasEtapas: false,
     atualizarSozinho: "desligada",
     atualizacaoVez: null,
+    // a nuvem e o painel na versão da demonstração, com a atualização completa desligada (o padrão)
+    nuvem: {
+      versao,
+      atualizacao: { estado: "atualizada", de: versaoAnterior(versao), para: versao, desde: iso(t0 - 2 * DIA), motivo: null },
+      publicado: { funcoes: versao, painel: versao },
+      impressoes: {},
+      completa: false,
+      publicacao: null,
+    },
     proximoRodizioEm: null,
   }
   const alertas: Alerta[] = [
@@ -870,9 +879,10 @@ export class FonteDemo implements Fonte {
         if (aviso >= troca) throw new ErroPainel("aviso_maior_que_troca")
       }
       const antes = this.d.config.auto
-      const { atualizacaoVez: _vez, proximoRodizioEm: _prox, ...gravaveis } = campos
+      const { atualizacaoVez: _vez, proximoRodizioEm: _prox, nuvem: _nuvem, ...gravaveis } = campos
       void _vez
       void _prox
+      void _nuvem
       Object.assign(this.d.config, gravaveis)
       for (const [k, v] of Object.entries(gravaveis)) this.auditar("config", `${k} = ${String(v)}`)
       if (campos.auto !== undefined && campos.auto !== antes)
@@ -1171,6 +1181,29 @@ export class FonteDemo implements Fonte {
     this.evento("info", "Computador novo liberado: a chave do cofre foi entregue cifrada só para ele.", { computador: pc.id })
     this.emitir()
     return { ...base, expiraEm, fase: "ligado" }
+  }
+
+  /** Como a função atualizar-nuvem: a nuvem da demonstração já está na versão mais nova; a conferência leva um instante. */
+  async atualizarNuvem(): Promise<ResultadoNuvem> {
+    const n = this.d.config.nuvem
+    if (!n) return { ok: false, estado: "falhou", para: null, motivo: "sem nuvem" }
+    const antes = n.atualizacao
+    n.atualizacao = { estado: "atualizando", de: n.versao, para: n.versao, desde: this.agora().toISOString(), motivo: null }
+    if (n.publicacao?.estado === "falhou") n.publicacao = null
+    this.emitir()
+    await esperar(this.atrasoMs ? this.atrasoMs : 1200)
+    n.atualizacao = antes ?? { estado: "atualizada", de: n.versao, para: n.versao, desde: this.agora().toISOString(), motivo: null }
+    this.auditar("atualizar_nuvem", n.versao ?? "?")
+    this.emitir()
+    return { ok: true, estado: "em_dia", para: n.versao, motivo: null }
+  }
+
+  desligarAtualizacaoCompleta() {
+    return this.escrever(() => {
+      if (this.d.config.nuvem) this.d.config.nuvem.completa = false
+      this.evento("info", "A atualização completa foi desligada (pelo painel): os tokens cifrados saíram da nuvem.", { atualizacao_completa: "desligada" })
+      this.auditar("atualizacao_completa", "desligar")
+    })
   }
 
   revogarComputador(id: string) {

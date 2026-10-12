@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest"
 
 import { rotuloDestino } from "./rotulos"
-import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, faseDaLigacao, modoAtualizar, paraDiagnostico, paraVez, valorDoModo } from "./supabase"
+import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, faseDaLigacao, modoAtualizar, paraDiagnostico, paraNuvem, paraVez, valorDoModo } from "./supabase"
 
 describe("FonteSupabase (partes puras)", () => {
   it("mensagens das funções do banco viram códigos traduzíveis", () => {
@@ -125,5 +125,34 @@ describe("andamento da ligação de computador novo (ligacao_pedidos, 0019)", ()
   it("as mensagens novas da nuvem viram códigos traduzíveis", () => {
     expect(codigoDoErro("dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel")).toBe("ligacao_dupla")
     expect(codigoDoErro("computador novo desconhecido ou revogado")).toBe("computador_revogado")
+  })
+
+  it("a nuvem e o painel (0021): só o que a tela usa, conferido; nuvem de antes da 0.3.0 vem sem versão", () => {
+    expect(paraNuvem(new Map())).toEqual({
+      versao: null,
+      atualizacao: null,
+      publicado: { funcoes: null, painel: null },
+      impressoes: {},
+      completa: false,
+      publicacao: null,
+    })
+    const n = paraNuvem(
+      new Map<string, unknown>([
+        ["nuvem_versao", "0.3.1"],
+        ["nuvem_atualizacao", { estado: "falhou", de: "0.3.0", para: "0.3.2", desde: "2026-10-12T10:00:00Z", motivo: "x".repeat(400) }],
+        ["publicado", { funcoes: "0.3.0", painel: "lixo", em: "2026-10-12T10:00:00Z" }],
+        ["impressoes", { "0.3.1": { funcoes: "a", painel: "b" }, "nao-versao": { funcoes: "c" } }],
+        ["atualizacao_completa", { ligada: true }],
+        ["publicacao_vez", { computador: "pc-1", para: "0.3.1", estado: "em_andamento", desde: "2026-10-12T10:00:00Z" }],
+      ])
+    )
+    expect(n.versao).toBe("0.3.1")
+    expect(n.atualizacao?.estado).toBe("falhou")
+    expect(n.atualizacao?.motivo?.length).toBe(300)
+    expect(n.publicado).toEqual({ funcoes: "0.3.0", painel: null })
+    expect(Object.keys(n.impressoes)).toEqual(["0.3.1"])
+    expect(n.completa).toBe(true)
+    expect(n.publicacao).toEqual({ computadorId: "pc-1", para: "0.3.1", estado: "em_andamento", desde: "2026-10-12T10:00:00Z", motivo: null })
+    expect(paraNuvem(new Map([["publicacao_vez", { para: "x", estado: "em_andamento" }]])).publicacao).toBeNull()
   })
 })

@@ -1,16 +1,17 @@
-// Atualizar o programa dos computadores pelo painel: o botão por computador ("Versão X disponível · Atualizar"), o
-// "Verificar atualização" (cada computador ligado confere agora), o "Atualizar todos", a escolha de como cada um se
-// atualiza sozinho (desligada, de madrugada, assim que sair) e o andamento (pedido, atualizando, voltou na versão nova,
-// falhou com o motivo, ou esperando a nuvem). Só administrador pede. O painel e a nuvem não se atualizam por aqui: são
-// do instalador no computador principal, e a versão que precisa deles primeiro é recusada pelo agente.
+// Atualizações pelo painel: a linha "Nuvem e painel" (a versão de cada um, o Atualizar a nuvem e o andamento: a nuvem
+// aplica as próprias migrações sem token; funções e painel vão pelo instalador ou, com a atualização completa ligada,
+// por um computador), o botão por computador ("Versão X disponível · Atualizar"), o "Verificar atualização" (cada
+// computador ligado confere agora), o "Atualizar todos", a escolha de como tudo se atualiza sozinho (desligada, de
+// madrugada, assim que sair; na ordem nuvem, funções e painel, computadores) e o andamento. Só administrador pede.
 
 import * as React from "react"
 import {
-  CircleAlertIcon,
   CircleCheckIcon,
   CircleXIcon,
   ClockIcon,
   CloudAlertIcon,
+  CloudIcon,
+  CloudUploadIcon,
   DownloadIcon,
   MoonIcon,
   PowerOffIcon,
@@ -35,6 +36,7 @@ import { useT } from "@/i18n"
 import {
   andamentoDaAtualizacao,
   andamentoDeTodos,
+  faseDaNuvem,
   assinarConferencia,
   assinarPedidos,
   comecarConferencia,
@@ -42,7 +44,6 @@ import {
   entendeAssimQueSair,
   guardarLeitura,
   guardarPedido,
-  painelAtras,
   mudancasDosPedidos,
   pedidoDe,
   pedidoRecente,
@@ -57,8 +58,10 @@ import {
 } from "@/lib/atualizar"
 import { cn } from "@/lib/utils"
 
-/** O comando que instala o painel e a nuvem (no computador principal, com os tokens). */
+/** O comando que publica as funções e o painel (no computador que criou a instalação, com os tokens). */
 export const COMANDO_ATUALIZAR_PAINEL = "npx github:dantaspaulo/reveza --atualizar"
+/** O comando que liga a atualização completa (num computador da instalação: só ele tem a chave do cofre). */
+export const COMANDO_COMPLETA = "reveza atualizacao-completa ligar"
 
 export function useAtualizar(pc: Computador) {
   const { t } = useT()
@@ -174,6 +177,115 @@ const ICONE_DO_ESTADO: Record<EstadoNaAtualizacao, typeof MoonIcon | null> = {
   disponivel: DownloadIcon,
 }
 
+const codigo = "w-fit max-w-full rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-words"
+
+/** A linha "Nuvem e painel": a versão de cada um, o Atualizar a nuvem (administrador) e em que pé está. */
+export function LinhaNuvem() {
+  const { t } = useT()
+  const { fonte } = useDados()
+  const estado = useEstado()
+  const acao = useAcao()
+  const agora = useAgora(5000)
+  const { pode } = usePermissao()
+  const [pedindo, setPedindo] = React.useState(false)
+  const n = estado.config.nuvem ?? null
+  const f = faseDaNuvem(n, agora)
+  const nomeDe = (id: string | null) =>
+    estado.computadores.find((c) => c.id === id)?.nome ?? t("computadores.atualizacao.nuvem.computadorDesconhecido")
+  const ocupado = pedindo || f.fase === "atualizando" || f.fase === "publicando"
+  const k = "computadores.atualizacao.nuvem"
+
+  const atualizar = async () => {
+    setPedindo(true)
+    const [ok, r] = await acao(() => fonte.atualizarNuvem())
+    setPedindo(false)
+    if (!ok || !r) return
+    if (r.estado === "em_dia") toast.success(t(`${k}.resultado.emDia`, { versao: r.para ?? "?" }))
+    else if (r.estado === "atualizada") toast.success(t(`${k}.resultado.atualizada`, { versao: r.para ?? "?" }))
+    else if (r.estado === "atualizando") toast.info(t(`${k}.resultado.atualizando`))
+    else toast.error(t(`${k}.resultado.falhou`, { motivo: r.motivo || r.estado }))
+  }
+  const desligar = () => void acao(() => fonte.desligarAtualizacaoCompleta(), t(`${k}.completa.desligou`))
+
+  const partes =
+    f.fase === "passo_manual"
+      ? t(`${k}.partes.${f.funcoes && f.painel ? "ambas" : f.funcoes ? "funcoes" : "painel"}`)
+      : ""
+  const texto =
+    f.fase === "desconhecida"
+      ? t(`${k}.fase.desconhecida`)
+      : f.fase === "atualizando"
+        ? t(`${k}.fase.atualizando`, { versao: f.versao ?? "?" })
+        : f.fase === "falhou"
+          ? t(`${k}.fase.falhou`, { versao: f.versao ?? "?", motivo: f.motivo || "?" })
+          : f.fase === "publicando"
+            ? t(`${k}.fase.publicando`, { versao: f.versao, computador: nomeDe(f.computadorId) })
+            : f.fase === "publicacao_falhou"
+              ? t(`${k}.fase.publicacaoFalhou`, { versao: f.versao, motivo: f.motivo || "?" })
+              : f.fase === "passo_manual"
+                ? t(`${k}.fase.passoManual`, { versao: f.versao, partes })
+                : f.fase === "esperando_publicacao"
+                  ? t(`${k}.fase.esperandoPublicacao`, { versao: f.versao })
+                  : t(`${k}.fase.atualizada`, { versao: f.versao })
+  const atencao = f.fase === "falhou" || f.fase === "publicacao_falhou" || f.fase === "passo_manual" || f.fase === "desconhecida"
+  const Icone = atencao ? CloudAlertIcon : f.fase === "atualizada" ? CircleCheckIcon : null
+  const cor = atencao ? "text-atencao" : f.fase === "atualizada" ? "text-ok" : "text-muted-foreground"
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 font-medium">
+            <CloudIcon className="size-4 text-muted-foreground" aria-hidden />
+            {t(`${k}.titulo`)}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {t(`${k}.versoes`, {
+              nuvem: n?.versao ?? "?",
+              funcoes: n?.publicado.funcoes ?? "?",
+              painel: n?.publicado.painel ?? __VERSAO_PAINEL__,
+            })}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!pode || ocupado}
+          title={pode ? t(`${k}.dica`) : t("computadores.atualizacao.soAdmin")}
+          onClick={() => void atualizar()}
+        >
+          {ocupado ? <Spinner /> : <CloudUploadIcon />}
+          {t(`${k}.botao`)}
+        </Button>
+      </div>
+      <p className={cn("flex items-start gap-1.5 text-xs break-words", cor)} role="status" aria-live="polite">
+        {Icone ? <Icone className="mt-px size-3.5 shrink-0" aria-hidden /> : ocupado ? <Spinner className="mt-px size-3 shrink-0" /> : null}
+        <span>{texto}</span>
+      </p>
+      {f.fase === "passo_manual" || f.fase === "desconhecida" ? <code className={codigo}>{COMANDO_ATUALIZAR_PAINEL}</code> : null}
+      {n?.versao ? (
+        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {n.completa ? (
+            <span>
+              {t(`${k}.completa.ligada`)}{" "}
+              {pode ? (
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={desligar}>
+                  {t(`${k}.completa.desligar`)}
+                </Button>
+              ) : null}
+            </span>
+          ) : (
+            <>
+              <span>{t(`${k}.completa.desligada`)}</span>
+              <code className={codigo}>{COMANDO_COMPLETA}</code>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /** O cartão de cima da tela Computadores: verificar, atualizar todos, como atualizar sozinho e o andamento. */
 export function CartaoAtualizacoes() {
   const { t } = useT()
@@ -195,7 +307,6 @@ export function CartaoAtualizacoes() {
   const outros = versaoMaisNova([...ativos.map((c) => c.versao), ...(achada ? [achada] : [])])
   // quem já está atualizando (pedido desta aba, ou o computador contou que está) não entra de novo
   const comAtualizacao = ativos.filter((pc) => versaoDisponivel(pc, outros) && !pedidoRecente(pc.id) && !pc.diagnostico?.atualizacao)
-  const atras = painelAtras(__VERSAO_PAINEL__, ativos)
   // a versão para onde todos vão: a mais nova que alguém conhece (a achada agora, a lida antes, a de outro na frente)
   const alvo = versaoMaisNova(
     [achada, outros, estado.config.atualizacaoVez?.para, ...ativos.map((c) => c.diagnostico?.versaoNova)].filter(
@@ -299,6 +410,7 @@ export function CartaoAtualizacoes() {
         <CardDescription>{t("computadores.atualizacao.descricao")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
+        <LinhaNuvem />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5" role="status" aria-live="polite">
             <span className={cn("flex items-center gap-1.5", resultado?.fase === "em_dia" ? "text-ok" : "text-muted-foreground")}>
@@ -332,7 +444,6 @@ export function CartaoAtualizacoes() {
             <CloudAlertIcon className="text-atencao" />
             <AlertDescription className="flex flex-col gap-1">
               <span className="text-atencao">{t("computadores.atualizacao.precisaNuvem", { versao: alvo })}</span>
-              <code className="w-fit max-w-full rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-words">{COMANDO_ATUALIZAR_PAINEL}</code>
             </AlertDescription>
           </Alert>
         ) : null}
@@ -404,18 +515,6 @@ export function CartaoAtualizacoes() {
           </RadioGroup>
         </div>
 
-        <Alert>
-          <CircleAlertIcon />
-          <AlertDescription className="flex flex-col gap-1">
-            <span>{t("computadores.atualizacao.painelNuvem")}</span>
-            <code className="w-fit max-w-full rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-words">{COMANDO_ATUALIZAR_PAINEL}</code>
-            {atras ? (
-              <span className="text-atencao">
-                {t("computadores.atualizacao.painelAtras", { painel: __VERSAO_PAINEL__, computadores: atras })}
-              </span>
-            ) : null}
-          </AlertDescription>
-        </Alert>
       </CardContent>
     </Card>
   )

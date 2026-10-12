@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { Comando, Computador, Evento } from "@/dados/tipos"
+import type { Comando, Computador, EstadoNuvem, Evento } from "@/dados/tipos"
 import {
   andamentoDaAtualizacao,
   andamentoDeTodos,
@@ -8,6 +8,7 @@ import {
   comecarConferencia,
   conferenciaAtual,
   entendeAssimQueSair,
+  faseDaNuvem,
   guardarLeitura,
   guardarPedido,
   limparConferencia,
@@ -17,6 +18,7 @@ import {
   pedidoDe,
   pedidoRecente,
   pedidosEmAberto,
+  pendenteDaPublicacao,
   PRAZO_DA_CONFERENCIA_MS,
   resultadoDaConferencia,
   versaoDisponivel,
@@ -119,7 +121,7 @@ describe("botão de atualizar do painel", () => {
     expect(pedidoRecente("pc-y", AGORA.getTime())).toBe(false)
   })
 
-  it("o painel atrás dos computadores aparece (ele é atualizado no computador principal)", () => {
+  it("o painel atrás dos computadores aparece (a não ser que a nuvem saiba que o painel no ar é o da versão dela)", () => {
     expect(painelAtras("0.1.6", [pc("0.1.7"), pc("0.1.6")])).toBe("0.1.7")
     expect(painelAtras("0.1.7", [pc("0.1.7")])).toBeNull()
     expect(painelAtras("0.1.7", [pc("0.1.9", { revogado: true })])).toBeNull()
@@ -257,5 +259,57 @@ describe("andamento de todos (o cartão de cima)", () => {
     expect(entendeAssimQueSair(antigo)).toBe(false)
     expect(andamentoDeTodos([antigo], "0.1.7", [], null, "assim_que_sair", AGORA)[0]!.estado).toBe("disponivel")
     expect(andamentoDeTodos([antigo], "0.1.7", [], null, "madrugada", AGORA)[0]!.estado).toBe("na_fila")
+  })
+})
+
+describe("a nuvem e o painel (0.3.0)", () => {
+  const nuvem = (extra: Partial<EstadoNuvem> = {}): EstadoNuvem => ({
+    versao: "0.3.1",
+    atualizacao: null,
+    publicado: { funcoes: "0.3.0", painel: "0.3.0" },
+    impressoes: {},
+    completa: false,
+    publicacao: null,
+    ...extra,
+  })
+
+  it("o que falta publicar: a mesma regra do banco e do agente", () => {
+    expect(pendenteDaPublicacao(null)).toEqual({ funcoes: false, painel: false })
+    expect(pendenteDaPublicacao(nuvem())).toEqual({ funcoes: true, painel: true })
+    const imp = { "0.3.0": { funcoes: "f1", painel: "p1" }, "0.3.1": { funcoes: "f1", painel: "p2" } }
+    expect(pendenteDaPublicacao(nuvem({ impressoes: imp }))).toEqual({ funcoes: false, painel: true })
+    expect(pendenteDaPublicacao(nuvem({ publicado: { funcoes: "0.4.0", painel: "0.3.1" } }))).toEqual({ funcoes: false, painel: false })
+    expect(pendenteDaPublicacao(nuvem({ publicado: { funcoes: null, painel: null } }))).toEqual({ funcoes: true, painel: true })
+  })
+
+  it("a fase: desconhecida, atualizando, falhou, publicando, publicação parada, passo manual, esperando e em dia", () => {
+    expect(faseDaNuvem(null, AGORA)).toEqual({ fase: "desconhecida" })
+    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "atualizando", de: "0.3.0", para: "0.3.2", desde: min(-2), motivo: null } }), AGORA)).toEqual({
+      fase: "atualizando",
+      versao: "0.3.2",
+    })
+    // a vez da nuvem venceu (10 minutos): não fica girando para sempre
+    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "atualizando", de: "0.3.0", para: "0.3.2", desde: min(-11), motivo: null } }), AGORA).fase).toBe("passo_manual")
+    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "falhou", de: "0.3.1", para: "0.3.2", desde: min(-2), motivo: "erro x" } }), AGORA)).toEqual({
+      fase: "falhou",
+      versao: "0.3.2",
+      motivo: "erro x",
+    })
+    // a falha de uma versão que a nuvem já passou não aparece mais
+    expect(faseDaNuvem(nuvem({ atualizacao: { estado: "falhou", de: "0.3.0", para: "0.3.1", desde: min(-60), motivo: "x" } }), AGORA).fase).toBe("passo_manual")
+    const publicando = nuvem({ completa: true, publicacao: { computadorId: "pc-1", para: "0.3.1", estado: "em_andamento", desde: min(-3), motivo: null } })
+    expect(faseDaNuvem(publicando, AGORA)).toEqual({ fase: "publicando", versao: "0.3.1", computadorId: "pc-1" })
+    const parada = nuvem({ completa: true, publicacao: { computadorId: "pc-1", para: "0.3.1", estado: "falhou", desde: min(-3), motivo: "403" } })
+    expect(faseDaNuvem(parada, AGORA)).toEqual({ fase: "publicacao_falhou", versao: "0.3.1", motivo: "403" })
+    expect(faseDaNuvem(nuvem(), AGORA)).toEqual({ fase: "passo_manual", versao: "0.3.1", funcoes: true, painel: true })
+    expect(faseDaNuvem(nuvem({ completa: true }), AGORA)).toEqual({ fase: "esperando_publicacao", versao: "0.3.1" })
+    expect(faseDaNuvem(nuvem({ publicado: { funcoes: "0.3.1", painel: "0.3.1" } }), AGORA)).toEqual({ fase: "atualizada", versao: "0.3.1" })
+  })
+
+  it("o painel atrás: com a nuvem dizendo que o painel no ar está em dia, nada de aviso", () => {
+    const emDia = nuvem({ publicado: { funcoes: "0.3.1", painel: "0.3.1" } })
+    expect(painelAtras("0.3.0", [pc("0.3.1")], emDia)).toBeNull()
+    expect(painelAtras("0.3.0", [pc("0.3.1")], nuvem())).toBe("0.3.1")
+    expect(painelAtras("0.3.0", [pc("0.3.1")], null)).toBe("0.3.1")
   })
 })

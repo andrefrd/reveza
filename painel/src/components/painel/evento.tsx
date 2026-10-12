@@ -74,6 +74,12 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
   const vars = { computador: pc(d.computador), conta: conta(d.conta), de: conta(d.de), para: conta(d.para) }
   // nos eventos de atualização, de e para são versões (X.Y.Z), não contas
   const versao = (v: unknown) => (typeof v === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v) ? v : "?")
+  // a nuvem e o painel (0.3.0): a nuvem atualizada, funções e painel publicados, a atualização completa ligada ou não
+  if (d.atualizacao_nuvem === "concluida") return { titulo: t("evento.nuvemAtualizada", { para: versao(d.para) }), detalhe: null }
+  if (d.publicacao === "concluida") return { titulo: t("evento.publicacaoConcluida", { para: versao(d.para), computador: vars.computador }), detalhe: null }
+  if (d.atualizacao_completa === "ligada" || d.atualizacao_completa === "desligada") {
+    return { titulo: t(d.atualizacao_completa === "ligada" ? "evento.completaLigada" : "evento.completaDesligada", { computador: vars.computador }), detalhe: null }
+  }
   if (typeof d.atualizacao === "string" && ["pedida", "concluida", "falhou", "precisa_nuvem"].includes(d.atualizacao)) {
     const v = { computador: vars.computador, de: versao(d.de), para: versao(d.para) }
     const chave =
@@ -122,7 +128,12 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
       break
     case "alerta":
       if (d.motivo === "atualizacao_falhou") {
-        titulo = t("evento.atualizacaoSozinhoFalhou", { computador: vars.computador, para: versao(d.para) })
+        titulo =
+          d.parte === "nuvem"
+            ? t("evento.nuvemFalhou", { para: versao(d.para) })
+            : d.parte === "publicacao"
+              ? t("evento.publicacaoFalhou", { para: versao(d.para), computador: vars.computador })
+              : t("evento.atualizacaoSozinhoFalhou", { computador: vars.computador, para: versao(d.para) })
         detalhe = typeof d.erro === "string" && d.erro ? d.erro.slice(0, 200) : null
       } else if (d.motivo === "sem_livre") titulo = t("evento.semLivre", vars)
       else if (d.motivo === "teste") titulo = t("evento.teste", { canal: canal(d.canal) })

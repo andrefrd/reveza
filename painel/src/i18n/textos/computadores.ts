@@ -24,8 +24,7 @@ export default secao({
           concluida: "Voltou na versão nova ({versao}).",
           falhou: "Não atualizou: {motivo}",
           semSuporte: "Este computador está numa versão que não se atualiza pelo painel: rode {comando} nele.",
-          precisaNuvem:
-            "A versão {versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.",
+          precisaNuvem: "A versão {versao} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, no cartão Atualizações.",
         },
         verificar: "Verificar atualização",
         verificarDica: "Pede a cada computador ligado que confira agora a versão publicada, sem esperar as 6 horas.",
@@ -41,8 +40,7 @@ export default secao({
           antigosPeloBotao:
             "Os computadores numa versão anterior à 0.2.1 só se atualizam sozinhos de madrugada: para eles, use Atualizar todos; depois disso, eles vão sozinhos.",
         },
-        precisaNuvem:
-          "A versão {versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.",
+        precisaNuvem: "A versão {versao} precisa da nuvem atualizada primeiro: use Atualizar a nuvem, acima.",
         andamento: {
           titulo: "Andamento",
           resumo: "{feitos} de {total} na {versao}",
@@ -57,7 +55,7 @@ export default secao({
         modo: {
           titulo: "Atualizar sozinho",
           descricao:
-            "Um computador por vez, só quando ele está calmo (sem troca de conta em andamento nem sessão no limite). Se um voltar para a versão anterior, os outros param e sai um alerta.",
+            "Na ordem: a nuvem primeiro (sem token), depois as funções e o painel (com a atualização completa ligada) e então os computadores, um por vez, só quando ele está calmo (sem troca de conta em andamento nem sessão no limite). Se um passo falhar, os seguintes param e sai um alerta.",
           desligada: { titulo: "Desligada", texto: "Só pelos botões Atualizar e Atualizar todos." },
           madrugada: {
             titulo: "De madrugada (3h às 5h)",
@@ -70,9 +68,44 @@ export default secao({
           },
           salvo: "Atualizar sozinho: {modo}",
         },
-        painelNuvem:
-          "O botão Atualizar troca só o programa dos computadores. O painel e a nuvem são atualizados no computador principal (o que criou a instalação), pelo instalador, que pede os tokens do Supabase e da Vercel:",
         painelAtras: "O painel está na {painel}; os computadores já estão na {computadores}.",
+        nuvem: {
+          titulo: "Nuvem e painel",
+          versoes: "Nuvem {nuvem} · funções {funcoes} · painel {painel}",
+          botao: "Atualizar a nuvem",
+          dica: "A nuvem confere a versão oficial mais nova e aplica sozinha as migrações que faltam, sem token nenhum. Também tenta de novo a publicação que tinha parado.",
+          fase: {
+            desconhecida:
+              "A nuvem ainda não sabe a versão dela (instalação de antes da 0.3.0): rode uma vez a atualização pelo instalador, no computador que criou a instalação.",
+            atualizando: "Atualizando a nuvem para a {versao}…",
+            falhou: "A atualização da nuvem para a {versao} parou: {motivo}. A nuvem segue na versão de antes; Atualizar a nuvem tenta de novo.",
+            publicando: "Publicando as funções e o painel da {versao} em {computador}…",
+            publicacaoFalhou: "A publicação das funções e do painel da {versao} parou: {motivo}. O painel de antes continua no ar; Atualizar a nuvem tenta de novo.",
+            passoManual:
+              "A nuvem está na {versao}, que mexe {partes}: rode a atualização pelo instalador no computador que criou a instalação (ele pede os tokens), ou ligue a atualização completa.",
+            esperandoPublicacao: "Funções e painel da {versao}: um computador ligado publica em instantes.",
+            atualizada: "Nuvem e painel em dia na {versao}.",
+          },
+          partes: {
+            funcoes: "nas funções da nuvem",
+            painel: "no painel",
+            ambas: "nas funções da nuvem e no painel",
+          },
+          computadorDesconhecido: "um computador",
+          completa: {
+            ligada:
+              "Atualização completa ligada: funções e painel novos vão ao ar sozinhos, por um computador da instalação. Os tokens ficam cifrados com a chave do cofre; quem tiver um computador da instalação tem acesso a eles.",
+            desligada: "Atualização completa desligada: funções e painel novos pedem o passo manual. Para ligar, num computador da instalação:",
+            desligar: "Desligar",
+            desligou: "Atualização completa desligada: os tokens cifrados saíram da nuvem. Apague-os também no Supabase e na Vercel.",
+          },
+          resultado: {
+            emDia: "A nuvem já está na versão mais nova ({versao}).",
+            atualizada: "Nuvem atualizada para a {versao}.",
+            atualizando: "Já há uma atualização da nuvem em andamento.",
+            falhou: "A nuvem não atualizou: {motivo}",
+          },
+        },
       },
       descricao:
         "Cada computador tem identidade própria, revogável sozinha. Ele conversa com a nuvem no tempo de atualização que você escolher (5 a 30 segundos); nada fica aberto nele.",
@@ -186,7 +219,7 @@ export default secao({
           concluida: "Back on the new version ({versao}).",
           falhou: "Did not update: {motivo}",
           semSuporte: "This computer runs a version that can't update from the panel: run {comando} on it.",
-          precisaNuvem: "Version {versao} needs the cloud and the panel updated first: run the update on the main computer.",
+          precisaNuvem: "Version {versao} needs the cloud updated first: use Update the cloud, in the Updates card.",
         },
         verificar: "Check for updates",
         verificarDica: "Asks each computer that is on to check the published version now, without waiting the 6 hours.",
@@ -202,7 +235,7 @@ export default secao({
           antigosPeloBotao:
             "Computers on a version before 0.2.1 only update by themselves overnight: for them, use Update all; after that, they go by themselves.",
         },
-        precisaNuvem: "Version {versao} needs the cloud and the panel updated first: run the update on the main computer.",
+        precisaNuvem: "Version {versao} needs the cloud updated first: use Update the cloud, above.",
         andamento: {
           titulo: "Progress",
           resumo: "{feitos} of {total} on {versao}",
@@ -217,7 +250,7 @@ export default secao({
         modo: {
           titulo: "Update by itself",
           descricao:
-            "One computer at a time, only when it is calm (no account switch going on and no session at the limit). If one goes back to the previous version, the others stop and an alert goes out.",
+            "In order: the cloud first (no token), then the functions and the panel (with the full update on) and then the computers, one at a time, only when it is calm (no account switch going on and no session at the limit). If a step fails, the next ones stop and an alert goes out.",
           desligada: { titulo: "Off", texto: "Only through the Update and Update all buttons." },
           madrugada: {
             titulo: "Overnight (3 to 5 a.m.)",
@@ -230,9 +263,44 @@ export default secao({
           },
           salvo: "Update by itself: {modo}",
         },
-        painelNuvem:
-          "The Update button only replaces the computers' program. The panel and the cloud are updated on the main computer (the one that created the installation), by the installer, which asks for the Supabase and Vercel tokens:",
         painelAtras: "The panel is on {painel}; the computers are already on {computadores}.",
+        nuvem: {
+          titulo: "Cloud and panel",
+          versoes: "Cloud {nuvem} · functions {funcoes} · panel {painel}",
+          botao: "Update the cloud",
+          dica: "The cloud checks the newest official version and applies the missing migrations by itself, with no token at all. It also retries a publication that had stopped.",
+          fase: {
+            desconhecida:
+              "The cloud does not know its version yet (installation from before 0.3.0): run the update once with the installer, on the computer that created the installation.",
+            atualizando: "Updating the cloud to {versao}…",
+            falhou: "The cloud update to {versao} stopped: {motivo}. The cloud stays on the previous version; Update the cloud tries again.",
+            publicando: "Publishing the functions and the panel of {versao} on {computador}…",
+            publicacaoFalhou: "Publishing the functions and the panel of {versao} stopped: {motivo}. The previous panel stays online; Update the cloud tries again.",
+            passoManual:
+              "The cloud is on {versao}, which changes {partes}: run the update with the installer on the computer that created the installation (it asks for the tokens), or turn on the full update.",
+            esperandoPublicacao: "Functions and panel of {versao}: a computer that is on publishes them shortly.",
+            atualizada: "Cloud and panel up to date on {versao}.",
+          },
+          partes: {
+            funcoes: "the cloud functions",
+            painel: "the panel",
+            ambas: "the cloud functions and the panel",
+          },
+          computadorDesconhecido: "a computer",
+          completa: {
+            ligada:
+              "Full update on: new functions and panel go online by themselves, through a computer of the installation. The tokens stay encrypted with the vault key; whoever has a computer of the installation has access to them.",
+            desligada: "Full update off: new functions and panel need the manual step. To turn it on, on a computer of the installation:",
+            desligar: "Turn off",
+            desligou: "Full update off: the encrypted tokens left the cloud. Delete them in Supabase and Vercel too.",
+          },
+          resultado: {
+            emDia: "The cloud is already on the newest version ({versao}).",
+            atualizada: "Cloud updated to {versao}.",
+            atualizando: "A cloud update is already in progress.",
+            falhou: "The cloud did not update: {motivo}",
+          },
+        },
       },
       descricao:
         "Each computer has its own identity, revocable on its own. It talks to the cloud at the update interval you choose (5 to 30 seconds); nothing is left open on it.",

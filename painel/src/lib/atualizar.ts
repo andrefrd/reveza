@@ -1,10 +1,11 @@
 // O botão de atualizar o programa de um computador: o painel só pede ({ versao: "mais_nova" }); quem escolhe a versão,
-// baixa e instala é o agente, só com versão oficial publicada e maior que a dele. O painel e a nuvem continuam sendo
-// atualizados pelo instalador no computador principal (com os tokens); a versão que precisa deles primeiro é recusada
-// pelo agente (a trava de compatibilidade), e o painel mostra.
+// baixa e instala é o agente, só com versão oficial publicada e maior que a dele. A nuvem (desde a 0.3.0) se atualiza
+// sozinha, sem token: o painel só pede (Atualizar a nuvem). Funções e painel vão ao ar pelo instalador ou, com a
+// atualização completa ligada, por um computador; a versão que precisa da nuvem primeiro é recusada pelo agente (a
+// trava de compatibilidade), e o painel mostra.
 
 import { compararVersao } from "@/dados/derivados"
-import type { Comando, Computador, Evento, ModoAtualizar, VezAtualizacao } from "@/dados/tipos"
+import type { Comando, Computador, EstadoNuvem, Evento, ModoAtualizar, VezAtualizacao } from "@/dados/tipos"
 
 /** O corpo do pedido: nunca endereço nem caminho, só "a mais nova" (o agente confere tudo). */
 export const PEDIDO_ATUALIZAR = { versao: "mais_nova" } as const
@@ -102,7 +103,9 @@ export function andamentoDaAtualizacao(pc: Computador, cmd: Comando | null, even
 }
 
 /** A versão dos computadores quando ela está na frente da do painel (o painel é atualizado no computador principal). */
-export function painelAtras(versaoPainel: string, computadores: Computador[]): string | null {
+export function painelAtras(versaoPainel: string, computadores: Computador[], nuvem?: EstadoNuvem | null): string | null {
+  // a nuvem sabe que o painel que está no ar é o da versão dela (ou que a versão nova não mexeu no painel): em dia
+  if (nuvem?.versao && !pendenteDaPublicacao(nuvem).painel) return null
   let maisNova: string | null = null
   for (const pc of computadores) if (!pc.revogado && SEMVER.test(pc.versao)) maisNova = maior(maisNova, pc.versao)
   return maisNova && SEMVER.test(versaoPainel) && compararVersao(maisNova, versaoPainel) > 0 ? maisNova : null
@@ -276,4 +279,61 @@ export function andamentoDeTodos(
     const vaiSozinho = modo === "madrugada" || (modo === "assim_que_sair" && entendeAssimQueSair(pc))
     return { pc, estado: vaiSozinho ? ("na_fila" as const) : ("disponivel" as const) }
   })
+}
+
+// ------------------------------------------------------------------------------------------------ a nuvem e o painel
+
+/**
+ * O que falta publicar para a versão da nuvem (a mesma regra do banco, rvz_publicacao_pendente): uma parte está em dia
+ * quando a versão no ar já é a da nuvem (ou mais nova), ou quando a nuvem calculou o mesmo resumo das duas.
+ */
+export function pendenteDaPublicacao(n: EstadoNuvem | null | undefined): { funcoes: boolean; painel: boolean } {
+  if (!n?.versao) return { funcoes: false, painel: false }
+  const v = n.versao
+  const falta = (parte: "funcoes" | "painel") => {
+    const p = n.publicado[parte]
+    if (!p || !SEMVER.test(p)) return true
+    if (compararVersao(p, v) >= 0) return false
+    const a = n.impressoes[v]?.[parte]
+    return !(a && a === n.impressoes[p]?.[parte])
+  }
+  return { funcoes: falta("funcoes"), painel: falta("painel") }
+}
+
+export type FaseNuvem =
+  /** Nuvem de antes da 0.3.0: ela ainda não sabe a versão dela (o instalador grava na primeira atualização). */
+  | { fase: "desconhecida" }
+  | { fase: "atualizando"; versao: string | null }
+  | { fase: "falhou"; versao: string | null; motivo: string }
+  | { fase: "publicando"; versao: string; computadorId: string | null }
+  | { fase: "publicacao_falhou"; versao: string; motivo: string }
+  /** A versão da nuvem mexe em funções ou painel e a atualização completa está desligada. */
+  | { fase: "passo_manual"; versao: string; funcoes: boolean; painel: boolean }
+  /** Com a atualização completa, um computador ligado publica funções e painel em instantes. */
+  | { fase: "esperando_publicacao"; versao: string }
+  | { fase: "atualizada"; versao: string }
+
+/** Em que pé estão a nuvem e o painel, para a linha "Nuvem e painel" do cartão de atualizações. */
+export function faseDaNuvem(n: EstadoNuvem | null | undefined, agora: Date): FaseNuvem {
+  if (!n?.versao) {
+    if (n?.atualizacao?.estado === "atualizando") return { fase: "atualizando", versao: n.atualizacao.para }
+    return { fase: "desconhecida" }
+  }
+  const t = agora.getTime()
+  const recente = (iso: string | null, min: number) => !!iso && t - Date.parse(iso) < min * MIN
+  const at = n.atualizacao
+  if (at?.estado === "atualizando" && recente(at.desde, 10)) return { fase: "atualizando", versao: at.para }
+  if (at?.estado === "falhou" && at.para && compararVersao(at.para, n.versao) > 0) {
+    return { fase: "falhou", versao: at.para, motivo: at.motivo ?? "" }
+  }
+  const pub = n.publicacao
+  if (pub?.para === n.versao && pub.estado === "em_andamento" && recente(pub.desde, 45)) {
+    return { fase: "publicando", versao: n.versao, computadorId: pub.computadorId }
+  }
+  if (pub?.para === n.versao && pub.estado === "falhou") return { fase: "publicacao_falhou", versao: n.versao, motivo: pub.motivo ?? "" }
+  const p = pendenteDaPublicacao(n)
+  if (p.funcoes || p.painel) {
+    return n.completa ? { fase: "esperando_publicacao", versao: n.versao } : { fase: "passo_manual", versao: n.versao, ...p }
+  }
+  return { fase: "atualizada", versao: n.versao }
 }

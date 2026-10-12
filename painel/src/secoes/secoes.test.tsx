@@ -458,7 +458,7 @@ describe("Computadores: o cartão de atualizações (Verificar, a escolha de com
     }
   })
 
-  it("a versão nova precisa da nuvem e do painel: o cartão pede a atualização no computador principal", async () => {
+  it("a versão nova precisa da nuvem primeiro: o cartão manda usar o Atualizar a nuvem", async () => {
     const computadores = linhas.tabelas.computadores.map((c) =>
       c.id === "pc1"
         ? {
@@ -474,8 +474,76 @@ describe("Computadores: o cartão de atualizações (Verificar, a escolha de com
     )
     const { html, erros } = await desenharComputadores([{ chave: "atualizar_sozinho", valor: "assim_que_sair" }], computadores)
     expect(erros).toEqual([])
-    expect(html).toContain("A versão 0.2.1 precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.")
+    expect(html).toContain("A versão 0.2.1 precisa da nuvem atualizada primeiro: use Atualizar a nuvem, acima.")
     expect(html).toContain("esperando a nuvem")
+  })
+
+  /** O texto da linha "Nuvem e painel" (o parágrafo de estado dela). */
+  const linhaNuvem = (html: string) => html.match(/Nuvem e painel<\/span>[\s\S]*?<p[^>]*role="status"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, "") ?? ""
+  // o svg do ícone (ou do spinner) não atravessa outro botão: o atributo capturado é o do próprio Atualizar a nuvem
+  const botaoNuvem = (html: string) => html.match(/<button([^>]*)>(?:<svg(?:(?!<button)[^])*?<\/svg>)?Atualizar a nuvem<\/button>/)
+
+  it("Nuvem e painel, na produção de 12/10 (nuvem de antes da 0.3.0): diz o que fazer, com o botão liberado para o administrador", async () => {
+    const { html, erros, lido } = await desenharComputadores()
+    expect(erros).toEqual([])
+    expect(lido.config.nuvem?.versao).toBeNull()
+    expect(linhaNuvem(html)).toContain("A nuvem ainda não sabe a versão dela (instalação de antes da 0.3.0)")
+    expect(html).toContain("npx github:dantaspaulo/reveza --atualizar")
+    const botao = botaoNuvem(html)
+    expect(botao).not.toBeNull()
+    expect(botao![1]).not.toMatch(/\sdisabled=""/)
+  })
+
+  it("Nuvem e painel em dia: as versões, e a atualização completa desligada com o comando de ligar", async () => {
+    const { html, erros } = await desenharComputadores([
+      { chave: "nuvem_versao", valor: "0.3.0" },
+      { chave: "publicado", valor: { funcoes: "0.3.0", painel: "0.3.0" } },
+      { chave: "nuvem_atualizacao", valor: { estado: "atualizada", de: "0.2.1", para: "0.3.0", desde: new Date().toISOString() } },
+    ])
+    expect(erros).toEqual([])
+    expect(html).toContain("Nuvem 0.3.0 · funções 0.3.0 · painel 0.3.0")
+    expect(linhaNuvem(html)).toBe("Nuvem e painel em dia na 0.3.0.")
+    expect(html).toContain("Atualização completa desligada: funções e painel novos pedem o passo manual.")
+    expect(html).toContain("reveza atualizacao-completa ligar")
+  })
+
+  it("a versão da nuvem mexe só no painel, sem a atualização completa: o passo manual, dizendo o que mudou", async () => {
+    const { html, erros } = await desenharComputadores([
+      { chave: "nuvem_versao", valor: "0.3.1" },
+      { chave: "publicado", valor: { funcoes: "0.3.0", painel: "0.3.0" } },
+      { chave: "impressoes", valor: { "0.3.0": { funcoes: "f1", painel: "p1" }, "0.3.1": { funcoes: "f1", painel: "p2" } } },
+    ])
+    expect(erros).toEqual([])
+    expect(linhaNuvem(html)).toContain("A nuvem está na 0.3.1, que mexe no painel: rode a atualização pelo instalador")
+  })
+
+  it("a atualização da nuvem parou: o motivo, e o botão tenta de novo", async () => {
+    const { html, erros } = await desenharComputadores([
+      { chave: "nuvem_versao", valor: "0.3.0" },
+      { chave: "publicado", valor: { funcoes: "0.3.0", painel: "0.3.0" } },
+      {
+        chave: "nuvem_atualizacao",
+        valor: { estado: "falhou", de: "0.3.0", para: "0.3.1", desde: new Date().toISOString(), motivo: "a migração 0023_x.sql não entrou (nada dela ficou): erro" },
+      },
+    ])
+    expect(erros).toEqual([])
+    expect(linhaNuvem(html)).toContain("A atualização da nuvem para a 0.3.1 parou: a migração 0023_x.sql não entrou (nada dela ficou): erro.")
+    expect(botaoNuvem(html)![1]).not.toMatch(/\sdisabled=""/)
+  })
+
+  it("atualização completa ligada e um computador publicando: o nome dele, e o Desligar para o administrador", async () => {
+    const { html, erros } = await desenharComputadores([
+      { chave: "nuvem_versao", valor: "0.3.1" },
+      { chave: "publicado", valor: { funcoes: "0.3.0", painel: "0.3.0" } },
+      { chave: "atualizacao_completa", valor: { ligada: true, em: new Date().toISOString(), computador: "pc1" } },
+      { chave: "publicacao_vez", valor: { computador: "pc1", para: "0.3.1", desde: new Date().toISOString(), estado: "em_andamento" } },
+    ])
+    expect(erros).toEqual([])
+    const nome = linhas.tabelas.computadores.find((c) => c.id === "pc1")?.nome as string
+    expect(linhaNuvem(html)).toContain(`Publicando as funções e o painel da 0.3.1 em ${nome}`)
+    expect(html).toContain("Atualização completa ligada")
+    expect(html).toMatch(/>Desligar<\/button>/)
+    expect(botaoNuvem(html)![1]).toMatch(/\sdisabled=""/)
   })
 
   it("todos na versão mais nova depois do Verificar", async () => {

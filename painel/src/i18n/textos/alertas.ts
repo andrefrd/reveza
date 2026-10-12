@@ -14,7 +14,7 @@ export default secao({
         resumo_dia: "Resumo do dia",
         troca: "Cada troca de conta",
         limite: "Sessão bateu o limite",
-        atualizacao_falhou: "Atualização sozinha não deu certo",
+        atualizacao_falhou: "Atualização sozinha parou",
       },
       eventosDica: {
         sem_livre: "Todas as contas no limite, pausadas ou em uso.",
@@ -24,7 +24,7 @@ export default secao({
         resumo_dia: "Uso, custo e trocas do dia, uma vez por dia.",
         troca: "Uma mensagem a cada troca (pode ser muita coisa).",
         limite: "Uma sessão foi barrada e trocou de conta.",
-        atualizacao_falhou: "Um computador voltou para a versão anterior ao se atualizar sozinho; os outros pararam.",
+        atualizacao_falhou: "A atualização da nuvem, a publicação das funções e do painel, ou a de um computador parou; os passos seguintes esperam.",
       },
       vazio: {
         titulo: "Nenhum alerta ainda",
@@ -108,7 +108,7 @@ export default secao({
         resumo_dia: "Daily summary",
         troca: "Every account switch",
         limite: "Session hit the limit",
-        atualizacao_falhou: "Automatic update went wrong",
+        atualizacao_falhou: "Automatic update stopped",
       },
       eventosDica: {
         sem_livre: "All accounts at the limit, paused or in use.",
@@ -118,7 +118,7 @@ export default secao({
         resumo_dia: "Usage, cost and switches of the day, once a day.",
         troca: "One message per switch (could be a lot).",
         limite: "A session was blocked and switched accounts.",
-        atualizacao_falhou: "A computer went back to the previous version while updating by itself; the others stopped.",
+        atualizacao_falhou: "The cloud update, the publishing of the functions and the panel, or the update of a computer stopped; the next steps wait.",
       },
       vazio: {
         titulo: "No alerts yet",

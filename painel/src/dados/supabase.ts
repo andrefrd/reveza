@@ -8,7 +8,7 @@ import type { PostgrestError, RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "./cliente"
 import { rotuloDestino } from "./rotulos"
 import { codigoDeAcesso } from "../lib/ligacao"
-import { ErroPainel, type CamposConta, type Fonte, type Recursos } from "./fonte"
+import { ErroPainel, type CamposConta, type Fonte, type Recursos, type ResultadoNuvem } from "./fonte"
 import type {
   AcaoComando,
   Alerta,
@@ -38,6 +38,7 @@ import type {
   RegistroAuditoria,
   SessaoAberta,
   SessaoUso,
+  EstadoNuvem,
   VezAtualizacao,
   WebhookSaida,
 } from "./tipos"
@@ -61,10 +62,11 @@ export const CONFIG_PADRAO: ConfigTroca = {
   exigirDuasEtapas: false,
   atualizarSozinho: "desligada",
   atualizacaoVez: null,
+  nuvem: null,
   proximoRodizioEm: null,
 }
 
-type CampoGravavel = Exclude<keyof ConfigTroca, "proximoRodizioEm" | "atualizacaoVez">
+type CampoGravavel = Exclude<keyof ConfigTroca, "proximoRodizioEm" | "atualizacaoVez" | "nuvem">
 
 /** O jeito de atualizar sozinho a partir do valor do banco: false/true de antes da escolha, ou o nome (0020). */
 export function modoAtualizar(valor: unknown): ModoAtualizar {
@@ -88,6 +90,42 @@ export function paraVez(v: unknown): VezAtualizacao | null {
   const desde = typeof x.desde === "string" ? Date.parse(x.desde) : NaN
   if (!Number.isFinite(desde)) return null
   return { computadorId: x.computador, para: x.para, estado: x.estado, desde: new Date(desde).toISOString() }
+}
+
+const SEMVER = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
+const versaoOuNull = (v: unknown) => (typeof v === "string" && SEMVER.test(v) ? v : null)
+const textoOuNull = (v: unknown, max = 300) => (typeof v === "string" && v ? v.slice(0, max) : null)
+const objeto = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
+
+/**
+ * A nuvem e o painel (0021), a partir da configuração: só o que a tela usa, conferido. Nuvem de antes da 0.3.0 (sem
+ * nada disso): versão null, e a tela diz o que fazer.
+ */
+export function paraNuvem(porChave: Map<string, unknown>): EstadoNuvem {
+  const at = objeto(porChave.get("nuvem_atualizacao"))
+  const pub = objeto(porChave.get("publicado"))
+  const vez = objeto(porChave.get("publicacao_vez"))
+  const estadoAt = at.estado === "atualizando" || at.estado === "atualizada" || at.estado === "falhou" ? at.estado : null
+  const estadoVez = vez.estado === "em_andamento" || vez.estado === "concluida" || vez.estado === "falhou" ? vez.estado : null
+  const impressoes: EstadoNuvem["impressoes"] = {}
+  for (const [v, x] of Object.entries(objeto(porChave.get("impressoes")))) {
+    if (!SEMVER.test(v)) continue
+    const o = objeto(x)
+    impressoes[v] = { funcoes: textoOuNull(o.funcoes, 80) ?? undefined, painel: textoOuNull(o.painel, 80) ?? undefined }
+  }
+  return {
+    versao: versaoOuNull(porChave.get("nuvem_versao")),
+    atualizacao: estadoAt
+      ? { estado: estadoAt, de: versaoOuNull(at.de), para: versaoOuNull(at.para), desde: textoOuNull(at.desde, 40), motivo: textoOuNull(at.motivo) }
+      : null,
+    publicado: { funcoes: versaoOuNull(pub.funcoes), painel: versaoOuNull(pub.painel) },
+    impressoes,
+    completa: objeto(porChave.get("atualizacao_completa")).ligada === true,
+    publicacao:
+      estadoVez && versaoOuNull(vez.para)
+        ? { computadorId: textoOuNull(vez.computador, 40), para: vez.para as string, estado: estadoVez, desde: textoOuNull(vez.desde, 40), motivo: textoOuNull(vez.motivo) }
+        : null,
+  }
 }
 
 export const CHAVES_CONFIG: Record<CampoGravavel, string> = {
@@ -443,6 +481,7 @@ export class FonteSupabase implements Fonte {
     cfg.proximoRodizioEm = typeof prox === "string" ? prox : null
     cfg.atualizarSozinho = modoAtualizar(porChave.get("atualizar_sozinho"))
     cfg.atualizacaoVez = paraVez(porChave.get("atualizacao_vez"))
+    cfg.nuvem = paraNuvem(porChave)
 
     return {
       agora: new Date().toISOString(),
@@ -684,6 +723,22 @@ export class FonteSupabase implements Fonte {
       .maybeSingle()
     if (error) erro(error)
     return data ? paraComando(data) : null
+  }
+
+  async atualizarNuvem(): Promise<ResultadoNuvem> {
+    // a função confere o administrador (com a regra das duas etapas) e só aceita a versão oficial mais nova
+    const { data, error } = await supabase().functions.invoke<ResultadoNuvem & { erro?: string }>("atualizar-nuvem", {
+      body: { acao: "atualizar" },
+    })
+    if (error || !data || typeof data.estado !== "string") {
+      const msg = String(data?.erro ?? error?.message ?? "")
+      throw new ErroPainel(/duas etapas/.test(msg) ? "precisa_aal2" : codigoDoErro(msg), msg)
+    }
+    return { ok: data.ok === true, estado: data.estado, para: data.para ?? null, motivo: data.motivo ?? null }
+  }
+
+  async desligarAtualizacaoCompleta() {
+    await rpc("painel_credenciais_apagar", {})
   }
 
   async criarAcessoComputador(): Promise<{ codigo: string; computadorId: string | null }> {
