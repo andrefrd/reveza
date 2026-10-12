@@ -7,6 +7,30 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.3.0 · 12/10/2026
+
+A nuvem e o painel também se atualizam sozinhos. Esta versão traz mudança no banco e uma função nova da nuvem: atualize
+UMA vez o computador que criou a instalação com `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.3.0.tar.gz --atualizar`
+(com os tokens do Supabase e da Vercel); depois disso a nuvem se atualiza pelo painel, sem token, e os outros
+computadores pelo botão.
+
+- **Atualizar a nuvem** (Computadores → Atualizações → Nuvem e painel): a própria nuvem baixa a versão oficial mais
+  nova e aplica só as migrações que faltam, cada uma inteira ou nada, sem guardar token nenhum. A linha mostra a versão
+  da nuvem, das funções e do painel, e em que pé estão.
+- **Na ordem, inclusive sozinho:** Atualizar sozinho (Desligada, De madrugada, Assim que sair) vale também para a
+  nuvem: nuvem, depois funções e painel, depois os computadores. Um passo que falha para os seguintes, aparece no painel
+  e manda o alerta "Atualização sozinha parou".
+- **Atualização completa (opcional, desligada de fábrica):** `reveza atualizacao-completa ligar` guarda os tokens do
+  Supabase e da Vercel na nuvem cifrados com a chave do cofre (a nuvem não consegue ler), e um computador da instalação
+  publica sozinho as funções e o painel novos. Quem tem um computador da instalação passa a ter esses tokens: use
+  tokens de alcance curto e com validade. Desliga com `reveza atualizacao-completa desligar` ou no painel. O fim da
+  instalação oferece (padrão: não).
+- Sem a atualização completa, o painel mostra o passo manual só quando a versão mexe nas funções ou no painel.
+- **Domínio do painel:** `--dominio contas.meudominio.com` põe ou troca o subdomínio (na instalação ou no
+  `--atualizar`) e `--dominio vercel` volta ao endereço gratuito da Vercel; o passo a passo do DNS vale para qualquer
+  provedor. Sem escolher, o painel fica no endereço gratuito da Vercel (`<projeto>.vercel.app`, com HTTPS).
+- O aviso da versão que precisa da nuvem primeiro aponta para o Atualizar a nuvem.
+
 ## 0.2.1 · 12/10/2026
 
 Verificar atualização na hora e escolher como os computadores se atualizam sozinhos. Atualize primeiro o computador que
