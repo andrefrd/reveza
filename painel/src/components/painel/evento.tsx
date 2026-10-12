@@ -74,11 +74,19 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
   const vars = { computador: pc(d.computador), conta: conta(d.conta), de: conta(d.de), para: conta(d.para) }
   // nos eventos de atualização, de e para são versões (X.Y.Z), não contas
   const versao = (v: unknown) => (typeof v === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v) ? v : "?")
-  if (typeof d.atualizacao === "string" && ["pedida", "concluida", "falhou"].includes(d.atualizacao)) {
+  if (typeof d.atualizacao === "string" && ["pedida", "concluida", "falhou", "precisa_nuvem"].includes(d.atualizacao)) {
     const v = { computador: vars.computador, de: versao(d.de), para: versao(d.para) }
-    const chave = d.atualizacao === "pedida" ? "evento.atualizacaoPedida" : d.atualizacao === "concluida" ? "evento.atualizacaoConcluida" : "evento.atualizacaoFalhou"
+    const chave =
+      d.atualizacao === "pedida"
+        ? "evento.atualizacaoPedida"
+        : d.atualizacao === "concluida"
+          ? "evento.atualizacaoConcluida"
+          : d.atualizacao === "precisa_nuvem"
+            ? "evento.atualizacaoPrecisaNuvem"
+            : "evento.atualizacaoFalhou"
     const motivo = d.atualizacao === "falhou" && typeof d.motivo === "string" ? d.motivo.slice(0, 200) : null
-    return { titulo: t(chave, v), detalhe: motivo ?? (d.sozinho === true ? t("evento.atualizacaoSozinho") : null) }
+    const sozinho = d.sozinho === true ? t(d.modo === "assim_que_sair" ? "evento.atualizacaoAssimQueSair" : "evento.atualizacaoSozinho") : null
+    return { titulo: t(chave, v), detalhe: motivo ?? sozinho }
   }
   // computador novo (0.2.0): o pedido, a entrega da chave e a recusa vêm da nuvem com os dados de cada um
   if (d.ligacao === "pedido") return { titulo: t("evento.ligacaoPedido"), detalhe: null }

@@ -98,7 +98,7 @@ export default function Troca() {
     setSalvando(true)
     const camposConfig = Object.fromEntries(
       (Object.keys(cfg) as (keyof ConfigTroca)[])
-        .filter((k) => k !== "proximoRodizioEm" && cfg[k] !== base.config[k])
+        .filter((k) => k !== "proximoRodizioEm" && k !== "atualizacaoVez" && cfg[k] !== base.config[k])
         .map((k) => [k, cfg[k]])
     ) as Partial<ConfigTroca>
     const [ok] = await acao(async () => {

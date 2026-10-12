@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest"
 
 import { rotuloDestino } from "./rotulos"
-import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, faseDaLigacao, paraDiagnostico } from "./supabase"
+import { CHAVES_CONFIG, CONFIG_PADRAO, codigoDoErro, faseDaLigacao, modoAtualizar, paraDiagnostico, paraVez, valorDoModo } from "./supabase"
 
 describe("FonteSupabase (partes puras)", () => {
   it("mensagens das funções do banco viram códigos traduzíveis", () => {
@@ -40,8 +40,31 @@ describe("FonteSupabase (partes puras)", () => {
       aviso: 90,
       troca: 95,
       rodizioOrdem: "aleatoria",
-      atualizarSozinho: false,
+      atualizarSozinho: "desligada",
     })
+  })
+
+  it("atualizar sozinho: o true de antes é de madrugada, e o painel grava false e true para os jeitos de antes", () => {
+    expect(modoAtualizar(true)).toBe("madrugada")
+    expect(modoAtualizar("madrugada")).toBe("madrugada")
+    expect(modoAtualizar("assim_que_sair")).toBe("assim_que_sair")
+    for (const v of [false, undefined, null, "desligada", "sempre", 1]) expect(modoAtualizar(v)).toBe("desligada")
+    // os agentes de antes da 0.2.1 só entendem true: de madrugada continua sendo true no banco
+    expect(valorDoModo("desligada")).toBe(false)
+    expect(valorDoModo("madrugada")).toBe(true)
+    expect(valorDoModo("assim_que_sair")).toBe("assim_que_sair")
+  })
+
+  it("a vez de atualizar sozinho (escrita pelo banco) só entra conferida", () => {
+    const desde = "2026-10-12T10:00:00.000Z"
+    expect(paraVez({ computador: "pc-1", de: "0.2.0", para: "0.2.1", desde, estado: "em_andamento" })).toEqual({
+      computadorId: "pc-1",
+      para: "0.2.1",
+      estado: "em_andamento",
+      desde,
+    })
+    for (const mau of [null, "x", [], { computador: "pc-1", para: "https://x", desde, estado: "em_andamento" }, { computador: "pc-1", para: "0.2.1", desde: "lixo", estado: "em_andamento" }, { computador: "pc-1", para: "0.2.1", desde, estado: "qualquer" }])
+      expect(paraVez(mau)).toBeNull()
   })
 
   it("o rótulo do destino de um alerta nunca mostra segredo", () => {
@@ -72,6 +95,12 @@ describe("diagnóstico do agente", () => {
       { id: "a", ok: true, detalhe: undefined },
     ])
     expect(paraDiagnostico(null, "1")).toBeNull()
+  })
+
+  it("a trava que o agente conta (a versão nova precisa da nuvem): só X.Y.Z", () => {
+    expect(paraDiagnostico({ em: 1791700000, conferencias: [], precisaNuvem: { para: "0.2.1" } }, "0.2.0")?.precisaNuvem).toEqual({ para: "0.2.1" })
+    expect(paraDiagnostico({ em: 1791700000, conferencias: [], precisaNuvem: { para: "<b>" } }, "0.2.0")?.precisaNuvem).toBeNull()
+    expect(paraDiagnostico({ em: 1791700000, conferencias: [] }, "0.2.0")?.precisaNuvem).toBeNull()
   })
 })
 

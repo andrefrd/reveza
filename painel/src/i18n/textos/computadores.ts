@@ -24,13 +24,49 @@ export default secao({
           concluida: "Voltou na versão nova ({versao}).",
           falhou: "Não atualizou: {motivo}",
           semSuporte: "Este computador está numa versão que não se atualiza pelo painel: rode {comando} nele.",
+          precisaNuvem:
+            "A versão {versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.",
         },
-        sozinho: {
-          titulo: "Atualizar sozinho de madrugada",
-          texto:
-            "Com versão nova publicada, cada computador se atualiza entre 3h e 5h ({fuso}), quando não há troca de conta nem sessão no limite. Um por vez: o próximo só começa quando o anterior voltou na versão nova; se um voltar para a anterior, os outros param e sai um alerta.",
-          ligada: "Atualizar sozinho de madrugada: ligado",
-          desligada: "Atualizar sozinho de madrugada: desligado",
+        verificar: "Verificar atualização",
+        verificarDica: "Pede a cada computador ligado que confira agora a versão publicada, sem esperar as 6 horas.",
+        verificarSemLigado: "Nenhum computador ligado agora para conferir.",
+        verificarFalhou: "Não consegui pedir a conferência a nenhum computador.",
+        conferencia: {
+          conferindo: "Conferindo nos computadores… ({n} de {total} responderam)",
+          semResposta: "Nenhum computador respondeu agora. Os ligados conferem sozinhos a cada 6 horas.",
+          emDia: "Todos na versão mais nova ({versao}).",
+          disponivel: "Versão {versao} disponível para {n} computador(es).",
+          comecaSozinho: "Com “Assim que sair”, eles começam sozinhos, um computador por vez.",
+          esperaMadrugada: "Com “De madrugada”, eles se atualizam sozinhos entre 3h e 5h. Para agora, use Atualizar todos.",
+        },
+        precisaNuvem:
+          "A versão {versao} precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.",
+        andamento: {
+          titulo: "Andamento",
+          resumo: "{feitos} de {total} na {versao}",
+          em_dia: "na {versao}",
+          atualizando: "atualizando…",
+          na_fila: "esperando a vez",
+          na_filaMadrugada: "de madrugada",
+          falhou: "não atualizou",
+          precisa_nuvem: "esperando a nuvem",
+          disponivel: "versão nova disponível",
+        },
+        modo: {
+          titulo: "Atualizar sozinho",
+          descricao:
+            "Um computador por vez, só quando ele está calmo (sem troca de conta em andamento nem sessão no limite). Se um voltar para a versão anterior, os outros param e sai um alerta.",
+          desligada: { titulo: "Desligada", texto: "Só pelos botões Atualizar e Atualizar todos." },
+          madrugada: {
+            titulo: "De madrugada (3h às 5h)",
+            texto: "Com versão nova publicada, cada computador se atualiza entre 3h e 5h ({fuso}).",
+          },
+          assim_que_sair: {
+            titulo: "Assim que sair",
+            texto:
+              "Cada computador confere a versão publicada a cada 6 horas (ou no Verificar atualização) e se atualiza assim que acha uma nova.",
+          },
+          salvo: "Atualizar sozinho: {modo}",
         },
         painelNuvem:
           "O botão Atualizar troca só o programa dos computadores. O painel e a nuvem são atualizados no computador principal (o que criou a instalação), pelo instalador, que pede os tokens do Supabase e da Vercel:",
@@ -148,13 +184,47 @@ export default secao({
           concluida: "Back on the new version ({versao}).",
           falhou: "Did not update: {motivo}",
           semSuporte: "This computer runs a version that can't update from the panel: run {comando} on it.",
+          precisaNuvem: "Version {versao} needs the cloud and the panel updated first: run the update on the main computer.",
         },
-        sozinho: {
-          titulo: "Update by itself overnight",
-          texto:
-            "When a new version is published, each computer updates between 3 and 5 a.m. ({fuso}), when no account switch or session at the limit is going on. One at a time: the next only starts when the previous one is back on the new version; if one goes back to the previous version, the others stop and an alert goes out.",
-          ligada: "Update by itself overnight: on",
-          desligada: "Update by itself overnight: off",
+        verificar: "Check for updates",
+        verificarDica: "Asks each computer that is on to check the published version now, without waiting the 6 hours.",
+        verificarSemLigado: "No computer is on right now to check.",
+        verificarFalhou: "Could not ask any computer to check.",
+        conferencia: {
+          conferindo: "Checking on the computers… ({n} of {total} answered)",
+          semResposta: "No computer answered right now. The ones that are on check by themselves every 6 hours.",
+          emDia: "All on the newest version ({versao}).",
+          disponivel: "Version {versao} available for {n} computer(s).",
+          comecaSozinho: "With “As soon as it comes out”, they start by themselves, one computer at a time.",
+          esperaMadrugada: "With “Overnight”, they update by themselves between 3 and 5 a.m. To do it now, use Update all.",
+        },
+        precisaNuvem: "Version {versao} needs the cloud and the panel updated first: run the update on the main computer.",
+        andamento: {
+          titulo: "Progress",
+          resumo: "{feitos} of {total} on {versao}",
+          em_dia: "on {versao}",
+          atualizando: "updating…",
+          na_fila: "waiting for its turn",
+          na_filaMadrugada: "overnight",
+          falhou: "did not update",
+          precisa_nuvem: "waiting for the cloud",
+          disponivel: "new version available",
+        },
+        modo: {
+          titulo: "Update by itself",
+          descricao:
+            "One computer at a time, only when it is calm (no account switch going on and no session at the limit). If one goes back to the previous version, the others stop and an alert goes out.",
+          desligada: { titulo: "Off", texto: "Only through the Update and Update all buttons." },
+          madrugada: {
+            titulo: "Overnight (3 to 5 a.m.)",
+            texto: "When a new version is published, each computer updates between 3 and 5 a.m. ({fuso}).",
+          },
+          assim_que_sair: {
+            titulo: "As soon as it comes out",
+            texto:
+              "Each computer checks the published version every 6 hours (or on Check for updates) and updates as soon as it finds a new one.",
+          },
+          salvo: "Update by itself: {modo}",
         },
         painelNuvem:
           "The Update button only replaces the computers' program. The panel and the cloud are updated on the main computer (the one that created the installation), by the installer, which asks for the Supabase and Vercel tokens:",

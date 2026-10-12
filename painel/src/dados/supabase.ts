@@ -31,12 +31,14 @@ import type {
   LinhaUso,
   MotivoRecusaLigacao,
   Membro,
+  ModoAtualizar,
   NovoAlerta,
   Papel,
   PontoHistorico,
   RegistroAuditoria,
   SessaoAberta,
   SessaoUso,
+  VezAtualizacao,
   WebhookSaida,
 } from "./tipos"
 
@@ -57,11 +59,36 @@ export const CONFIG_PADRAO: ConfigTroca = {
   esperaEntreTrocasS: 90,
   fuso: "America/Sao_Paulo",
   exigirDuasEtapas: false,
-  atualizarSozinho: false,
+  atualizarSozinho: "desligada",
+  atualizacaoVez: null,
   proximoRodizioEm: null,
 }
 
-type CampoGravavel = Exclude<keyof ConfigTroca, "proximoRodizioEm">
+type CampoGravavel = Exclude<keyof ConfigTroca, "proximoRodizioEm" | "atualizacaoVez">
+
+/** O jeito de atualizar sozinho a partir do valor do banco: false/true de antes da escolha, ou o nome (0020). */
+export function modoAtualizar(valor: unknown): ModoAtualizar {
+  if (valor === true || valor === "madrugada") return "madrugada"
+  if (valor === "assim_que_sair") return "assim_que_sair"
+  return "desligada"
+}
+
+/** O que o painel grava: false e true para os jeitos de antes (os agentes anteriores à 0.2.1 entendem), o nome no novo. */
+export function valorDoModo(modo: ModoAtualizar): boolean | string {
+  return modo === "madrugada" ? true : modo === "assim_que_sair" ? "assim_que_sair" : false
+}
+
+/** A vez de atualizar sozinho (config `atualizacao_vez`, escrita pelo banco): só o que a tela usa, conferido. */
+export function paraVez(v: unknown): VezAtualizacao | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null
+  const x = v as Record<string, unknown>
+  const semver = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
+  if (typeof x.computador !== "string" || typeof x.para !== "string" || !semver.test(x.para)) return null
+  if (x.estado !== "em_andamento" && x.estado !== "concluida" && x.estado !== "falhou") return null
+  const desde = typeof x.desde === "string" ? Date.parse(x.desde) : NaN
+  if (!Number.isFinite(desde)) return null
+  return { computadorId: x.computador, para: x.para, estado: x.estado, desde: new Date(desde).toISOString() }
+}
 
 export const CHAVES_CONFIG: Record<CampoGravavel, string> = {
   auto: "auto",
@@ -217,6 +244,8 @@ export function paraDiagnostico(bruto: unknown, versao: string): Computador["dia
     at && typeof at === "object" && semver(at.para) && typeof at.desde === "string" && Number.isFinite(Date.parse(at.desde))
       ? { para: semver(at.para)!, desde: new Date(Date.parse(at.desde)).toISOString() }
       : null
+  const pn = d.precisaNuvem as Record<string, unknown> | null | undefined
+  const precisaNuvem = pn && typeof pn === "object" && semver(pn.para) ? { para: semver(pn.para)! } : null
   return {
     em,
     versao: typeof d.versao === "string" ? d.versao : versao,
@@ -224,6 +253,7 @@ export function paraDiagnostico(bruto: unknown, versao: string): Computador["dia
     itens,
     versaoNova: semver(d.versaoNova),
     atualizacao,
+    precisaNuvem,
   }
 }
 
@@ -410,6 +440,8 @@ export class FonteSupabase implements Fonte {
     }
     const prox = porChave.get("proximo_rodizio_em")
     cfg.proximoRodizioEm = typeof prox === "string" ? prox : null
+    cfg.atualizarSozinho = modoAtualizar(porChave.get("atualizar_sozinho"))
+    cfg.atualizacaoVez = paraVez(porChave.get("atualizacao_vez"))
 
     return {
       agora: new Date().toISOString(),
@@ -610,7 +642,10 @@ export class FonteSupabase implements Fonte {
         return peso(a) - peso(b)
       })
     }
-    for (const [campo, valor] of lista) await rpc("painel_config", { p_chave: CHAVES_CONFIG[campo], p_valor: valor })
+    for (const [campo, valor] of lista) {
+      const gravar = campo === "atualizarSozinho" ? valorDoModo(valor as ModoAtualizar) : valor
+      await rpc("painel_config", { p_chave: CHAVES_CONFIG[campo], p_valor: gravar })
+    }
   }
 
   async salvarConta(id: string, campos: CamposConta) {

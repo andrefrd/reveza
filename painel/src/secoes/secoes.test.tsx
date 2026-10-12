@@ -359,6 +359,117 @@ describe("telas com os dados da produção (admin em aal1, fator pendente, alert
   })
 })
 
+describe("Computadores: o cartão de atualizações (Verificar, a escolha de como atualizar sozinho e a trava)", () => {
+  const vazioDeConfig = () => linhas.tabelas.config.filter((c) => c.chave !== "atualizar_sozinho" && c.chave !== "atualizacao_vez")
+  async function desenharComputadores(config: Record<string, unknown>[] = [], computadores?: Record<string, unknown>[]) {
+    const antes = { config: linhas.tabelas.config, computadores: linhas.tabelas.computadores }
+    linhas.tabelas.config = [...vazioDeConfig(), ...config]
+    if (computadores) linhas.tabelas.computadores = computadores
+    try {
+      const lido = await fonte.carregar()
+      const { default: Tela } = await TELAS.computadores()
+      return { ...(await desenhar(Tela, fonte, { ...lido, contas: pintarPorWorkspace(lido.contas) })), lido }
+    } finally {
+      linhas.tabelas.config = antes.config
+      linhas.tabelas.computadores = antes.computadores
+    }
+  }
+  /** O botão de rádio da escolha (Radix): marcado ou não. */
+  const marcado = (html: string, modo: string) => {
+    const tag = html.match(new RegExp(`<button[^>]*id="atualizar-${modo}"[^>]*>`))?.[0] ?? ""
+    return /aria-checked="true"/.test(tag)
+  }
+
+  it("a instalação que já estava com a opção ligada (true) aparece em 'De madrugada'; o Verificar aparece liberado", async () => {
+    const { html, erros, lido } = await desenharComputadores([{ chave: "atualizar_sozinho", valor: true }])
+    expect(erros).toEqual([])
+    expect(lido.config.atualizarSozinho).toBe("madrugada")
+    expect(marcado(html, "madrugada")).toBe(true)
+    expect(marcado(html, "desligada")).toBe(false)
+    expect(marcado(html, "assim_que_sair")).toBe(false)
+    expect(html).toContain("De madrugada (3h às 5h)")
+    expect(html).toContain("Assim que sair")
+    const [botao] = [...html.matchAll(/<button([^>]*)>(?:<svg[^]*?<\/svg>)?Verificar atualização<\/button>/g)]
+    expect(botao).toBeDefined()
+    expect(botao![1]).not.toMatch(/\sdisabled=""/)
+  })
+
+  it("sem a opção gravada (a produção de 12/10): 'Desligada'; 'assim_que_sair' gravado aparece marcado", async () => {
+    expect(marcado((await desenharComputadores()).html, "desligada")).toBe(true)
+    expect(marcado((await desenharComputadores([{ chave: "atualizar_sozinho", valor: "assim_que_sair" }])).html, "assim_que_sair")).toBe(true)
+  })
+
+  it("o Verificar achou versão nova com 'Assim que sair': eles começam sozinhos, com o andamento, sem o Atualizar todos", async () => {
+    const { comecarConferencia, guardarLeitura, limparConferencia } = await import("@/lib/atualizar")
+    comecarConferencia({ pc1: 501, pc2: 502 })
+    for (const [id, pc] of [[501, "pc1"], [502, "pc2"]] as const) {
+      guardarLeitura({
+        id,
+        computadorId: pc,
+        acao: "atualizar",
+        estado: "feito",
+        criadoEm: new Date().toISOString(),
+        resposta: { ok: true, conferido: true, atual: "0.1.4", mais_nova: "0.2.1", nova: true, atualizando: null, precisa_nuvem: false },
+      })
+    }
+    try {
+      const vez = { computador: "pc1", de: "0.1.4", para: "0.2.1", desde: new Date().toISOString(), estado: "em_andamento" }
+      const { html, erros } = await desenharComputadores([
+        { chave: "atualizar_sozinho", valor: "assim_que_sair" },
+        { chave: "atualizacao_vez", valor: vez },
+      ])
+      expect(erros).toEqual([])
+      expect(html).toContain("Versão 0.2.1 disponível para 2 computador(es).")
+      expect(html).toContain("eles começam sozinhos, um computador por vez")
+      expect(html).toContain("0 de 2 na 0.2.1")
+      expect(html).toContain("esperando a vez")
+      expect(html).not.toMatch(/Atualizar todos \(/)
+    } finally {
+      limparConferencia()
+    }
+  })
+
+  it("a versão nova precisa da nuvem e do painel: o cartão pede a atualização no computador principal", async () => {
+    const computadores = linhas.tabelas.computadores.map((c) =>
+      c.id === "pc1"
+        ? {
+            ...c,
+            diagnostico: {
+              em: Math.floor(Date.now() / 1000),
+              conferencias: [],
+              versaoNova: "0.2.1",
+              precisaNuvem: { para: "0.2.1" },
+            },
+          }
+        : c
+    )
+    const { html, erros } = await desenharComputadores([{ chave: "atualizar_sozinho", valor: "assim_que_sair" }], computadores)
+    expect(erros).toEqual([])
+    expect(html).toContain("A versão 0.2.1 precisa da nuvem e do painel atualizados primeiro: rode a atualização no computador principal.")
+    expect(html).toContain("esperando a nuvem")
+  })
+
+  it("todos na versão mais nova depois do Verificar", async () => {
+    const { comecarConferencia, guardarLeitura, limparConferencia } = await import("@/lib/atualizar")
+    comecarConferencia({ pc1: 601 })
+    guardarLeitura({
+      id: 601,
+      computadorId: "pc1",
+      acao: "atualizar",
+      estado: "feito",
+      criadoEm: new Date().toISOString(),
+      resposta: { ok: true, conferido: true, atual: "0.1.4", mais_nova: "0.1.4", nova: false, atualizando: null, precisa_nuvem: false },
+    })
+    try {
+      const computadores = linhas.tabelas.computadores.map((c) => (c.id === "pc2" ? { ...c, versao: "0.1.4" } : c))
+      const { html } = await desenharComputadores([], computadores)
+      expect(html).toContain("Todos na versão mais nova (0.1.4).")
+    } finally {
+      limparConferencia()
+    }
+  })
+})
+
 describe("a caixa da tela quebrada", () => {
   async function caixa(erro: unknown) {
     const { SecaoQuebrou } = await import("@/App")

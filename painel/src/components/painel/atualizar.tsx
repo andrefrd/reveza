@@ -1,33 +1,58 @@
 // Atualizar o programa dos computadores pelo painel: o botão por computador ("Versão X disponível · Atualizar"), o
-// "Atualizar todos", a opção de atualizar sozinho de madrugada e o andamento (pedido, atualizando, voltou na versão
-// nova, ou falhou com o motivo). Só administrador pede. O painel e a nuvem não se atualizam por aqui: são do instalador
-// no computador principal.
+// "Verificar atualização" (cada computador ligado confere agora), o "Atualizar todos", a escolha de como cada um se
+// atualiza sozinho (desligada, de madrugada, assim que sair) e o andamento (pedido, atualizando, voltou na versão nova,
+// falhou com o motivo, ou esperando a nuvem). Só administrador pede. O painel e a nuvem não se atualizam por aqui: são
+// do instalador no computador principal, e a versão que precisa deles primeiro é recusada pelo agente.
 
 import * as React from "react"
-import { CircleAlertIcon, DownloadIcon, MoonIcon } from "lucide-react"
+import {
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleXIcon,
+  ClockIcon,
+  CloudAlertIcon,
+  DownloadIcon,
+  MoonIcon,
+  PowerOffIcon,
+  RefreshCwIcon,
+  ZapIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { useComando } from "@/components/painel/dialogo-login"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field"
+import { Progress } from "@/components/ui/progress"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Spinner } from "@/components/ui/spinner"
-import { Switch } from "@/components/ui/switch"
 import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
-import { versaoMaisNova } from "@/dados/derivados"
-import type { Computador } from "@/dados/tipos"
+import { estadoComputador, versaoMaisNova } from "@/dados/derivados"
+import { ErroPainel } from "@/dados/fonte"
+import type { Computador, ModoAtualizar } from "@/dados/tipos"
 import { useT } from "@/i18n"
 import {
   andamentoDaAtualizacao,
+  andamentoDeTodos,
+  assinarConferencia,
   assinarPedidos,
+  comecarConferencia,
+  conferenciaAtual,
+  guardarLeitura,
   guardarPedido,
   painelAtras,
   mudancasDosPedidos,
   pedidoDe,
   pedidoRecente,
+  pedidosEmAberto,
   PEDIDO_ATUALIZAR,
+  PEDIDO_CONFERIR,
+  resultadoDaConferencia,
   versaoDisponivel,
   type AndamentoAtualizacao,
+  type Conferencia,
+  type EstadoNaAtualizacao,
 } from "@/lib/atualizar"
 import { cn } from "@/lib/utils"
 
@@ -92,9 +117,15 @@ export function LinhaAtualizacao({ andamento, className }: { andamento: Andament
           ? t("computadores.atualizacao.fase.concluida", { versao: andamento.para })
           : andamento.fase === "sem_suporte"
             ? t("computadores.atualizacao.fase.semSuporte", { comando: COMANDO_ATUALIZAR_PAINEL })
-            : t("computadores.atualizacao.fase.falhou", { motivo: andamento.motivo || "?" })
+            : andamento.fase === "precisa_nuvem"
+              ? t("computadores.atualizacao.fase.precisaNuvem", { versao: andamento.para })
+              : t("computadores.atualizacao.fase.falhou", { motivo: andamento.motivo || "?" })
   const cor =
-    andamento.fase === "concluida" ? "text-ok" : andamento.fase === "falhou" || andamento.fase === "sem_suporte" ? "text-atencao" : "text-muted-foreground"
+    andamento.fase === "concluida"
+      ? "text-ok"
+      : andamento.fase === "falhou" || andamento.fase === "sem_suporte" || andamento.fase === "precisa_nuvem"
+        ? "text-atencao"
+        : "text-muted-foreground"
   return (
     <p className={cn("flex items-start gap-1.5 text-xs break-words", cor, className)} role="status">
       {andamento.fase === "pedido" || andamento.fase === "atualizando" ? <Spinner className="mt-px size-3" /> : null}
@@ -103,20 +134,105 @@ export function LinhaAtualizacao({ andamento, className }: { andamento: Andament
   )
 }
 
-/** O cartão de cima da tela Computadores: atualizar sozinho, atualizar todos e o aviso do painel e da nuvem. */
+/** Os três jeitos de atualizar sozinho, na ordem da tela. */
+export const MODOS_ATUALIZAR: ModoAtualizar[] = ["desligada", "madrugada", "assim_que_sair"]
+const ICONE_DO_MODO: Record<ModoAtualizar, typeof MoonIcon> = { desligada: PowerOffIcon, madrugada: MoonIcon, assim_que_sair: ZapIcon }
+
+const SEMVER = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
+
+/** Lê de 1,5 em 1,5 s os pedidos da rodada que ainda podem responder (até o prazo da nuvem). */
+function useAcompanharConferencia(c: Conferencia | null) {
+  const { fonte } = useDados()
+  const id = c?.id ?? null
+  React.useEffect(() => {
+    if (id === null) return
+    let vivo = true
+    const ler = async () => {
+      const atual = conferenciaAtual()
+      if (!vivo || !atual || atual.id !== id) return
+      const abertos = pedidosEmAberto(atual)
+      if (!abertos.length) return
+      const lidos = await Promise.all(abertos.map((x) => fonte.lerComando(x).catch(() => null)))
+      if (!vivo) return
+      for (const l of lidos) if (l) guardarLeitura(l)
+      setTimeout(() => void ler(), 1500)
+    }
+    void ler()
+    return () => {
+      vivo = false
+    }
+  }, [fonte, id])
+}
+
+const ICONE_DO_ESTADO: Record<EstadoNaAtualizacao, typeof MoonIcon | null> = {
+  em_dia: CircleCheckIcon,
+  atualizando: null,
+  na_fila: ClockIcon,
+  falhou: CircleXIcon,
+  precisa_nuvem: CloudAlertIcon,
+  disponivel: DownloadIcon,
+}
+
+/** O cartão de cima da tela Computadores: verificar, atualizar todos, como atualizar sozinho e o andamento. */
 export function CartaoAtualizacoes() {
   const { t } = useT()
   const { fonte } = useDados()
   const estado = useEstado()
   const acao = useAcao()
+  const agora = useAgora(5000)
   const { pode } = usePermissao()
   const [enviando, setEnviando] = React.useState(false)
+  const [pedindoConferencia, setPedindoConferencia] = React.useState(false)
   React.useSyncExternalStore(assinarPedidos, mudancasDosPedidos, mudancasDosPedidos)
-  const ativos = estado.computadores.filter((c) => !c.revogado)
-  const outros = versaoMaisNova(ativos.map((c) => c.versao))
+  const conferencia = React.useSyncExternalStore(assinarConferencia, conferenciaAtual, conferenciaAtual)
+  useAcompanharConferencia(conferencia)
+  // a identidade pendente (código de acesso ainda sem uso) não tem programa para atualizar
+  const ativos = estado.computadores.filter((c) => !c.revogado && c.sistema !== "pendente")
+  const modo = estado.config.atualizarSozinho
+  const resultado = conferencia ? resultadoDaConferencia(conferencia, ativos, agora.getTime()) : null
+  const achada = resultado?.fase === "disponivel" || resultado?.fase === "em_dia" ? resultado.versao : null
+  const outros = versaoMaisNova([...ativos.map((c) => c.versao), ...(achada ? [achada] : [])])
   // quem já está atualizando (pedido desta aba, ou o computador contou que está) não entra de novo
   const comAtualizacao = ativos.filter((pc) => versaoDisponivel(pc, outros) && !pedidoRecente(pc.id) && !pc.diagnostico?.atualizacao)
   const atras = painelAtras(__VERSAO_PAINEL__, ativos)
+  // a versão para onde todos vão: a mais nova que alguém conhece (a achada agora, a lida antes, a de outro na frente)
+  const alvo = versaoMaisNova(
+    [achada, outros, estado.config.atualizacaoVez?.para, ...ativos.map((c) => c.diagnostico?.versaoNova)].filter(
+      (v): v is string => typeof v === "string" && SEMVER.test(v)
+    )
+  )
+  const linhas = alvo ? andamentoDeTodos(ativos, alvo, estado.eventos, estado.config.atualizacaoVez, modo, agora) : []
+  const feitos = linhas.filter((l) => l.estado === "em_dia").length
+  const algumAtras = linhas.some((l) => l.estado !== "em_dia")
+  const mostrarAndamento =
+    algumAtras && (modo !== "desligada" || linhas.some((l) => l.estado === "atualizando" || l.estado === "falhou"))
+  const precisaNuvem = !!alvo && (linhas.some((l) => l.estado === "precisa_nuvem") || (resultado?.fase === "disponivel" && resultado.precisaNuvem))
+  const ligados = ativos.filter((pc) => estadoComputador(pc, agora) !== "parado")
+  const conferindo = pedindoConferencia || resultado?.fase === "conferindo"
+
+  const verificar = async () => {
+    if (!ligados.length) {
+      toast.info(t("computadores.atualizacao.verificarSemLigado"))
+      return
+    }
+    setPedindoConferencia(true)
+    const [ok, pedidos] = await acao(async () => {
+      const feitosAgora: Record<string, number> = {}
+      let primeiro: unknown = null
+      for (const pc of ligados) {
+        try {
+          feitosAgora[pc.id] = (await fonte.comando(pc.id, "atualizar", { ...PEDIDO_CONFERIR })).id
+        } catch (e) {
+          primeiro ??= e
+        }
+      }
+      if (!Object.keys(feitosAgora).length) throw primeiro ?? new ErroPainel("falha")
+      return feitosAgora
+    })
+    setPedindoConferencia(false)
+    if (ok) comecarConferencia(pedidos)
+  }
+
   const atualizarTodos = async () => {
     setEnviando(true)
     let pedidos = 0
@@ -133,6 +249,40 @@ export function CartaoAtualizacoes() {
     if (pedidos) toast.success(t("computadores.atualizacao.todosPedido", { n: pedidos }))
     else toast.error(t("computadores.atualizacao.todosFalhou"))
   }
+
+  const escolher = (v: string) => {
+    const novo = v as ModoAtualizar
+    if (!MODOS_ATUALIZAR.includes(novo) || novo === modo) return
+    void acao(
+      () => fonte.salvarConfig({ atualizarSozinho: novo }),
+      t("computadores.atualizacao.modo.salvo", { modo: t(`computadores.atualizacao.modo.${novo}.titulo`) })
+    )
+  }
+
+  // o que dizer na linha de cima: o resultado do Verificar (se houver), senão o que já se sabe
+  const textoDoEstado =
+    resultado?.fase === "conferindo"
+      ? t("computadores.atualizacao.conferencia.conferindo", { n: resultado.responderam, total: resultado.total })
+      : resultado?.fase === "sem_resposta"
+        ? t("computadores.atualizacao.conferencia.semResposta")
+        : resultado?.fase === "em_dia" && !comAtualizacao.length
+          ? t("computadores.atualizacao.conferencia.emDia", { versao: resultado.versao })
+          : resultado?.fase === "disponivel" || (resultado && comAtualizacao.length)
+            ? t("computadores.atualizacao.conferencia.disponivel", { versao: alvo ?? "?", n: Math.max(comAtualizacao.length, resultado?.fase === "disponivel" ? resultado.atras : 0) })
+            : comAtualizacao.length
+              ? t("computadores.atualizacao.disponiveis", { n: comAtualizacao.length })
+              : t("computadores.atualizacao.emDia")
+  const comoSegue =
+    resultado?.fase === "disponivel" && !precisaNuvem
+      ? modo === "assim_que_sair"
+        ? t("computadores.atualizacao.conferencia.comecaSozinho")
+        : modo === "madrugada"
+          ? t("computadores.atualizacao.conferencia.esperaMadrugada")
+          : null
+      : null
+  // com "assim que sair", eles vão sozinhos, um por vez: o Atualizar todos (todos de uma vez) sai do caminho
+  const mostrarTodos = comAtualizacao.length > 0 && modo !== "assim_que_sair"
+
   return (
     <Card>
       <CardHeader>
@@ -146,40 +296,110 @@ export function CartaoAtualizacoes() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-muted-foreground">
-            {comAtualizacao.length
-              ? t("computadores.atualizacao.disponiveis", { n: comAtualizacao.length })
-              : t("computadores.atualizacao.emDia")}
-          </span>
-          {comAtualizacao.length ? (
-            <Button size="sm" disabled={!pode || enviando} onClick={() => void atualizarTodos()}>
-              {enviando ? <Spinner /> : <DownloadIcon />}
-              {t("computadores.atualizacao.todos", { n: comAtualizacao.length })}
-            </Button>
-          ) : null}
-        </div>
-        <label className="flex items-start justify-between gap-4 rounded-lg border p-3">
-          <span className="flex min-w-0 gap-2.5">
-            <MoonIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-medium">{t("computadores.atualizacao.sozinho.titulo")}</span>
-              <span className="text-xs text-muted-foreground">
-                {t("computadores.atualizacao.sozinho.texto", { fuso: estado.config.fuso })}
-              </span>
+          <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5" role="status" aria-live="polite">
+            <span className={cn("flex items-center gap-1.5", resultado?.fase === "em_dia" ? "text-ok" : "text-muted-foreground")}>
+              {conferindo ? <Spinner className="size-3.5" /> : resultado?.fase === "em_dia" ? <CircleCheckIcon className="size-4" aria-hidden /> : null}
+              {textoDoEstado}
             </span>
-          </span>
-          <Switch
-            checked={estado.config.atualizarSozinho}
+            {comoSegue ? <span className="text-xs text-muted-foreground">{comoSegue}</span> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pode || conferindo}
+              title={pode ? t("computadores.atualizacao.verificarDica") : t("computadores.atualizacao.soAdmin")}
+              onClick={() => void verificar()}
+            >
+              {conferindo ? <Spinner /> : <RefreshCwIcon />}
+              {t("computadores.atualizacao.verificar")}
+            </Button>
+            {mostrarTodos ? (
+              <Button size="sm" disabled={!pode || enviando} onClick={() => void atualizarTodos()}>
+                {enviando ? <Spinner /> : <DownloadIcon />}
+                {t("computadores.atualizacao.todos", { n: comAtualizacao.length })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {precisaNuvem && alvo ? (
+          <Alert className="border-atencao-borda bg-atencao-fundo">
+            <CloudAlertIcon className="text-atencao" />
+            <AlertDescription className="flex flex-col gap-1">
+              <span className="text-atencao">{t("computadores.atualizacao.precisaNuvem", { versao: alvo })}</span>
+              <code className="w-fit max-w-full rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-words">{COMANDO_ATUALIZAR_PAINEL}</code>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {mostrarAndamento && alvo ? (
+          <div className="flex flex-col gap-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-medium">{t("computadores.atualizacao.andamento.titulo")}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {t("computadores.atualizacao.andamento.resumo", { feitos, total: linhas.length, versao: alvo })}
+              </span>
+            </div>
+            <Progress value={linhas.length ? (feitos / linhas.length) * 100 : 0} className="h-1.5" aria-hidden />
+            <ul className="flex flex-col gap-1">
+              {linhas.map(({ pc, estado: e }) => {
+                const Icone = ICONE_DO_ESTADO[e]
+                const texto =
+                  e === "em_dia"
+                    ? t("computadores.atualizacao.andamento.em_dia", { versao: alvo })
+                    : e === "na_fila" && modo === "madrugada"
+                      ? t("computadores.atualizacao.andamento.na_filaMadrugada")
+                      : t(`computadores.atualizacao.andamento.${e}`)
+                const cor = e === "em_dia" ? "text-ok" : e === "falhou" || e === "precisa_nuvem" ? "text-atencao" : "text-muted-foreground"
+                return (
+                  <li key={pc.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate">{pc.nome}</span>
+                    <span className={cn("flex shrink-0 items-center gap-1", cor)}>
+                      {Icone ? <Icone className="size-3.5" aria-hidden /> : <Spinner className="size-3" />}
+                      {texto}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium">{t("computadores.atualizacao.modo.titulo")}</span>
+            <span className="text-xs text-muted-foreground">{t("computadores.atualizacao.modo.descricao")}</span>
+          </div>
+          <RadioGroup
+            value={modo}
+            onValueChange={escolher}
             disabled={!pode}
-            aria-label={t("computadores.atualizacao.sozinho.titulo")}
-            onCheckedChange={(v) =>
-              void acao(
-                () => fonte.salvarConfig({ atualizarSozinho: v }),
-                v ? t("computadores.atualizacao.sozinho.ligada") : t("computadores.atualizacao.sozinho.desligada")
+            aria-label={t("computadores.atualizacao.modo.titulo")}
+            className="gap-2 md:grid-cols-3"
+          >
+            {MODOS_ATUALIZAR.map((m) => {
+              const Icone = ICONE_DO_MODO[m]
+              return (
+                <FieldLabel key={m} htmlFor={`atualizar-${m}`}>
+                  <Field orientation="horizontal">
+                    <RadioGroupItem value={m} id={`atualizar-${m}`} />
+                    <FieldContent>
+                      <FieldTitle>
+                        <Icone className="size-3.5 text-muted-foreground" aria-hidden />
+                        {t(`computadores.atualizacao.modo.${m}.titulo`)}
+                      </FieldTitle>
+                      <FieldDescription className="text-xs">
+                        {t(`computadores.atualizacao.modo.${m}.texto`, { fuso: estado.config.fuso })}
+                      </FieldDescription>
+                    </FieldContent>
+                  </Field>
+                </FieldLabel>
               )
-            }
-          />
-        </label>
+            })}
+          </RadioGroup>
+        </div>
+
         <Alert>
           <CircleAlertIcon />
           <AlertDescription className="flex flex-col gap-1">

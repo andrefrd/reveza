@@ -1,12 +1,16 @@
 // O botão de atualizar o programa de um computador: o painel só pede ({ versao: "mais_nova" }); quem escolhe a versão,
 // baixa e instala é o agente, só com versão oficial publicada e maior que a dele. O painel e a nuvem continuam sendo
-// atualizados pelo instalador no computador principal (com os tokens).
+// atualizados pelo instalador no computador principal (com os tokens); a versão que precisa deles primeiro é recusada
+// pelo agente (a trava de compatibilidade), e o painel mostra.
 
 import { compararVersao } from "@/dados/derivados"
-import type { Comando, Computador, Evento } from "@/dados/tipos"
+import type { Comando, Computador, Evento, ModoAtualizar, VezAtualizacao } from "@/dados/tipos"
 
 /** O corpo do pedido: nunca endereço nem caminho, só "a mais nova" (o agente confere tudo). */
 export const PEDIDO_ATUALIZAR = { versao: "mais_nova" } as const
+
+/** O Verificar atualização: o agente lê a versão publicada agora (sem esperar as 6 horas) e conta o que achou. */
+export const PEDIDO_CONFERIR = { conferir: true } as const
 
 const SEMVER = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
 
@@ -34,6 +38,8 @@ export type AndamentoAtualizacao =
   | { fase: "concluida"; para: string }
   | { fase: "falhou"; motivo: string; para: string | null }
   | { fase: "sem_suporte" }
+  /** A versão nova precisa da nuvem e do painel atualizados no computador principal primeiro (a trava do agente). */
+  | { fase: "precisa_nuvem"; para: string }
 
 const MIN = 60_000
 
@@ -58,6 +64,7 @@ export function andamentoDaAtualizacao(pc: Computador, cmd: Comando | null, even
     if (cmd.estado === "pendente") return { fase: "pedido" }
     if (cmd.estado === "reservado") return { fase: "atualizando", para: null, desde: cmd.criadoEm }
     const r = cmd.resposta ?? {}
+    if (cmd.estado !== "feito" && r.precisa_nuvem === true && para(r.para)) return { fase: "precisa_nuvem", para: para(r.para)! }
     if (cmd.estado !== "feito") {
       const erro = typeof r.erro === "string" ? r.erro.slice(0, 300) : cmd.estado
       return { fase: "falhou", motivo: erro, para: null }
@@ -79,11 +86,18 @@ export function andamentoDaAtualizacao(pc: Computador, cmd: Comando | null, even
   if (ultimo?.dados?.atualizacao === "concluida" && t - Date.parse(ultimo.em) < 15 * MIN) {
     return { fase: "concluida", para: para(ultimo.dados.para) ?? pc.versao }
   }
+  const atras = (v: string | null) => !!v && (!SEMVER.test(pc.versao) || compararVersao(pc.versao, v) < 0)
+  if (ultimo?.dados?.atualizacao === "precisa_nuvem" && atras(para(ultimo.dados.para))) {
+    return { fase: "precisa_nuvem", para: para(ultimo.dados.para)! }
+  }
   const alvo = para(ultimo?.dados?.para) ?? para(emCurso?.para)
   if ((ultimo?.dados?.atualizacao === "pedida" || emCurso) && alvo && compararVersao(pc.versao, alvo) < 0) {
     if (t - Date.parse(ultimo?.em ?? emCurso!.desde) < 30 * MIN) return { fase: "atualizando", para: alvo, desde: ultimo?.em ?? emCurso!.desde }
   }
   if (alvo && compararVersao(pc.versao, alvo) >= 0 && ultimo?.dados?.atualizacao === "pedida") return { fase: "concluida", para: alvo }
+  // a trava segue valendo no agente (o diagnóstico conta a cada 10 minutos), mesmo depois de o aviso sair da janela
+  const travada = para(pc.diagnostico?.precisaNuvem?.para)
+  if (atras(travada)) return { fase: "precisa_nuvem", para: travada! }
   return null
 }
 
@@ -125,4 +139,132 @@ export function mudancasDosPedidos(): number {
 export function assinarPedidos(fn: () => void): () => void {
   ouvintes.add(fn)
   return () => ouvintes.delete(fn)
+}
+
+// ------------------------------------------------------------------------------------------------ verificar atualização
+
+/** Uma rodada do Verificar atualização: o pedido feito a cada computador ligado e o que cada um respondeu. */
+export interface Conferencia {
+  id: number
+  em: number
+  /** computador → comando do pedido */
+  pedidos: Record<string, number>
+  /** comando → como ficou na última leitura */
+  lidos: Record<number, Comando>
+}
+
+let conferencia: Conferencia | null = null
+let rodadas = 0
+const ouvintesConferencia = new Set<() => void>()
+
+function avisarConferencia() {
+  for (const o of ouvintesConferencia) o()
+}
+
+/** Começa uma rodada nova (a anterior sai da tela). */
+export function comecarConferencia(pedidos: Record<string, number>, agora = Date.now()): void {
+  conferencia = { id: ++rodadas, em: agora, pedidos: { ...pedidos }, lidos: {} }
+  avisarConferencia()
+}
+
+/** Guarda a leitura de um pedido da rodada atual (o objeto muda, para quem lê a rodada se redesenhar). */
+export function guardarLeitura(c: Comando): void {
+  if (!conferencia || !Object.values(conferencia.pedidos).includes(c.id)) return
+  const antes = conferencia.lidos[c.id]
+  if (antes && antes.estado === c.estado && JSON.stringify(antes.resposta) === JSON.stringify(c.resposta)) return
+  conferencia = { ...conferencia, lidos: { ...conferencia.lidos, [c.id]: c } }
+  avisarConferencia()
+}
+
+export function conferenciaAtual(): Conferencia | null {
+  return conferencia
+}
+
+export function assinarConferencia(fn: () => void): () => void {
+  ouvintesConferencia.add(fn)
+  return () => ouvintesConferencia.delete(fn)
+}
+
+/** Só para os testes. */
+export function limparConferencia(): void {
+  conferencia = null
+  avisarConferencia()
+}
+
+const FIM_DO_COMANDO = new Set(["feito", "recusado", "expirado"])
+/** A nuvem expira o pedido em 2 minutos: depois disso, quem não respondeu não responde mais. */
+export const PRAZO_DA_CONFERENCIA_MS = 150_000
+
+/** Os pedidos da rodada que ainda podem responder (para quem acompanha ler de novo). */
+export function pedidosEmAberto(c: Conferencia, agora = Date.now()): number[] {
+  if (agora - c.em > PRAZO_DA_CONFERENCIA_MS) return []
+  return Object.values(c.pedidos).filter((id) => !FIM_DO_COMANDO.has(c.lidos[id]?.estado ?? "pendente"))
+}
+
+export type ResultadoConferencia =
+  | { fase: "conferindo"; responderam: number; total: number }
+  | { fase: "sem_resposta" }
+  | { fase: "em_dia"; versao: string }
+  | { fase: "disponivel"; versao: string; atras: number; precisaNuvem: boolean }
+
+const ativo = (pc: Computador) => !pc.revogado && pc.sistema !== "pendente"
+
+/**
+ * O resultado da rodada: conferindo (alguém ainda pode responder), ninguém respondeu, todos na mais nova, ou a versão
+ * disponível com quantos computadores estão atrás. A versão mais nova junta a que os agentes acharam agora com a que já
+ * se sabia (a de outro computador na frente, ou a lida antes); o "atrás" é pela versão de cada um, ao vivo.
+ */
+export function resultadoDaConferencia(c: Conferencia, computadores: Computador[], agora = Date.now()): ResultadoConferencia {
+  const ids = Object.values(c.pedidos)
+  const fechados = ids.filter((id) => FIM_DO_COMANDO.has(c.lidos[id]?.estado ?? "pendente"))
+  if (fechados.length < ids.length && agora - c.em <= PRAZO_DA_CONFERENCIA_MS) {
+    return { fase: "conferindo", responderam: fechados.length, total: ids.length }
+  }
+  const respostas = ids
+    .map((id) => c.lidos[id])
+    .filter((x): x is Comando => !!x && x.estado === "feito" && x.resposta?.conferido === true)
+    .map((x) => x.resposta!)
+  // computador de versão anterior recusa o pedido (não sabe conferir): responde, mas sem versão
+  const recusaram = ids.some((id) => c.lidos[id]?.estado === "recusado")
+  if (!respostas.length && !recusaram) return { fase: "sem_resposta" }
+  const ativos = computadores.filter(ativo)
+  const conhecidas = [
+    ...respostas.map((r) => r.mais_nova),
+    ...ativos.flatMap((pc) => [pc.versao, pc.diagnostico?.versaoNova]),
+  ].filter((v): v is string => typeof v === "string" && SEMVER.test(v))
+  const versao = conhecidas.reduce<string | null>((m, v) => maior(m, v), null)
+  if (!versao) return { fase: "sem_resposta" }
+  const atras = ativos.filter((pc) => !SEMVER.test(pc.versao) || compararVersao(pc.versao, versao) < 0).length
+  if (!atras) return { fase: "em_dia", versao }
+  const precisaNuvem =
+    respostas.some((r) => r.precisa_nuvem === true && r.mais_nova === versao) ||
+    ativos.some((pc) => pc.diagnostico?.precisaNuvem?.para === versao)
+  return { fase: "disponivel", versao, atras, precisaNuvem }
+}
+
+// ------------------------------------------------------------------------------------------------ andamento de todos
+
+export type EstadoNaAtualizacao = "em_dia" | "atualizando" | "na_fila" | "falhou" | "precisa_nuvem" | "disponivel"
+
+/**
+ * Onde cada computador está na atualização para `alvo` (o andamento do cartão de cima): já nela, atualizando agora (a vez
+ * é dele, ou ele contou), falhou, travado pela nuvem, esperando a vez (com a atualização sozinha ligada) ou só disponível.
+ */
+export function andamentoDeTodos(
+  computadores: Computador[],
+  alvo: string,
+  eventos: Evento[],
+  vez: VezAtualizacao | null | undefined,
+  modo: ModoAtualizar,
+  agora: Date
+): { pc: Computador; estado: EstadoNaAtualizacao }[] {
+  return computadores.filter(ativo).map((pc) => {
+    if (SEMVER.test(pc.versao) && compararVersao(pc.versao, alvo) >= 0) return { pc, estado: "em_dia" as const }
+    const a = andamentoDaAtualizacao(pc, null, eventos, agora)
+    if (a?.fase === "atualizando" || a?.fase === "pedido") return { pc, estado: "atualizando" as const }
+    if (a?.fase === "falhou") return { pc, estado: "falhou" as const }
+    if (a?.fase === "precisa_nuvem") return { pc, estado: "precisa_nuvem" as const }
+    if (vez?.estado === "em_andamento" && vez.computadorId === pc.id) return { pc, estado: "atualizando" as const }
+    return { pc, estado: modo === "desligada" ? ("disponivel" as const) : ("na_fila" as const) }
+  })
 }

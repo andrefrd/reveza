@@ -4,6 +4,11 @@ export type Idioma = "pt-BR" | "en"
 export type Papel = "admin" | "leitura"
 export type Modo = "limite" | "limiar" | "rodizio"
 export type OrdemRodizio = "aleatoria" | "menor_uso"
+/**
+ * Como cada computador se atualiza sozinho: desligada (o padrão), de madrugada (3h às 5h no fuso) ou assim que sair (na
+ * hora em que ele acha a versão nova). No banco, as duas primeiras são false e true (o true de antes é de madrugada).
+ */
+export type ModoAtualizar = "desligada" | "madrugada" | "assim_que_sair"
 /** "pendente": o código de acesso foi criado e o computador ainda não fez o primeiro contato (dá para revogar). */
 export type Sistema = "macos" | "linux" | "windows" | "pendente"
 export type TipoJanela = "five_hour" | "seven_day" | "seven_day_opus" | "seven_day_sonnet"
@@ -83,6 +88,8 @@ export interface Diagnostico {
   versaoNova?: string | null
   /** A atualização do programa em andamento neste computador. */
   atualizacao?: { para: string; desde: string } | null
+  /** A versão nova que a trava recusou: ela precisa da nuvem e do painel atualizados no computador principal primeiro. */
+  precisaNuvem?: { para: string } | null
 }
 
 export interface Atribuicao {
@@ -117,10 +124,20 @@ export interface ConfigTroca {
   fuso: string
   /** Toda pessoa administradora precisa da verificação em duas etapas (desligado: cada uma escolhe). */
   exigirDuasEtapas: boolean
-  /** Cada computador se atualiza sozinho de madrugada (3h às 5h no fuso), um por vez. Desligado de fábrica. */
-  atualizarSozinho: boolean
+  /** Como cada computador se atualiza sozinho, um por vez. Desligada de fábrica. */
+  atualizarSozinho: ModoAtualizar
+  /** Só leitura: de quem é a vez de atualizar sozinho agora (config `atualizacao_vez`, um computador por vez). */
+  atualizacaoVez?: VezAtualizacao | null
   /** Só leitura: quando o banco marcou o próximo rodízio. */
   proximoRodizioEm: string | null
+}
+
+/** A vez de atualizar sozinho (um computador por vez): quem, para qual versão e como está. */
+export interface VezAtualizacao {
+  computadorId: string
+  para: string
+  estado: "em_andamento" | "concluida" | "falhou"
+  desde: string
 }
 
 export type TipoEvento = "troca" | "aviso" | "limite" | "retomada" | "conexao" | "erro" | "info" | "alerta"

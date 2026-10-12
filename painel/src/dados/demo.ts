@@ -7,6 +7,7 @@ import { codigoDeAcesso } from "@/lib/ligacao"
 import { proximaCorLivre } from "@/lib/cores"
 import { versao as versaoDoInstalador } from "@/lib/instalador"
 import { localizarDemo } from "./demo-idioma"
+import { compararVersao } from "./derivados"
 import { rotuloDestino } from "./rotulos"
 import { ErroPainel, type CamposConta, type Fonte, type Recursos } from "./fonte"
 import type {
@@ -565,7 +566,8 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     esperaEntreTrocasS: 90,
     fuso: "America/Sao_Paulo",
     exigirDuasEtapas: false,
-    atualizarSozinho: false,
+    atualizarSozinho: "desligada",
+    atualizacaoVez: null,
     proximoRodizioEm: null,
   }
   const alertas: Alerta[] = [
@@ -867,11 +869,50 @@ export class FonteDemo implements Fonte {
         if (aviso >= troca) throw new ErroPainel("aviso_maior_que_troca")
       }
       const antes = this.d.config.auto
-      Object.assign(this.d.config, campos)
-      for (const [k, v] of Object.entries(campos)) this.auditar("config", `${k} = ${String(v)}`)
+      const { atualizacaoVez: _vez, proximoRodizioEm: _prox, ...gravaveis } = campos
+      void _vez
+      void _prox
+      Object.assign(this.d.config, gravaveis)
+      for (const [k, v] of Object.entries(gravaveis)) this.auditar("config", `${k} = ${String(v)}`)
       if (campos.auto !== undefined && campos.auto !== antes)
         this.evento("info", "config", { motivo: campos.auto ? "auto_ligada" : "auto_desligada" })
+      // como no banco: mudar a escolha destrava a vez; "assim que sair" começa já com quem sabe da versão nova
+      if (campos.atualizarSozinho !== undefined) {
+        this.d.config.atualizacaoVez = null
+        this.rolarSozinho()
+      }
     })
+  }
+
+  /**
+   * Como os agentes com "assim que sair": um computador por vez, quem está atrás da versão que conhece se atualiza; o
+   * próximo só quando o anterior voltou na versão nova.
+   */
+  private rolarSozinho() {
+    if (this.d.config.atualizarSozinho !== "assim_que_sair" || this.d.config.atualizacaoVez?.estado === "em_andamento") return
+    const pc = this.d.computadores.find(
+      (c) => !c.revogado && c.sistema !== "pendente" && c.diagnostico?.versaoNova && compararVersao(c.diagnostico.versaoNova, c.versao) > 0
+    )
+    if (!pc) return
+    const de = pc.versao
+    const para = pc.diagnostico!.versaoNova!
+    const desde = this.agora().toISOString()
+    this.d.config.atualizacaoVez = { computadorId: pc.id, para, estado: "em_andamento", desde }
+    pc.diagnostico!.atualizacao = { para, desde }
+    this.evento("info", "atualizacao", { computador: pc.id, atualizacao: "pedida", de, para, comando: null, sozinho: true, modo: "assim_que_sair" })
+    this.emitir()
+    setTimeout(() => {
+      pc.versao = para
+      if (pc.diagnostico) {
+        pc.diagnostico.versao = para
+        pc.diagnostico.atualizacao = null
+        pc.diagnostico.itens = pc.diagnostico.itens.map((i) => (i.id === "agente" ? { ...i, detalhe: `versão ${para}, Node 22.12.0` } : i))
+      }
+      this.d.config.atualizacaoVez = { computadorId: pc.id, para, estado: "concluida", desde }
+      this.evento("info", "atualizacao", { computador: pc.id, atualizacao: "concluida", de, para, comando: null, sozinho: true, modo: "assim_que_sair" })
+      this.emitir()
+      this.rolarSozinho()
+    }, 6000)
   }
 
   salvarConta(id: string, campos: CamposConta) {
@@ -980,6 +1021,22 @@ export class FonteDemo implements Fonte {
             diagnostico: { conferencias, em: pc.diagnostico.em, versao: pc.versao, atrasoBuscaMs: pc.diagnostico.atrasoBuscaMs },
           }
         }
+      }
+      if (acao === "atualizar" && corpo.conferir === true) {
+        // como o agente: lê a versão publicada agora e conta o que achou (na demonstração, a do pacote)
+        const maisNova = this.d.versao
+        if (pc.diagnostico) pc.diagnostico.versaoNova = maisNova
+        const nova = compararVersao(maisNova, pc.versao) > 0
+        cmd.resposta = {
+          ok: true,
+          conferido: true,
+          atual: pc.versao,
+          mais_nova: maisNova,
+          nova,
+          atualizando: pc.diagnostico?.atualizacao?.para ?? null,
+          precisa_nuvem: false,
+        }
+        setTimeout(() => this.rolarSozinho(), 1500)
       }
       if (acao === "atualizar" && typeof corpo.versao === "string") {
         // como o agente: baixa a versão oficial mais nova e volta nela uns segundos depois

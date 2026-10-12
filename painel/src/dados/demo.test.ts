@@ -256,11 +256,38 @@ describe("FonteDemo", () => {
     }
   })
 
-  it("atualizar sozinho de madrugada começa desligado e só administrador liga", async () => {
+  it("atualizar sozinho começa desligada e muda para de madrugada ou assim que sair", async () => {
     const f = nova()
-    expect((await f.carregar()).config.atualizarSozinho).toBe(false)
-    await f.salvarConfig({ atualizarSozinho: true })
-    expect((await f.carregar()).config.atualizarSozinho).toBe(true)
+    expect((await f.carregar()).config.atualizarSozinho).toBe("desligada")
+    await f.salvarConfig({ atualizarSozinho: "madrugada" })
+    expect((await f.carregar()).config.atualizarSozinho).toBe("madrugada")
+  })
+
+  it("assim que sair: quem sabe da versão nova se atualiza sozinho, um por vez, e o Verificar conta a versão", async () => {
+    vi.useFakeTimers()
+    try {
+      const f = nova()
+      const antes = await f.carregar()
+      const atras = antes.computadores.filter((c) => c.diagnostico?.versaoNova && c.versao !== c.diagnostico.versaoNova)
+      expect(atras.length).toBeGreaterThan(0)
+      const pc = atras[0]!
+      const p = f.salvarConfig({ atualizarSozinho: "assim_que_sair" })
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      let agora = await f.carregar()
+      expect(agora.config.atualizacaoVez).toMatchObject({ computadorId: pc.id, estado: "em_andamento" })
+      expect(agora.eventos[0]!.dados).toMatchObject({ atualizacao: "pedida", sozinho: true, modo: "assim_que_sair" })
+      await vi.advanceTimersByTimeAsync(7000)
+      agora = await f.carregar()
+      expect(agora.computadores.find((c) => c.id === pc.id)!.versao).toBe(pc.diagnostico!.versaoNova)
+      expect(agora.config.atualizacaoVez?.estado).toBe("concluida")
+      // o Verificar: a resposta conta a versão publicada, como o agente
+      const c = await f.comando(pc.id, "atualizar", { conferir: true })
+      await vi.advanceTimersByTimeAsync(3000)
+      expect((await f.lerComando(c.id))?.resposta).toMatchObject({ ok: true, conferido: true, nova: false })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("avisa quem assinou quando algo muda", async () => {

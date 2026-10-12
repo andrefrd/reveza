@@ -108,7 +108,7 @@ export default secao({
         resumo_dia: "Daily summary",
         troca: "Every account switch",
         limite: "Session hit the limit",
-        atualizacao_falhou: "Overnight update went wrong",
+        atualizacao_falhou: "Automatic update went wrong",
       },
       eventosDica: {
         sem_livre: "All accounts at the limit, paused or in use.",
