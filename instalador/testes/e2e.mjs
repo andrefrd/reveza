@@ -163,11 +163,12 @@ try {
       conferir("a identidade pendente não entrou antes de receber a chave",
         (await sql("select sistema from public.computadores where id = $1", [pc2]))[0]?.sistema === "pendente");
       if (codigoLig) {
-        const { spawnSync } = await import("node:child_process");
-        const errado = spawnSync(process.execPath, [cli, "ligar", "AAAA-AAAA"], { env, encoding: "utf8" });
-        conferir("reveza ligar com o código errado não libera", errado.status !== 0 && /não confere/.test(errado.stderr), (errado.stderr || "").slice(-200));
-        const lib = spawnSync(process.execPath, [cli, "ligar", codigoLig.toLowerCase()], { env, encoding: "utf8" });
-        conferir("reveza ligar CODIGO no computador que tem a chave entrega a chave cifrada", lib.status === 0, (lib.stderr || "").slice(-200));
+        // assíncrono de propósito: o emulador da nuvem roda neste mesmo processo, e um spawnSync travaria o laço de
+        // eventos que responde ao `reveza ligar` (o primeiro ensaio da 0.2.0 no GitHub esperou 5 minutos e caiu assim)
+        const errado = await rodar(process.execPath, [cli, "ligar", "AAAA-AAAA"], env, { saida: false });
+        conferir("reveza ligar com o código errado não libera", errado.codigo !== 0 && /não confere/.test(errado.texto), errado.texto.slice(-200));
+        const lib = await rodar(process.execPath, [cli, "ligar", codigoLig.toLowerCase()], env, { saida: false });
+        conferir("reveza ligar CODIGO no computador que tem a chave entrega a chave cifrada", lib.codigo === 0, lib.texto.slice(-200));
       }
       await Promise.race([terminou2, esperar(120_000)]);
       if (fim2 === null) p2.kill("SIGTERM");
