@@ -19,6 +19,8 @@
 You connect your accounts once; it follows each one's usage, switches near the end and the session goes on on the new account.<br/>
 Logins stay encrypted on your computer, and the dashboard lives in your own cloud.
 
+🌐 **Project website: [https://reveza.ia.br/en](https://reveza.ia.br/en)**
+
 </div>
 
 <br/>

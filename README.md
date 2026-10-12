@@ -19,6 +19,8 @@
 Você conecta as suas contas uma vez; ele acompanha o uso de cada uma, troca perto do fim e a sessão segue na conta nova.<br/>
 Os logins ficam cifrados no seu computador, e o painel mora na sua própria nuvem.
 
+🌐 **Site do projeto: [https://reveza.ia.br](https://reveza.ia.br)**
+
 </div>
 
 <br/>
