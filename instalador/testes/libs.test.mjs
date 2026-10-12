@@ -2,14 +2,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Vercel, listar } from "../lib/vercel.mjs";
 import { criarProjeto, conferirToken, organizacoes, projetos, regiaoSugerida } from "../lib/supabase.mjs";
 import { dnsPronto, dominioValido, passosCloudflare } from "../lib/dominio.mjs";
 import { acharChatTelegram, testar, topicoNtfy } from "../lib/alertas.mjs";
-import { criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath } from "../lib/programa.mjs";
+import { copiarEstado, criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath, voltarAtualizacao } from "../lib/programa.mjs";
 import { emailValido, senhaForte, t } from "../lib/texto.mjs";
 import { lerArgs, soEsteComputador } from "../instalar.mjs";
 
@@ -327,4 +327,56 @@ test("atualizar um computador ligado (sem ref da nuvem) não pede token: só o p
   assert.equal(soEsteComputador(ligado, false), false, "sem --atualizar não vale");
   assert.equal(soEsteComputador({ nuvem: null }, true), false);
   assert.equal(soEsteComputador(null, true), false);
+});
+
+test("antes de atualizar: cópia conferida do estado, sem o programa, e só as 5 cópias mais novas ficam", () => {
+  const base = mkdtempSync(path.join(os.tmpdir(), "reveza-copia-"));
+  try {
+    writeFileSync(path.join(base, "estado.json"), '{"versao":1}');
+    writeFileSync(path.join(base, "instalacao.json"), '{"versao":"0.1.5"}');
+    mkdirSync(path.join(base, "contas", "a1"), { recursive: true });
+    writeFileSync(path.join(base, "contas", "a1", ".credentials.json"), '{"claudeAiOauth":{}}');
+    mkdirSync(path.join(base, "app", "agente"), { recursive: true });
+    writeFileSync(path.join(base, "app", "agente", "x.js"), "programa");
+    mkdirSync(path.join(base, "logs"), { recursive: true });
+    mkdirSync(path.join(base, "copias"), { recursive: true });
+    writeFileSync(path.join(base, "copias", "principal-123.json"), "{}");
+    const c = copiarEstado(base, "antes-0.1.6", { agora: new Date("2026-10-12T03:00:00Z") });
+    assert.equal(readFileSync(path.join(c, "contas", "a1", ".credentials.json"), "utf8"), '{"claudeAiOauth":{}}');
+    assert.equal(readFileSync(path.join(c, "estado.json"), "utf8"), '{"versao":1}');
+    assert.ok(!existsSync(path.join(c, "app")), "o programa não entra na cópia");
+    assert.ok(!existsSync(path.join(c, "logs")));
+    for (let i = 1; i <= 6; i++) copiarEstado(base, "antes-x", { agora: new Date(Date.UTC(2026, 9, 12, 4, i)) });
+    const datadas = readdirSync(path.join(base, "copias")).filter((n) => /^\d{8}-/.test(n));
+    assert.equal(datadas.length, 5, "só as 5 mais novas");
+    assert.ok(!datadas.some((n) => n.startsWith("20261012-030000")), "a mais velha saiu");
+    assert.ok(existsSync(path.join(base, "copias", "principal-123.json")), "a cópia de login antigo da principal fica");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("atualização que não subiu: o programa anterior volta, a configuração volta da cópia e os logins ficam os mais novos", () => {
+  const base = mkdtempSync(path.join(os.tmpdir(), "reveza-volta-"));
+  try {
+    const app = path.join(base, "app");
+    mkdirSync(path.join(base, "app.anterior"), { recursive: true });
+    writeFileSync(path.join(base, "app.anterior", "v"), "0.1.5");
+    mkdirSync(app, { recursive: true });
+    writeFileSync(path.join(app, "v"), "0.1.6");
+    writeFileSync(path.join(base, "estado.json"), '{"formato":"novo"}');
+    mkdirSync(path.join(base, "contas", "a1"), { recursive: true });
+    writeFileSync(path.join(base, "contas", "a1", ".credentials.json"), "token-antigo");
+    const copia = copiarEstado(base, "antes-0.1.6");
+    writeFileSync(path.join(base, "estado.json"), '{"formato":"escrito-pela-nova"}');
+    writeFileSync(path.join(base, "contas", "a1", ".credentials.json"), "token-renovado");
+    assert.equal(voltarAtualizacao(app, base, copia), true);
+    assert.equal(readFileSync(path.join(app, "v"), "utf8"), "0.1.5");
+    assert.equal(readFileSync(path.join(base, "app.falhou", "v"), "utf8"), "0.1.6", "a versão que falhou fica para olhar");
+    assert.equal(readFileSync(path.join(base, "estado.json"), "utf8"), '{"formato":"novo"}');
+    assert.equal(readFileSync(path.join(base, "contas", "a1", ".credentials.json"), "utf8"), "token-renovado", "login renovado não volta para o antigo");
+    assert.equal(voltarAtualizacao(app, base, copia), false, "sem anterior, não há para onde voltar");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });

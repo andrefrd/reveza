@@ -861,6 +861,8 @@ export class Agente {
 
   publico(): Record<string, unknown> {
     return this.trocador.publico({
+      // a versão do programa que está rodando: o instalador confere por ela que a versão nova subiu de verdade
+      programa: VERSAO,
       sombra: this.d.sombra,
       nuvem: { ligada: this.comNuvem, online: this.online, computadorId: this.estado.nuvem.computadorId },
       cofre: !!this.chave,

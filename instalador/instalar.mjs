@@ -33,6 +33,7 @@ import { construir, prepararPasta } from "./lib/painel.mjs";
 import {
   acrescentarPath, ambienteLimpo, criarLancador, existe, gravarConfigLocal, gravarInstalacao, instalarMod, instalarPrograma, lerInstalacao,
   linhaPath, npm, portaOcupada, removerMod, rodar,
+  copiarEstado, voltarAtualizacao,
 } from "./lib/programa.mjs";
 import { conferirToken, criarProjeto, organizacoes, projetos, REGIOES, regiaoSugerida } from "./lib/supabase.mjs";
 import { emailValido, fraco, info, mascara, nao, negrito, ok, perguntador, senhaForte, t, titulo, usarIdioma, verde } from "./lib/texto.mjs";
@@ -328,6 +329,44 @@ async function servico(ctx) {
   }
 }
 
+/** A versão do agente que está respondendo na ponte local (pelo `reveza status --json` do programa instalado). */
+function versaoRodando(ctx) {
+  const r = reveza(ctx, ["status", "--json", ...(ctx.sombra ? ["--sombra"] : [])]);
+  try {
+    const e = JSON.parse(r.saida);
+    return e.parado ? null : e.programa ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Depois de atualizar: o agente novo precisa responder na porta local. Se não responder em 30 s, volta o programa
+ * anterior e a configuração da cópia, sobe o serviço de novo e para com erro (nada se perde: contas e logins ficam).
+ */
+async function conferirSubiu(ctx) {
+  const porta = ctx.sombra ? 7789 : 7788;
+  for (let i = 0; i < 30; i++) {
+    if (versaoRodando(ctx) === VERSAO) return ok(t(`o agente ${VERSAO} está rodando`, `agent ${VERSAO} is running`));
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  nao(t("o agente novo não respondeu em 30 s: voltando para a versão anterior", "the new agent did not answer in 30 s: going back to the previous version"));
+  if (!voltarAtualizacao(ctx.app, BASE, ctx.copia)) throw new Error(t("não havia versão anterior para voltar; veja os logs em ~/.reveza/logs", "there was no previous version to go back to; see the logs in ~/.reveza/logs"));
+  ctx.cli = path.join(ctx.app, "agente", "dist", "src", "cli.js");
+  criarLancador(BIN, ctx.cli);
+  reveza(ctx, ["servico", "instalar", ...(ctx.sombra ? ["--sombra"] : [])]);
+  let voltou = false;
+  for (let i = 0; i < 30 && !voltou; i++) {
+    voltou = await portaOcupada(porta);
+    if (!voltou) await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error(voltou
+    ? t(`a versão ${VERSAO} não subiu; voltei para a anterior, que está rodando. Contas e logins ficaram como estavam. Cópia: ${ctx.copia}`,
+      `version ${VERSAO} did not start; went back to the previous one, which is running. Accounts and logins stayed as they were. Copy: ${ctx.copia}`)
+    : t(`a versão ${VERSAO} não subiu e a anterior também não respondeu: rode reveza doctor. Cópia do estado: ${ctx.copia}`,
+      `version ${VERSAO} did not start and the previous one did not answer either: run reveza doctor. State copy: ${ctx.copia}`));
+}
+
 async function painel(ctx) {
   titulo(t("5/8 Painel", "5/8 Panel"));
   prepararPasta(RAIZ, BUILD);
@@ -612,6 +651,11 @@ async function main() {
     }
 
     await conferir(ctx);
+    if (inst) {
+      // antes de mexer em qualquer coisa: cópia conferida do estado (contas, logins, uso, configuração, identidade)
+      ctx.copia = copiarEstado(BASE, `antes-${VERSAO}`);
+      ok(t(`cópia do estado antes de atualizar: ${ctx.copia}`, `state copy before updating: ${ctx.copia}`));
+    }
     await programa(ctx);
     if (ctx.ligar) await ligar(ctx);
     else if (!ctx.atualizar && !ctx.importar) await perguntarTroca(ctx);
@@ -631,6 +675,7 @@ async function main() {
       ok(t(`troca: modo ${ctx.troca.modo}, automática ${ctx.troca.auto ? "ligada" : "desligada"} (neste computador)`, `switching: ${ctx.troca.modo} mode, automatic ${ctx.troca.auto ? "on" : "off"} (this computer)`));
     }
     await servico(ctx);
+    if (ctx.atualizar && !ctx.semServico) await conferirSubiu(ctx);
     if (ctx.gerencia && ctx.vercel) await painel(ctx);
     // computador ligado: as contas vêm da nuvem (o cofre), nada para conectar aqui
     if (!ctx.atualizar && !ctx.ligar) await contas(ctx);

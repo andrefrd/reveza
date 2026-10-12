@@ -1,6 +1,6 @@
 // O programa no computador: cópia do agente e do mod, build, o comando `reveza`, o mod no Claude Code e o serviço.
 import { spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
@@ -67,6 +67,71 @@ export function copiarPrograma(raiz, destino) {
       },
     });
   }
+}
+
+// ── cópia antes de atualizar ──────────────────────────────────────────────────
+// Pedido do Paulo (12/10/2026): "tem que garantir que não vai perder nada, nenhuma conexão, faz um backup antes".
+// O que é estado do Reveza neste computador (contas e os logins delas, uso, configuração, identidade, ponte local).
+// O programa (app), os logs e o build do painel não entram: o programa anterior já fica em `<app>.anterior`.
+export const ESTADO = ["estado.json", "instalacao.json", "contas", "registro", "ponte.json", "ponte.chave", "ligar-pelo-painel"];
+const MANTER_COPIAS = 5;
+
+function medir(alvo) {
+  if (!existsSync(alvo)) return { arquivos: 0, bytes: 0 };
+  const s = statSync(alvo);
+  if (!s.isDirectory()) return { arquivos: 1, bytes: s.size };
+  let arquivos = 0;
+  let bytes = 0;
+  for (const n of readdirSync(alvo)) {
+    const m = medir(path.join(alvo, n));
+    arquivos += m.arquivos;
+    bytes += m.bytes;
+  }
+  return { arquivos, bytes };
+}
+
+const carimbo = (d) => d.toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+
+/**
+ * Copia o estado para `<base>/copias/<data>-<rotulo>` e confere a cópia (mesmos arquivos e bytes) antes de devolver.
+ * Se a conferência falhar, lança: a atualização para antes de mexer em qualquer coisa. Mantém as 5 cópias mais novas
+ * (as cópias de login antigo da principal, `principal-*.json`, não entram na conta).
+ */
+export function copiarEstado(base, rotulo, { agora = new Date(), manter = MANTER_COPIAS } = {}) {
+  const pasta = path.join(base, "copias");
+  const destino = path.join(pasta, `${carimbo(agora)}-${rotulo.replace(/[^\w.-]/g, "_")}`);
+  mkdirSync(destino, { recursive: true, mode: 0o700 });
+  if (!WIN) chmodSync(pasta, 0o700);
+  for (const item of ESTADO) {
+    const de = path.join(base, item);
+    if (!existsSync(de)) continue;
+    cpSync(de, path.join(destino, item), { recursive: true, preserveTimestamps: true });
+    const a = medir(de);
+    const b = medir(path.join(destino, item));
+    if (a.arquivos !== b.arquivos || a.bytes !== b.bytes) {
+      throw new Error(`a cópia de ${item} não bateu (${b.arquivos}/${a.arquivos} arquivos): nada foi atualizado`);
+    }
+  }
+  const datadas = readdirSync(pasta).filter((n) => /^\d{8}-\d{6}-/.test(n)).sort();
+  for (const velha of datadas.slice(0, Math.max(0, datadas.length - manter))) rmSync(path.join(pasta, velha), { recursive: true, force: true });
+  return destino;
+}
+
+/**
+ * Atualização que não subiu: o programa anterior volta para o lugar (o novo fica em `<app>.falhou`) e a configuração
+ * volta da cópia. As contas e os logins NÃO voltam da cópia: o login pode ter sido renovado depois dela, e o token
+ * antigo já não valeria (eles ficam como estão, que é o mais novo).
+ */
+export function voltarAtualizacao(app, base, copia) {
+  if (!existsSync(`${app}.anterior`)) return false;
+  rmSync(`${app}.falhou`, { recursive: true, force: true });
+  if (existsSync(app)) renameSync(app, `${app}.falhou`);
+  renameSync(`${app}.anterior`, app);
+  for (const item of ["estado.json", "instalacao.json"]) {
+    const de = copia && path.join(copia, item);
+    if (de && existsSync(de)) cpSync(de, path.join(base, item));
+  }
+  return true;
 }
 
 export function instalarPrograma(raiz, app, { log = () => {} } = {}) {
