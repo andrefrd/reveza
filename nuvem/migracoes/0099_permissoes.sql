@@ -23,6 +23,8 @@ grant execute on function
   public.agente_evento(text, text, jsonb), public.agente_ligacao_publicar(text, text), public.agente_ligacao_buscar(),
   public.agente_marcar_login(uuid, boolean), public.agente_cofre_impressao(text),
   public.agente_vez_de_atualizar(text, text), public.agente_atualizacao_resultado(text, text, text), public.agente_migracoes(),
+  public.agente_credenciais_guardar(text, text, text, text, text), public.agente_credenciais_atualizacao(),
+  public.agente_credenciais_apagar(), public.agente_vez_de_publicar(text), public.agente_publicacao_resultado(text, text, text),
   public.agente_ligacao_pedir(jsonb), public.agente_ligacao_receber(), public.agente_ligacoes_abertas(),
   public.agente_ligacao_entregar(uuid, jsonb, jsonb), public.agente_ligacao_recusar(uuid, text),
   public.painel_ligacao_aprovador(uuid, uuid, text),
@@ -34,8 +36,11 @@ grant execute on function
   public.painel_alerta_apagar(uuid), public.painel_webhook(text, text[], boolean, uuid),
   public.painel_chave_api_criar(text, text[]), public.painel_chave_api_revogar(uuid),
   public.painel_meu_idioma(text), public.painel_push_inscrever(text, text, text),
-  public.painel_alerta_segredo(uuid, text), public.painel_webhook_segredo(uuid)
+  public.painel_alerta_segredo(uuid, text), public.painel_webhook_segredo(uuid), public.painel_credenciais_apagar()
 to authenticated;
+
+-- As servico_nuvem_* (0021) não são liberadas para ninguém: só o papel dono do banco as chama, pela conexão que a
+-- plataforma dá à Edge Function atualizar-nuvem.
 
 -- Só a chave de serviço (Edge Functions e pg_cron).
 grant execute on function public.api_conferir_chave(text), public.decidir(uuid, boolean),

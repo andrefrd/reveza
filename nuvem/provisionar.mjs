@@ -183,9 +183,9 @@ export function chavesVapid() {
   return { privada: JSON.stringify(jwk), publica: Buffer.from(pub).toString("base64url") };
 }
 
-// verify_jwt de cada função: as que recebem chamada de fora sem login (API pública com chave própria) ficam false e
-// conferem a chave dentro.
-export const FUNCOES = { convite: true, "computador-novo": true, alertas: false, api: false };
+// verify_jwt de cada função: as que recebem chamada de fora sem login (API pública com chave própria, ou o pg_cron com o
+// segredo dele) ficam false e conferem dentro.
+export const FUNCOES = { convite: true, "computador-novo": true, alertas: false, api: false, "atualizar-nuvem": false };
 
 export async function provisionar({ gerencia, ref, site, admin, smtp, turnstileSegredo, computador: criarComputador = true,
   log = () => {}, fetch: f = globalThis.fetch }) {

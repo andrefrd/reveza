@@ -64,7 +64,7 @@ test("provisiona na ordem certa e não põe segredo no log", async () => {
   assert.ok(iFechar >= 0 && iFechar < iPrimeira, `fechar ${iFechar} antes da 0001 ${iPrimeira}`);
   assert.equal(migracoesAplicadas(chamadas).length, migracoes().length);
   assert.ok(migracoesAplicadas(chamadas).at(-1).includes("0099"), "as permissões vão por último");
-  assert.equal(chamadas.filter((c) => c.url.includes("/functions/deploy")).length, 4, "as 4 funções publicadas");
+  assert.equal(chamadas.filter((c) => c.url.includes("/functions/deploy")).length, 5, "as 5 funções publicadas");
   assert.ok(migracoesAplicadas(chamadas)[0].includes("create type public.papel"));
   const auth = chamadas.filter((c) => c.url.endsWith("/config/auth"));
   assert.equal(auth[0].corpo.disable_signup, true);
