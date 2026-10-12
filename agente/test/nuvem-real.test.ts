@@ -47,6 +47,8 @@ describe("contrato das funções agente_*", () => {
     await n.evento("info", "t", {});
     await n.marcarLogin("c", true);
     await n.ligacaoPublicar(b, b);
+    await n.vezDeAtualizar("0.1.0", "0.1.1");
+    await n.resultadoAtualizacao("0.1.1", "falhou", "voltou");
     r.resposta = { ok: false, erro: "nenhuma ligação aberta" };
     assert.equal(await n.ligacaoBuscar(), null);
     const assinaturas = r.chamadas.map((c) => `${c.fn}(${Object.keys(c.args).join(",")})`);
@@ -65,6 +67,8 @@ describe("contrato das funções agente_*", () => {
       "agente_evento(p_tipo,p_texto,p_dados)",
       "agente_marcar_login(p_conta,p_precisa)",
       "agente_ligacao_publicar(p_embrulho,p_sal)",
+      "agente_vez_de_atualizar(p_de,p_para)",
+      "agente_atualizacao_resultado(p_para,p_estado,p_motivo)",
       "agente_ligacao_buscar()",
     ]);
     assert.equal(r.chamadas[3]!.args.p_cifrado, "AQID");
@@ -190,6 +194,21 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
     } finally {
       m.limpar();
     }
+  });
+
+  test("atualizar sozinho pelo banco: a vez de um computador por vez e o fim que libera", async () => {
+    const apoio = (await import(pathToFileURL(APOIO).href)) as { banco: () => Promise<any> };
+    const db = await apoio.banco();
+    const p1 = await db.computador("p1");
+    const p2 = await db.computador("p2");
+    const n1 = new NuvemRpc({ chamar: (fn, args) => db.rpc(p1, fn, args), horaDoServidor: async () => null });
+    const n2 = new NuvemRpc({ chamar: (fn, args) => db.rpc(p2, fn, args), horaDoServidor: async () => null });
+    assert.deepEqual(await n1.vezDeAtualizar("1.0.0", "1.0.1"), { pode: false, motivo: "desligado" });
+    await db.config("atualizar_sozinho", true);
+    assert.deepEqual(await n1.vezDeAtualizar("1.0.0", "1.0.1"), { pode: true, motivo: null });
+    assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: false, motivo: "outro" });
+    assert.deepEqual(await n1.resultadoAtualizacao("1.0.1", "concluida", null), { ok: true });
+    assert.deepEqual(await n2.vezDeAtualizar("1.0.0", "1.0.1"), { pode: true, motivo: null });
   });
 
   test("ligação de computador novo pelo banco: a chave chega igual, uma vez", async () => {

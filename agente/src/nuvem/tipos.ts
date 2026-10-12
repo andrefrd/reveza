@@ -125,4 +125,8 @@ export interface Nuvem {
   cofreImpressao(impressao: string | null): Promise<string | null>;
   /** Hora do servidor (epoch s), para o `doctor` conferir o relógio. */
   horaDoServidor(): Promise<number | null>;
+  /** Atualizar sozinho: pede a vez (um computador por vez). `motivo` diz por que não (desligado, outro, falhou...). */
+  vezDeAtualizar(de: string, para: string): Promise<{ pode: boolean; motivo: string | null }>;
+  /** Como terminou a atualização sozinha deste computador (libera a vez, ou para os outros e vira alerta). */
+  resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null): Promise<{ ok: boolean }>;
 }

@@ -79,6 +79,13 @@ const MUTANTES = [
   ["atualizar: a versão de dentro do pacote é conferida", "src/atualizar.ts", "pacote.version !== versao", "false", ["atualizar"]],
   ["atualizar: no Linux com systemd, escopo próprio", "src/atualizar.ts", "final = [\"systemd-run\", \"--user\", \"--scope\", \"--quiet\", ...argv];", "final = argv;", ["atualizar"]],
   ["atualizar: uma atualização por vez", "src/agente.ts", "if (pendente) return { ok: false, status: 409, erro: `já há uma atualização em andamento", "if (pendente && Date.now() < 0) return { ok: false, status: 409, erro: `já há uma atualização em andamento", ["atualizar"]],
+  ["sozinho: só das 3h às 5h", "src/atualizar.ts", "return hora >= 3 && hora < 5;", "return hora >= 3;", ["atualizar"]],
+  ["sozinho: no fuso da instalação", "src/atualizar.ts", "hora = formatar(typeof fuso === \"string\" && fuso ? fuso : FUSO_PADRAO);", "hora = formatar(FUSO_PADRAO);", ["atualizar"]],
+  ["sozinho: só com a opção ligada", "src/agente.ts", "if (cfg.atualizar_sozinho !== true || !nuvem", "if (!nuvem", ["atualizar"]],
+  ["sozinho: só num momento calmo", "src/agente.ts", "if (!naMadrugada(t, cfg.fuso) || this.atualizacaoPendente() || !this.momentoCalmo()) return;", "if (!naMadrugada(t, cfg.fuso) || this.atualizacaoPendente()) return;", ["atualizar"]],
+  ["sozinho: sessão no limite não é momento calmo", "src/agente.ts", "if (this.estado.fila.some((f) => f.estado === \"aguardando\" && t - f.em < FILA_VALIDA_S)) return false;", "", ["atualizar"]],
+  ["sozinho: o fim vai à nuvem (falha para os outros)", "src/agente.ts", "if (atual.sozinho && !atual.nuvemAvisada && atual.fim && this.d.nuvem) {", "if (atual.sozinho && !atual.nuvemAvisada && atual.fim && this.d.nuvem && Date.now() < 0) {", ["atualizar"]],
+  ["sozinho: o que nem começou só tenta na noite seguinte", "src/agente.ts", "t - this.sozinhoNaoComecouEm < 12 * 3600", "false", ["atualizar"]],
   ["~/.claude.json: não regravar arquivo ilegível", "src/claudejson.ts", "        const v = JSON.parse(bruto);", "        let v; try { v = JSON.parse(bruto); } catch { v = {}; }", ["doctor-cli"]],
 ];
 

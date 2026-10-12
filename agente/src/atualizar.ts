@@ -28,6 +28,21 @@ export const CONFERIR_VERSAO_S = 6 * 3600;
 export const ATUALIZACAO_VALIDA_S = 30 * 60;
 const PACOTE_MAXIMO = 64 * 1024 * 1024;
 export const TAREFA_ATUALIZAR = "Reveza AI atualizar";
+/** O fuso que o banco usa quando a instalação não tem um (config `fuso`). */
+export const FUSO_PADRAO = "America/Sao_Paulo";
+
+/** Atualizar sozinho só de madrugada: das 3h às 5h no fuso da instalação. */
+export function naMadrugada(epoch: number, fuso: unknown): boolean {
+  const formatar = (tz: string) =>
+    Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(new Date(epoch * 1000)));
+  let hora: number;
+  try {
+    hora = formatar(typeof fuso === "string" && fuso ? fuso : FUSO_PADRAO);
+  } catch {
+    hora = formatar(FUSO_PADRAO); // fuso que este Node não conhece: o do banco
+  }
+  return hora >= 3 && hora < 5;
+}
 
 export function urlDoPacote(versao: string): string {
   if (!VERSAO_VALIDA.test(versao)) throw new Error("versão inválida");

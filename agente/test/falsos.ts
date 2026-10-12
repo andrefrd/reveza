@@ -203,6 +203,10 @@ export class BancoFalso {
   sessoes = new Map<string, SessaoNuvem>();
   ligacoes: { embrulho: Buffer; sal: Buffer; por: string; usada: boolean; expira: number }[] = [];
   cofreImpressao: string | null = null;
+  /** A vez de atualizar sozinho (config `atualizacao_vez` do banco). */
+  vez: { pc: string; de: string; para: string; desde: number; estado: string } | null = null;
+  versoes = new Map<string, string>();
+  alertas: { texto: string; dados: Record<string, unknown> }[] = [];
   config: Record<string, unknown> = { auto: false, modo: "limiar", aviso: 90, troca: 95, intervalo_s: 5, retomar_terminal: false };
   chamadas: { pc: string; fn: string; args: unknown[] }[] = [];
   agora = () => T0;
@@ -248,6 +252,7 @@ export class NuvemFalsa implements Nuvem {
   async ola(versao: string, diagnostico: Record<string, unknown> | null, contaLocal: string | null) {
     this.registrarChamada("ola", versao, diagnostico, contaLocal);
     const b = this.banco;
+    b.versoes.set(this.pc, versao);
     for (const p of b.posse.values()) if (p.pc === this.pc && p.motivo === "uso") p.expira = b.agora() + 120;
     if (!b.atribuicao.has(this.pc) && contaLocal) {
       const c = [...b.contas.values()].find((x) => x.email === contaLocal.toLowerCase());
@@ -386,6 +391,36 @@ export class NuvemFalsa implements Nuvem {
 
   async horaDoServidor() {
     return this.banco.agora();
+  }
+
+  /** As mesmas regras do agente_vez_de_atualizar (0017). */
+  async vezDeAtualizar(de: string, para: string) {
+    this.registrarChamada("vezDeAtualizar", de, para);
+    const b = this.banco;
+    if (b.config.atualizar_sozinho !== true) return { pode: false, motivo: "desligado" };
+    const v = b.vez;
+    if (v?.estado === "falhou") return { pode: false, motivo: "falhou" };
+    if (v?.estado === "em_andamento") {
+      if (v.pc === this.pc) return { pode: false, motivo: "em_andamento" };
+      if (b.versoes.get(v.pc) !== v.para) {
+        if (b.agora() - v.desde <= 45 * 60) return { pode: false, motivo: "outro" };
+        v.estado = "falhou";
+        b.alertas.push({ texto: "não voltou na versão nova em 45 minutos", dados: { motivo: "atualizacao_falhou", computador: v.pc, para: v.para } });
+        return { pode: false, motivo: "falhou" };
+      }
+    }
+    b.vez = { pc: this.pc, de, para, desde: b.agora(), estado: "em_andamento" };
+    return { pode: true, motivo: null };
+  }
+
+  async resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null) {
+    this.registrarChamada("resultadoAtualizacao", para, estado, motivo);
+    const b = this.banco;
+    if (!b.vez || b.vez.pc !== this.pc || b.vez.para !== para || b.vez.estado !== "em_andamento") return { ok: false };
+    if (estado === "nao_comecou") b.vez = null;
+    else b.vez.estado = estado;
+    if (estado === "falhou") b.alertas.push({ texto: motivo ?? "", dados: { motivo: "atualizacao_falhou", computador: this.pc, para } });
+    return { ok: true };
   }
 }
 

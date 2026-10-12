@@ -175,4 +175,14 @@ export class NuvemRpc implements Nuvem {
   horaDoServidor() {
     return this.rpc.horaDoServidor();
   }
+
+  async vezDeAtualizar(de: string, para: string) {
+    const r = await this.chamar("agente_vez_de_atualizar", { p_de: de, p_para: para });
+    return { pode: r.pode === true, motivo: texto(r.motivo) };
+  }
+
+  async resultadoAtualizacao(para: string, estado: "concluida" | "falhou" | "nao_comecou", motivo: string | null) {
+    const r = await this.chamar("agente_atualizacao_resultado", { p_para: para, p_estado: estado, p_motivo: motivo });
+    return { ok: r.ok === true };
+  }
 }

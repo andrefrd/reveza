@@ -37,6 +37,7 @@ import type { Server } from "node:http";
 import {
   acharInstalador,
   ATUALIZACAO_VALIDA_S,
+  naMadrugada,
   CONFERIR_VERSAO_S,
   escolherVersao,
   extrairTarGz,
@@ -88,6 +89,15 @@ const ACOES = new Set(["conectar", "entrar_de_novo", "cancelar_login", "codigo_l
  * por vez, o pedido forjado que chega junto derruba os dois em vez de ser liberado pelo mesmo código (revisão de
  * segurança de 11/10/2026).
  */
+/** O registro da atualização em andamento, com o que o agente já contou dela. */
+type Pendente = AtualizacaoPendente & {
+  sozinho?: boolean;
+  relatado?: boolean;
+  fim?: "concluida" | "falhou";
+  motivo?: string;
+  nuvemAvisada?: boolean;
+};
+
 /** Quanto a conta que a nuvem mandou pode levar para chegar à principal antes de o doctor acusar falha. */
 export const ESPERA_CONTA_S = 120;
 
@@ -144,6 +154,11 @@ export class Agente {
   /** A versão mais nova publicada (lida no máximo a cada 6 h) e quando foi lida. */
   versaoNova: string | null = null;
   private versaoNovaLidaEm = 0;
+  /** A configuração da instalação que veio no último agente_ola (atualizar_sozinho, fuso...). */
+  private configNuvem: Record<string, unknown> = {};
+  private vezPedidaEm = 0;
+  private sozinhoNaoComecouEm = 0;
+  private motivoSemVez: string | null = null;
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
@@ -477,8 +492,10 @@ export class Agente {
       if (this.online === false) this.d.log.info("nuvem de volta");
       this.online = true;
       this.ultimaFalhaNuvem = null;
+      this.configNuvem = r.config ?? {};
       await this.vigiarAtualizacao();
       this.fundo(this.conferirVersaoNova());
+      await this.talvezAtualizarSozinho();
       if (!this.d.sombra) this.aplicarConfig(r.config);
       await this.conferirImpressao(nuvem, r.config);
       this.estado.nuvem.atribuicaoConta = r.atribuicao?.conta_id ?? null;
@@ -710,9 +727,49 @@ export class Agente {
   }
 
   /** A atualização em andamento, se houver (o arquivo é do próprio agente). */
-  atualizacaoPendente(): (AtualizacaoPendente & { sozinho?: boolean; relatado?: boolean }) | null {
-    const p = lerJson<AtualizacaoPendente & { sozinho?: boolean; relatado?: boolean }>(this.arquivoAtualizacao());
+  atualizacaoPendente(): Pendente | null {
+    const p = lerJson<Pendente>(this.arquivoAtualizacao());
     return p && typeof p.para === "string" && typeof p.em === "number" ? p : null;
+  }
+
+  /**
+   * Atualizar sozinho de madrugada (opção da instalação `atualizar_sozinho`, desligada de fábrica): com versão nova
+   * publicada, entre 3h e 5h no fuso da instalação, num momento calmo e com a vez da nuvem (um computador por vez: o
+   * próximo só quando o anterior voltou na versão nova; se um voltou para a anterior, ninguém mais), pelo mesmo
+   * caminho do botão do painel.
+   */
+  async talvezAtualizarSozinho(): Promise<void> {
+    const cfg = this.configNuvem;
+    const nuvem = this.d.nuvem;
+    if (cfg.atualizar_sozinho !== true || !nuvem || this.d.sombra || !this.d.versoes) return;
+    const para = this.versaoNova;
+    if (!para || compararVersao(para, VERSAO) <= 0) return;
+    const t = this.d.relogio.agora();
+    if (!naMadrugada(t, cfg.fuso) || this.atualizacaoPendente() || !this.momentoCalmo()) return;
+    // a vez é pedida no máximo a cada 5 minutos; a que nem começou (o pacote não baixou) só na noite seguinte
+    if (t - this.vezPedidaEm < 300 || t - this.sozinhoNaoComecouEm < 12 * 3600) return;
+    this.vezPedidaEm = t;
+    const vez = await nuvem.vezDeAtualizar(VERSAO, para).catch(() => ({ pode: false, motivo: "sem rede" }));
+    if (!vez.pode) {
+      if (this.motivoSemVez !== vez.motivo) this.d.log.info(`atualizar sozinho para a ${para}: ainda não (${vez.motivo ?? "sem motivo"})`);
+      this.motivoSemVez = vez.motivo;
+      return;
+    }
+    const r = await this.atualizarPrograma(para, { comando: null, sozinho: true });
+    if (!r.ok) {
+      this.sozinhoNaoComecouEm = t;
+      await nuvem.resultadoAtualizacao(para, "nao_comecou", r.erro).catch(() => undefined);
+    }
+  }
+
+  /** Nenhuma troca de conta em andamento nem sessão do assistente no limite agora. */
+  momentoCalmo(): boolean {
+    const t = this.d.relogio.agora();
+    if (this.trocador.geral.ocupada || t - (this.estado.trocadaEm || 0) < 300) return false;
+    if (this.posse?.soltarDepois.size) return false;
+    if (this.estado.fila.some((f) => f.estado === "aguardando" && t - f.em < FILA_VALIDA_S)) return false;
+    const ativa = this.estado.ativa ? this.estado.contas[this.estado.ativa] : null;
+    return !ativa || (pctEfetivo(ativa, t) ?? 0) < 100;
   }
 
   /**
@@ -796,6 +853,7 @@ export class Agente {
     const t = this.d.relogio.agora();
     const r = lerJson<{ codigo?: number; erro?: string }>(p.resultado);
     const terminou = !!r || t - p.em > ATUALIZACAO_VALIDA_S;
+    let atual: Pendente = p;
     if (!p.relatado) {
       let fim: "concluida" | "falhou" | null = null;
       let motivo = "";
@@ -816,7 +874,15 @@ export class Agente {
           motivo: motivo.slice(0, 200),
         });
       }
-      gravarJson(this.arquivoAtualizacao(), { ...p, relatado: true });
+      atual = { ...p, relatado: true, fim, motivo: motivo.slice(0, 200) };
+      gravarJson(this.arquivoAtualizacao(), atual);
+    }
+    // a atualização sozinha conta à nuvem como terminou: libera a vez, ou para os outros e vira alerta
+    if (atual.sozinho && !atual.nuvemAvisada && atual.fim && this.d.nuvem) {
+      const ok = await this.d.nuvem.resultadoAtualizacao(atual.para, atual.fim, atual.motivo || null).then(() => true, () => false);
+      if (!ok) return; // sem rede: conta na busca seguinte
+      atual = { ...atual, nuvemAvisada: true };
+      gravarJson(this.arquivoAtualizacao(), atual);
     }
     if (!terminou) return;
     fs.rmSync(this.arquivoAtualizacao(), { force: true });

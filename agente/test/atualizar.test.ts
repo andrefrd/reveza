@@ -17,6 +17,7 @@ import {
   GithubOficial,
   lerPedido,
   MAIS_NOVA,
+  naMadrugada,
   rodarSeparado,
   TAREFA_ATUALIZAR,
   URL_VERSOES,
@@ -25,7 +26,7 @@ import {
   type FonteVersoes,
 } from "../src/atualizar.js";
 import { VERSAO } from "../src/config.js";
-import { BancoFalso, ExecutorFalso, montar, NuvemFalsa, pastaTemporaria, type Montado } from "./falsos.js";
+import { ativaEm, BancoFalso, ExecutorFalso, montar, NuvemFalsa, pastaTemporaria, RelogioFalso, type Montado } from "./falsos.js";
 
 let tmp: ReturnType<typeof pastaTemporaria> | null = null;
 let m: Montado | null = null;
@@ -466,5 +467,142 @@ describe("o agente atualiza o próprio programa a pedido do painel", () => {
     await m!.agente.conferirVersaoNova();
     assert.equal(leituras, antes + 1);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(m!.c.base, "versoes.json"), "utf8")).maisNova, NOVA);
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ sozinho de madrugada
+
+describe("atualizar sozinho de madrugada", () => {
+  /** 13/10/2026, 03:30 em São Paulo (UTC-3, sem horário de verão). */
+  const MADRUGADA_SP = Date.UTC(2026, 9, 13, 6, 30) / 1000;
+
+  test("a janela é das 3h às 5h no fuso da instalação; fuso desconhecido cai no do banco", () => {
+    assert.equal(naMadrugada(MADRUGADA_SP, "America/Sao_Paulo"), true);
+    assert.equal(naMadrugada(Date.UTC(2026, 9, 13, 5, 59) / 1000, "America/Sao_Paulo"), false, "02:59");
+    assert.equal(naMadrugada(Date.UTC(2026, 9, 13, 6, 0) / 1000, "America/Sao_Paulo"), true, "03:00");
+    assert.equal(naMadrugada(Date.UTC(2026, 9, 13, 8, 0) / 1000, "America/Sao_Paulo"), false, "05:00");
+    assert.equal(naMadrugada(MADRUGADA_SP, "Asia/Tokyo"), false, "15:30 em Tóquio");
+    assert.equal(naMadrugada(Date.UTC(2026, 9, 12, 18, 30) / 1000, "Asia/Tokyo"), true, "03:30 em Tóquio");
+    assert.equal(naMadrugada(MADRUGADA_SP, "Fuso/Inventado"), true);
+    assert.equal(naMadrugada(MADRUGADA_SP, null), true);
+  });
+
+  const montados: Montado[] = [];
+  afterEach(() => {
+    while (montados.length) montados.pop()!.limpar();
+  });
+
+  async function computador(banco: BancoFalso, pc: string, versoes = new VersoesFalsas()) {
+    const relogio = new RelogioFalso();
+    relogio.t = MADRUGADA_SP;
+    const exec = new ExecutorFalso();
+    const mm = await montar({ nuvem: new NuvemFalsa(banco, pc), exec, versoes, relogio });
+    montados.push(mm);
+    mm.agente.estado.trocadaEm = 0;
+    await mm.agente.conferirVersaoNova();
+    return { m: mm, exec, versoes };
+  }
+  function bancoLigado(fuso = "America/Sao_Paulo") {
+    const banco = new BancoFalso();
+    banco.config = { ...banco.config, atualizar_sozinho: true, fuso };
+    banco.agora = () => MADRUGADA_SP;
+    return banco;
+  }
+
+  test("desligada de fábrica: nem pede a vez", async () => {
+    const banco = new BancoFalso();
+    banco.agora = () => MADRUGADA_SP;
+    const a = await computador(banco, "pc-1");
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0);
+    assert.ok(!banco.chamadas.some((c) => c.fn === "vezDeAtualizar"));
+  });
+
+  test("ligada, de madrugada e com versão nova: atualiza pelo mesmo caminho do botão (oficial, maior, --atualizar --sim)", async () => {
+    const banco = bancoLigado();
+    const a = await computador(banco, "pc-1");
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1);
+    assert.deepEqual(a.exec.iniciados[0]!.argv.slice(5), ["--atualizar", "--sim"]);
+    assert.deepEqual(a.versoes.baixadas, [NOVA]);
+    assert.equal(banco.vez?.pc, "pc-1");
+    const ev = banco.eventos.find((e) => (e.dados as { atualizacao?: string }).atualizacao === "pedida")!;
+    assert.equal((ev.dados as { sozinho: boolean }).sozinho, true);
+    assert.match(ev.texto, /sozinho, de madrugada/);
+  });
+
+  test("fora da janela (no fuso da instalação) não atualiza", async () => {
+    const banco = bancoLigado("Asia/Tokyo");
+    const a = await computador(banco, "pc-1");
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0);
+  });
+
+  test("com troca de conta em andamento ou sessão no limite, espera um momento calmo", async () => {
+    const banco = bancoLigado();
+    const a = await computador(banco, "pc-1");
+    a.m.agente.estado.trocadaEm = MADRUGADA_SP - 60;
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0, "trocou de conta há 1 minuto");
+    a.m.agente.estado.trocadaEm = 0;
+    a.m.agente.estado.fila.unshift({ sessao: "s1", cwd: "/x", tipo: "interativa", em: MADRUGADA_SP - 30, estado: "aguardando", conta: null });
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0, "uma sessão parou no limite agora");
+    a.m.agente.estado.fila = [];
+    await ativaEm(a.m, "A", 100);
+    a.m.agente.estado.trocadaEm = 0;
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 0, "a conta em uso está no limite");
+    assert.equal(a.m.agente.momentoCalmo(), false);
+  });
+
+  test("um computador por vez: o segundo só começa quando o primeiro voltou na versão nova", async () => {
+    const banco = bancoLigado();
+    const a = await computador(banco, "pc-1");
+    const b = await computador(banco, "pc-2");
+    await a.m.agente.busca();
+    await b.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1);
+    assert.equal(b.exec.iniciados.length, 0, "o primeiro ainda não voltou");
+    // o primeiro voltou na versão nova (o agente novo manda a versão no agente_ola)
+    banco.versoes.set("pc-1", NOVA);
+    await b.m.relogio.avancar(301_000);
+    await b.m.agente.busca();
+    assert.equal(b.exec.iniciados.length, 1);
+    assert.equal(banco.vez?.pc, "pc-2");
+  });
+
+  test("o primeiro voltou para a anterior: conta à nuvem, vira alerta, e os outros não atualizam", async () => {
+    const banco = bancoLigado();
+    const a = await computador(banco, "pc-1");
+    const b = await computador(banco, "pc-2");
+    await a.m.agente.busca();
+    const p = JSON.parse(fs.readFileSync(path.join(a.m.c.base, "atualizacao.json"), "utf8"));
+    fs.writeFileSync(p.log, "  o agente novo não respondeu em 30 s: voltando para a versão anterior\n");
+    fs.writeFileSync(p.resultado, JSON.stringify({ codigo: 1 }));
+    await a.m.agente.busca(); // o agente antigo, de volta, conta como terminou
+    assert.equal(banco.vez?.estado, "falhou");
+    assert.equal(banco.alertas.length, 1);
+    assert.match(String(banco.alertas[0]!.texto), /voltando para a versão anterior/);
+    await b.m.agente.busca();
+    assert.equal(b.exec.iniciados.length, 0, "os outros param");
+    // e o primeiro também não tenta de novo sozinho
+    await a.m.relogio.avancar(301_000);
+    await a.m.agente.busca();
+    assert.equal(a.exec.iniciados.length, 1);
+  });
+
+  test("o pacote nem baixou: libera a vez sem alerta e só tenta de novo na noite seguinte", async () => {
+    const banco = bancoLigado();
+    const v = new VersoesFalsas();
+    v.falharDownload = "o GitHub respondeu 503 ao pacote";
+    const a = await computador(banco, "pc-1", v);
+    await a.m.agente.busca();
+    assert.equal(banco.vez, null, "a vez ficou livre");
+    assert.equal(banco.alertas.length, 0);
+    v.falharDownload = null;
+    await a.m.relogio.avancar(301_000);
+    await a.m.agente.busca();
+    assert.deepEqual(v.baixadas, [NOVA], "não tenta de novo na mesma noite");
   });
 });
