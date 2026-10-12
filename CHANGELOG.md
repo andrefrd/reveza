@@ -7,6 +7,34 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.2.0 · 12/10/2026
+
+Computador novo sem segredo na tela, e instalação mais curta. Atualize primeiro o computador que criou a instalação
+com `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.2.0.tar.gz --atualizar` (com os tokens do Supabase
+e da Vercel: esta versão traz mudança no banco e o painel novo); os outros computadores, pelo botão Atualizar do painel
+(ou o mesmo comando, que não pede token). O computador que libera um computador novo precisa estar na 0.2.0 (o painel
+avisa).
+
+- **Ligar computador novo sem segredo na tela** (achado 2 da revisão de segurança de 11/10/2026). O painel mostra um
+  código de acesso (`rvzc_`) que só deixa o computador novo **pedir** para entrar: não abre o cofre. O computador novo
+  mostra em letras grandes um código de 8 caracteres; você digita esse código na janela que abre no computador que já
+  usa o Reveza (sem tela: `reveza ligar XXXX-XXXX`). A chave do cofre vai cifrada só para o computador novo (ECDH +
+  HKDF-SHA256 + AES-256-GCM), a nuvem só vê texto cifrado e o apaga na primeira leitura. O pedido vale 10 minutos, um
+  por vez (dois ao mesmo tempo são recusados), e três códigos errados recusam o pedido.
+- A identidade de um computador novo só vira computador depois de receber a chave do cofre. O painel acompanha cada
+  passo e mostra quem liberou; a janela abre na língua do painel.
+- **A troca automática já vem ligada** na instalação nova, antes do limite (avisa em 90%, troca em 95%), sem perguntas.
+  Uma linha diz isso e onde mudar (no painel, em Troca automática). Quem importa de outro gestor fica com a configuração
+  de lá; atualizar não muda a troca de ninguém.
+- **A página de criar cada token abre sozinha** no navegador (Supabase e Vercel), na hora em que o instalador pede. Não
+  abre com `--sim`, sem terminal, por SSH sem tela nem com o token já no ambiente.
+- **Etapas numeradas de 1 até o total do seu caminho** (antes eram sempre "de 8", com números pulados), e perguntas
+  mais claras, cada uma dizendo para que serve.
+- **Saiu:** o código `rvzl_` (levava a senha do computador e a frase do cofre) e o `rvzpc_`, que o instalador agora
+  recusa pedindo um código novo; a frase cifrada para o navegador; e `reveza ligar --painel ligar` (liberar sem
+  perguntar). A frase de 6 palavras fica só como emergência, para um computador já ligado que perdeu a chave
+  (`reveza ligar --mostrar-frase` / `--frase`).
+
 ## 0.1.7 · 12/10/2026
 
 Saúde que conserta, atualizar pelo painel, notificações e a tela de Alertas de volta. Atualize primeiro o computador que
