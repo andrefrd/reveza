@@ -8,11 +8,18 @@
 # `gh workflow run windows.yml -F ensaio=@ensaio.txt`. Só quem escreve no repositório dispara; nada é publicado.
 name: Windows de verdade
 
+# o ensaio acha a sua execução pelo nome (várias sessões podem ensaiar ao mesmo tempo); sem id, o nome de sempre
+run-name: ${{ inputs.id && format('ensaio {0}', inputs.id) || '' }}
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      id:
+        description: "identificador do ensaio (scripts/ensaio.mjs acha a execução pelo nome)"
+        required: false
+        default: ""
       ensaio:
         description: "mudança a ensaiar (git diff | gzip | base64); vazio = a main como está"
         required: false
@@ -40,11 +47,18 @@ jobs:
         # mudança grande não cabe no disparo (65 mil caracteres): ela vai num gist secreto do dono e aqui chega o endereço
         # (a 0.2.0 saiu sem este ensaio no Windows e o teste da janela ficou vermelho depois do lançamento)
         run: |
-          case "$ENSAIO" in
-            "https://gist.githubusercontent.com/$DONO/"*) curl -fsSL "$ENSAIO" ;;
-            https://*|http://*) echo "só gist do dono do repositório" >&2; exit 1 ;;
-            *) printf '%s' "$ENSAIO" ;;
-          esac | base64 -d | gunzip | git apply -v --whitespace=nowarn
+          # só o endereço "raw" de um gist do dono, no formato exato (nada de "..", "@" ou outro usuário no caminho), e sem
+          # seguir redirecionamento
+          G='^https://gist\.githubusercontent\.com/([A-Za-z0-9-]+)/[0-9a-f]{20,40}/raw/[0-9a-f]{40}/[A-Za-z0-9._-]+$'
+          A="$RUNNER_TEMP/ensaio.b64"
+          if [[ "$ENSAIO" =~ $G ]] && [ "${BASH_REMATCH[1]}" = "$DONO" ]; then
+            curl -fsS --proto =https --max-redirs 0 "$ENSAIO" -o "$A"
+          elif [[ "$ENSAIO" == http* ]]; then
+            echo "só gist do dono do repositório" >&2; exit 1
+          else
+            printf '%s' "$ENSAIO" > "$A"
+          fi
+          base64 -d "$A" | gunzip | git apply -v --whitespace=nowarn
           # commita aqui: os testes que empacotam com `git archive HEAD` precisam ver a mudança (o ensaio da 0.2.1 no
           # Windows ficou vermelho só por isso: a migração nova estava na pasta e não no HEAD)
           git add -A
