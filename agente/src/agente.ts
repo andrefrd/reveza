@@ -1102,7 +1102,8 @@ export class Agente {
       }
     }
     await nuvem.ligacaoRecusar(p.computador_id, "codigo_errado").catch(() => undefined);
-    this.trocador.evento("aviso", "Pedido de computador novo recusado: o código digitado não conferiu três vezes.");
+    // "info" fica só aqui (a nuvem registra a recusa com os dados dela, para o painel)
+    this.trocador.evento("info", "Pedido de computador novo recusado: o código digitado não conferiu três vezes.");
   }
 
   private ligacaoDuplaAvisadaEm = 0;
@@ -1110,7 +1111,7 @@ export class Agente {
     // um aviso (com som) por rodada de pedidos, não um por pedido
     if (this.d.relogio.agora() - this.ligacaoDuplaAvisadaEm < 60) return;
     this.ligacaoDuplaAvisadaEm = this.d.relogio.agora();
-    this.trocador.evento("aviso", `Pedido de computador novo: ${LIGACAO_DUPLA}.`);
+    this.trocador.evento("info", `Pedido de computador novo: ${LIGACAO_DUPLA}.`);
     void this.somDaTroca(true);
   }
 

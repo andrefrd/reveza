@@ -133,9 +133,9 @@ test("o caminho inteiro: quem tem a chave vê o pedido, entrega cifrado, o novo 
   // agora sim ele entra (e deixa de ser pendente: não pede nem recebe de novo)
   assert.equal((await b.rpc(novo, "agente_registrar", { p_nome: "novo", p_sistema: "linux", p_versao: "0.2.0" })).computador_id, novo.pc);
   await assert.rejects(b.rpc(novo, "agente_ligacao_receber", {}), /já entrou/);
-  const eventos = (await b.sql("select texto from public.eventos order by id")).map((e) => e.texto);
-  assert.ok(eventos.some((t) => /pediu para entrar/.test(t)));
-  assert.ok(eventos.some((t) => /entregue cifrada só para ele/.test(t)));
+  const eventos = await b.sql("select texto, dados from public.eventos order by id");
+  assert.ok(eventos.some((e) => /pediu para entrar/.test(e.texto) && e.dados.ligacao === "pedido"));
+  assert.ok(eventos.some((e) => /entregue cifrada só para ele/.test(e.texto) && e.dados.ligacao === "entregue" && e.dados.por === velho.pc));
 });
 
 test("dois pedidos abertos ao mesmo tempo: a entrega recusa os dois (falha fechada)", async () => {

@@ -129,7 +129,8 @@ begin
     raise exception 'este pedido já fechou: gere outro código no painel' using errcode = '42501';
   end if;
   if v_novo is not null then
-    perform public.rvz_evento('info', 'Um computador novo pediu para entrar (o código aparece nele).', jsonb_build_object('computador', v_pc));
+    perform public.rvz_evento('info', 'Um computador novo pediu para entrar (o código aparece nele).',
+                              jsonb_build_object('computador', v_pc, 'ligacao', 'pedido'));
   end if;
   return jsonb_build_object('ok', true, 'computador_id', v_pc, 'expira_em', v.expira_em);
 end $$;
@@ -197,7 +198,7 @@ begin
     update public.ligacao_pedidos set recusado = 'dois_pedidos', recusado_em = now()
      where publica is not null and entregue_em is null and recusado is null and expira_em > now();
     perform public.rvz_evento('aviso', 'Dois computadores novos pediram para entrar ao mesmo tempo: os dois foram recusados.',
-                              jsonb_build_object('computador', v_pc));
+                              jsonb_build_object('por', v_pc, 'ligacao', 'recusado', 'motivo', 'dois_pedidos'));
     return jsonb_build_object('ok', false, 'erro', 'dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel');
   end if;
   select l.* into v from public.ligacao_pedidos l
@@ -211,7 +212,7 @@ begin
   if v.expira_em <= now() then return jsonb_build_object('ok', false, 'erro', 'pedido vencido'); end if;
   update public.ligacao_pedidos set envelope = v_env, entregue_por = v_pc, entregue_em = now() where computador_id = p_computador;
   perform public.rvz_evento('info', 'Computador novo liberado: a chave do cofre foi entregue cifrada só para ele.',
-                            jsonb_build_object('computador', p_computador, 'por', v_pc));
+                            jsonb_build_object('computador', p_computador, 'por', v_pc, 'ligacao', 'entregue'));
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -231,7 +232,7 @@ begin
         when 'dois_pedidos' then 'Dois computadores novos pediram para entrar ao mesmo tempo: os dois foram recusados.'
         when 'codigo_errado' then 'Pedido de computador novo recusado: o código digitado não conferiu três vezes.'
         else 'Pedido de computador novo recusado na tela de um computador.' end,
-      jsonb_build_object('computador', p_computador, 'por', v_pc));
+      jsonb_build_object('computador', p_computador, 'por', v_pc, 'ligacao', 'recusado', 'motivo', p_motivo));
   end if;
   return jsonb_build_object('ok', v_feito);
 end $$;
