@@ -23,7 +23,7 @@ Este documento é a fonte de verdade para quem constrói. Decisões tomadas pelo
 |---|---|---|---|
 | `agente` | Node 18+ (TypeScript compilado), só módulos nativos + `@supabase/supabase-js` | cada computador | troca a credencial local, lê o uso das contas que tem em mãos, renova login, cifra e decifra o cofre, registra uso das transcrições, retoma sessão |
 | `mod` | módulo de hooks do Claude Code | cada sessão | uso ao vivo, aviso de limite, retomada da sessão, `/reveza` |
-| `nuvem` | Supabase (Postgres + RLS, Auth com MFA, Edge Functions, pg_cron) | projeto da pessoa | estado, decisões, cofre cifrado, filas, alertas, auditoria |
+| `nuvem` | Supabase (Postgres + RLS, Auth com MFA, Edge Functions, pg_cron) | projeto da pessoa | estado, decisões, cofre cifrado, filas, alertas, auditoria e a própria atualização (`atualizar-nuvem`, 7e) |
 | `painel` | Vite + React + TypeScript + Tailwind v4 + shadcn/ui (blocos oficiais) + React Bits grátis (baixado na instalação) | Vercel da pessoa | tudo o que a pessoa vê e controla, pt-BR e en, instalável no celular (PWA) |
 | `instalador` | Node (`npx github:<dono>/reveza`) | computador da pessoa | perguntas, provisiona Supabase e Vercel, domínio, primeiro computador e contas, alertas, prova final |
 | `cli` | o próprio `agente` (`reveza status`, `reveza trocar`, `reveza uso --csv`, `reveza doctor`) | computador | integração por script e diagnóstico |
@@ -104,7 +104,8 @@ aviso de limite. Para cada computador ligado:
 | `eventos(em, tipo, texto, dados)` | membro | funções e computador |
 | `comandos(id, criado_por, computador_id, acao, corpo, estado, resposta)` | membro | admin cria; computador reserva e responde |
 | `ligacao_pedidos(computador_id, aprovador, idioma, publica, pedido_em, expira_em, envelope, entregue_por, entregue_em, lido_em, recusado)` | membro, sem `publica` e `envelope` | o computador novo registra a chave pública (uma vez); computador ativo entrega ou recusa; admin escolhe o aprovador |
-| `config(chave, valor)` modo, limiares, rodízio, intervalo | membro | admin |
+| `config(chave, valor)` modo, limiares, rodízio, intervalo; e, só leitura, a versão da nuvem e o que está no ar (7e) | membro | admin (as de 7e: só funções da nuvem e o instalador) |
+| `credenciais_atualizacao(nome, cifrado, nonce, gravado_por, gravado_em)` os tokens da atualização completa, cifrados com `K` | ninguém de fora (nem o painel, nem a chave de serviço); computador ativo pela função | computador ativo (ligar e desligar); admin só apaga |
 | `alertas(canal, destino_cifrado, eventos, ativo)` | admin | admin |
 | `auditoria(em, user_id, acao, alvo, ip)` | admin | gatilhos (ninguém edita) |
 | `chaves_api(id, user_id, prefixo, hash, escopos, criada_em, usada_em, revogada)` | dono da chave | o próprio usuário |
@@ -139,7 +140,10 @@ e o texto que o mod põe no prompt é fixo.
 
 `reveza_migracoes(nome, hash)`: migração nova entra; arquivo marcado `-- reaplicável` (só funções, políticas e
 índices idempotentes) roda de novo quando muda; migração de tabela que mudou depois de aplicada é recusada (vai numa
-migração nova); as permissões (0099) fecham qualquer aplicação. As chaves do push (VAPID) nascem uma vez.
+migração nova); as permissões (0099) fecham qualquer aplicação. As chaves do push (VAPID) nascem uma vez. A mesma
+regra vale nos dois caminhos: o instalador (Management API, com o token) e, desde a 0.3.0, a própria nuvem (7e), que
+aplica cada migração numa transação. Por isso migração nova não pode controlar a própria transação nem usar
+`concurrently` ou `vacuum` (a nuvem recusa antes de começar e diz por quê).
 
 ## 7d. Atualizar o programa dos computadores
 
@@ -154,14 +158,77 @@ a dele, pelo instalador da própria versão nova, num processo separado, com a c
   andamento nem sessão no limite) e um por vez (`atualizacao_vez`, 0018 e 0020); se um volta para a anterior, os
   outros param e sai um alerta. O agente da 0.2.1 conta no diagnóstico que entende o "assim que sair"
   (`assimQueSair`); os de antes só vão sozinhos de madrugada, e o painel deixa o Atualizar todos para eles.
-- **Trava de compatibilidade**: uma versão nova pode trazer migração da nuvem e painel novo, que só o computador
-  principal aplica (com os tokens). Antes de rodar o instalador, o agente compara as migrações do pacote baixado
-  (`nuvem/migracoes`) com os nomes que a nuvem já aplicou (`agente_migracoes()`, só a lista de nomes de
-  `reveza_migracoes`; o computador não lê a tabela). Faltando alguma, ou com a nuvem sem a função ou sem o registro,
-  não atualiza: o painel mostra "A versão Y precisa da nuvem e do painel atualizados primeiro: rode a atualização no
-  computador principal", e o agente confere a nuvem de 5 em 5 minutos (sem baixar de novo) até poder seguir. Por isso
-  mudança de banco que uma versão exige vai sempre num arquivo novo de migração: a trava compara nomes, e um arquivo
-  reaplicável que muda com o mesmo nome não é visto por ela.
+- **Trava de compatibilidade**: uma versão nova pode trazer migração da nuvem. Antes de rodar o instalador, o agente
+  compara as migrações do pacote baixado (`nuvem/migracoes`) com os nomes que a nuvem já aplicou (`agente_migracoes()`,
+  só a lista de nomes de `reveza_migracoes`; o computador não lê a tabela). Faltando alguma, ou com a nuvem sem a função
+  ou sem o registro, não atualiza: o painel mostra "A versão Y precisa da nuvem atualizada primeiro: use Atualizar a
+  nuvem" (até a 0.2.1, era no computador principal, com os tokens; desde a 0.3.0 a nuvem se atualiza sozinha, 7e), e o
+  agente confere a nuvem de 5 em 5 minutos (sem baixar de novo) até poder seguir. Por isso mudança de banco que uma
+  versão exige vai sempre num arquivo novo de migração: a trava compara nomes, e um arquivo reaplicável que muda com o
+  mesmo nome não é visto por ela.
+- **A ordem** (0.3.0): com a atualização completa ligada (7e), a vez de se atualizar sozinho (`agente_vez_de_atualizar`)
+  espera as funções e o painel da versão da nuvem irem ao ar (`motivo: publicacao`), e para se a publicação parou
+  (`publicacao_falhou`). Enquanto um computador publica, ele mesmo não se atualiza (a publicação é um processo dele).
+
+## 7e. Atualizar a nuvem e o painel (0.3.0)
+
+Pedido do dono (12/10/2026): a nuvem e o painel também se atualizam sozinhos, com o menor privilégio possível. A ordem é
+nuvem → funções e painel → computadores, e um passo que falha para os seguintes, avisa no painel e manda o alerta
+(`atualizacao_falhou`, com `parte`: `nuvem` ou `publicacao`).
+
+**1. A nuvem aplica as próprias migrações, sem credencial guardada.** A Edge Function `atualizar-nuvem`
+(`nuvem/funcoes/atualizar-nuvem`) usa a conexão que a plataforma dá às funções (`SUPABASE_DB_URL`, documentada como a
+URL do Postgres do projeto; cliente `jsr:@db/postgres` 0.19.5, o do exemplo oficial do Supabase para Edge Functions).
+- Quem pede: o administrador pelo painel (**Atualizar a nuvem**; a regra das duas etapas de sempre), ou o pg_cron de
+  hora em hora (`reveza-atualizar-nuvem`, migração 0022, com o segredo do cron dos alertas), que segue a escolha
+  **Atualizar sozinho** (desligada não faz nada; de madrugada, das 3h às 5h no fuso; assim que sair, a qualquer hora).
+  A sozinha não tenta de novo uma versão que falhou: quem pede de novo é o administrador.
+- As regras do agente (7d): repositório fixo no código, só versão publicada (a API de releases; com ela recusando, por
+  limite de pedidos do endereço que as funções dividem, a página `/releases/latest`, que só aponta versão publicada) e
+  maior que a da nuvem, pacote da tag montado no código e redirecionamento só para `github.com` e
+  `codeload.github.com`. O `.tar.gz` é lido na memória, com limite de tamanho, recusando link e caminho para fora; o
+  `package.json` tem de ser o do Reveza na versão pedida.
+- Antes de tudo, confere que a conexão é dona (ou herda o papel dono) das tabelas e funções que as migrações refazem;
+  se não for, para sem mexer e diz os papéis (a nuvem segue pelo instalador).
+- Aplica o plano de 7c, cada migração numa transação com `pg_advisory_xact_lock` (778805), `lock_timeout` de 15 s e o
+  registro conferido de novo dentro da trava: duas rodadas juntas não aplicam a mesma migração duas vezes, e a que
+  falha não deixa nada dela (as anteriores ficam, e a próxima rodada continua dali). Uma rodada por vez
+  (`servico_nuvem_comecar`, a vez vale 10 minutos). No fim, `nuvem_versao` (só sobe), `nuvem_atualizacao` e os
+  resumos das partes (`impressoes`).
+- As funções `servico_nuvem_*` não são liberadas para nenhum papel de fora, nem para a chave de serviço: só o dono do
+  banco, pela conexão da função.
+- Provado nos testes: todas as migrações de hoje rodam uma transação cada, pelo caminho da função, com um papel que não
+  é superusuário e só tem o que o papel `postgres` do Supabase tem (criar no `public`, referenciar `auth.users`, as
+  funções do Auth, do Vault e do pg_cron); a 0005 (que cria as extensões pg_cron e pg_net) não roda no Postgres do
+  teste. Não provado aqui: o papel exato de `SUPABASE_DB_URL` num projeto de verdade e se ele é o mesmo que o
+  instalador usou (a Management API); a função confere isso a cada vez e para com o motivo se não for.
+
+**2. Funções e painel precisam de credencial: opcional e cifrada de ponta a ponta.** Publicar função exige o token
+pessoal do Supabase (alcança a conta inteira) e publicar o painel, o token da Vercel.
+- Desligada de fábrica. `reveza atualizacao-completa ligar` (ou a oferta no fim da instalação, padrão não) pede os dois
+  sem eco, mostra o que custa e como reduzir o alcance (Vercel: escopo no time do painel e validade; Supabase: validade
+  e uma conta só com a organização do Reveza), confere que alcançam o projeto e a conta, cifra cada um com `K`
+  (AES-256-GCM, dado associado `reveza-atualizacao|<nome>`) e guarda em `credenciais_atualizacao` (a impressão da
+  chave tem de ser a da instalação). `desligar` (ou Desligar, no painel) apaga; para tirar o acesso de vez, apague os
+  tokens no Supabase e na Vercel. Quem tem um computador da instalação tem `K`, e portanto os tokens.
+- A nuvem guarda os dados do painel que antes só o computador criador sabia (`painel_publicacao`: projeto, equipe,
+  domínio, endereços, chave pública do push; nunca token) e o que está no ar (`publicado`).
+- O que falta publicar (`rvz_publicacao_pendente`, a mesma regra no agente e no painel): uma parte está em dia quando a
+  versão no ar já é a da nuvem, ou quando a função calculou o mesmo resumo das duas versões (`impressoes`: as funções
+  com `nuvem/provisionar.mjs`, o painel com o build e a publicação; sem testes nem arquivos ocultos).
+- Com os tokens guardados, o primeiro computador ligado e calmo (qualquer sistema com o Node do agente) pega a vez
+  (`agente_vez_de_publicar`, um por vez; o mesmo computador retoma a publicação que caiu no meio; outro só depois de
+  45 minutos, e aí a de antes vira falha), baixa o pacote oficial da versão da nuvem e roda o instalador DELA com
+  `--publicar-nuvem --ref <projeto> --partes funcoes,painel`, com os tokens só pela entrada padrão. O instalador só
+  publica se a nuvem já está nessa versão, roda o provisionamento (as migrações já entraram; o plano sai vazio) e
+  compila o painel nesse computador, com o React Bits grátis baixado ali, como na instalação; a Vercel recebe só o
+  resultado, e a implantação nova só vira a de produção quando fica pronta (o painel antigo segue no ar até lá). A
+  saída vai para `logs/publicacao-X.log` sem nenhum pedaço dos tokens; o fim vai para `agente_publicacao_resultado`.
+- Sem os tokens, nada muda: o painel mostra o passo manual só quando a versão mexe nas funções ou no painel.
+
+**3. No painel**, a linha "Nuvem e painel" no topo do cartão de Atualizações: as versões, **Atualizar a nuvem**
+(administrador; também destrava a publicação parada) e o estado (em dia, atualizando, publicando, passo manual,
+esperando a publicação, falhou com o motivo, nuvem de antes da 0.3.0).
 
 ## 8. Autenticação e acesso
 
@@ -210,8 +277,9 @@ Menu lateral, nada empilhado numa tela só:
 2. **Contas**: lista, cor, prioridade, reserva, agenda, teto semanal, conectar (gera o pedido ao computador), entrar
    de novo, pausar.
 3. **Computadores**: lista, sistema, versão, visto há, conta em uso, ligar computador novo (o código aparece nele e é
-   digitado num computador que já usa o Reveza; o painel só acompanha), revogar; atualizações (Verificar atualização,
-   Atualizar todos, como atualizar sozinho e o andamento, seção 7d).
+   digitado num computador que já usa o Reveza; o painel só acompanha), revogar; atualizações (a linha Nuvem e painel
+   com o Atualizar a nuvem, seção 7e; Verificar atualização, Atualizar todos, como atualizar sozinho e o andamento,
+   seção 7d).
 4. **Uso**: custo equivalente, tokens, agentes, sessões por dia, conta, modelo, projeto e computador; mapa de calor;
    ranking; previsão de esgotar; exportar planilha.
 5. **Plano da semana**: cota semanal por conta dividida pelos dias, quanto já foi, alerta de ritmo.
@@ -228,7 +296,8 @@ Modo demonstração: `?demo=1` ou instalação `--demo` liga dados de exemplo ge
 
 ## 10. Instalador (no padrão do Claquete)
 
-`npx github:<dono>/reveza` com `--atualizar`, `--desinstalar`, `--sem-nuvem`, `--demo`, `--doctor`, `--ajuda`.
+`npx github:<dono>/reveza` com `--atualizar`, `--desinstalar`, `--sem-nuvem`, `--demo`, `--doctor`, `--dominio`, `--ajuda`
+(e, para uso do agente, `--publicar-nuvem`, 7e).
 Passos: conferência do sistema, agente e mod, ligar a uma instalação que já existe (só computador novo com o código do
 painel), nuvem (token do Supabase, cria o projeto, aplica o banco e as funções, cria o administrador com verificação em
 duas etapas, cria a identidade do computador e a chave do cofre; o token da Vercel é pedido aqui também), serviço,
@@ -244,6 +313,15 @@ A troca automática não é pergunta: a instalação nova grava ligada, antes do
 nuvem ou, com `--sem-nuvem`, no estado local; muda no painel. Atualizar, ligar e `--importar` não gravam troca (fica a
 que já vale; o `--com-nuvem` leva para a nuvem a do estado local). O banco nasce com a troca desligada; quem a liga é o
 instalador.
+
+Domínio do painel: sem escolher, o endereço gratuito da Vercel (`<projeto>.vercel.app`, com HTTPS). `--dominio
+<subdomínio>` liga ou troca o domínio (na instalação sem pergunta; no `--atualizar`, com os tokens) e `--dominio vercel`
+volta ao endereço da Vercel; `REVEZA_DOMINIO` continua valendo. O passo a passo do registro é neutro de provedor, com a
+dica da Cloudflare (proxy desligado) como observação.
+
+No fim da instalação (e do `--atualizar` com os tokens), a oferta da atualização completa (7e), padrão não; com `--sim`
+ou sem terminal, fica desligada. Depois de publicar, o instalador grava na nuvem `nuvem_versao`, `publicado` e
+`painel_publicacao`.
 
 Na hora de pedir cada token, o instalador abre a página de criá-lo (`open`, `xdg-open` ou `explorer.exe`), só com
 tela e pergunta: nunca com `--sim` ou sem terminal, por SSH sem tela, ou com o token já no ambiente; numa atualização,

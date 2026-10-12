@@ -96,7 +96,7 @@ It asks and sets everything up: checks the computer, installs the agent and the 
 deploys the dashboard on Vercel (with your own domain, if you want), connects the accounts, sets up alerts and runs a
 final check. The steps count from 1 to the total of your path. When each token is needed, the page to create it opens
 in your browser by itself (when there is a screen; the address is also printed in the terminal), and the Supabase and
-Vercel tokens are **not stored** anywhere. Automatic switching starts on, before the limit (warns at 90%, switches at
+Vercel tokens are **not stored** anywhere (unless you turn on the [full update](#-updating), which keeps them encrypted). Automatic switching starts on, before the limit (warns at 90%, switches at
 95%): change it in the dashboard, under **Auto switch**. Importing from another manager (`--importar`) keeps its
 settings.
 
@@ -106,7 +106,7 @@ settings.
 | 🪟 **On Windows** | `npx github:` needs [Git](https://git-scm.com/download/win); without it, use the release package: `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.2.1.tar.gz` |
 | 🧡 **Claude Code** | installed on each computer that will rotate accounts |
 | ☁️ **Supabase and Vercel** | free accounts are enough; without them, use `--sem-nuvem` |
-| 🌐 **A domain** | optional, with a step-by-step guide on Cloudflare |
+| 🌐 **A domain** | optional: without one, the dashboard lives at `<project>.vercel.app`, free and with HTTPS ([details](#-dashboard-address)) |
 
 <details>
 <summary><b>Every installer option</b></summary>
@@ -123,10 +123,28 @@ settings.
 | `--importar <folder>` | copies accounts and usage from another manager; the source does not change |
 | `--doctor` | checks the installation: agent, service, cloud, dashboard and security headers |
 | `--desinstalar` | removes the service and the mod; logins, usage, vault key and the computer in the cloud stay (to remove it for good, revoke the computer in the dashboard) |
+| `--dominio accounts.mydomain.com` | the dashboard on your subdomain, at install time or later with `--atualizar`; `--dominio vercel` goes back to the Vercel address |
 | `--idioma en` | questions in English |
 | `--sim` | no questions (reads `SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`, `REVEZA_ADMIN_EMAIL`, `REVEZA_ADMIN_SENHA`, `REVEZA_SUPABASE_REF` and `REVEZA_DOMINIO` from the environment) |
 
 </details>
+
+### 🌐 Dashboard address
+
+If you choose nothing, the dashboard lives at Vercel's free address, `https://<project>.vercel.app`, already with
+HTTPS. To use a subdomain of yours (`accounts.mydomain.com`), choose it during the install or run later, on the computer
+that created the installation:
+
+```bash
+npx github:dantaspaulo/reveza --atualizar --dominio accounts.mydomain.com
+```
+
+The installer shows the record Vercel asks for, to create wherever the domain lives (Cloudflare, GoDaddy, Namecheap,
+Route 53 or any other DNS): a `CNAME` named after the subdomain (e.g. `accounts`) pointing to the value it shows
+(usually `cname.vercel-dns.com`), or an `A` record to `76.76.21.21` for a root domain. Vercel issues the HTTPS
+certificate by itself, and the Vercel address starts redirecting to yours. On Cloudflare, keep the proxy off (grey
+cloud, "DNS only"). To go back to the Vercel address: `--atualizar --dominio vercel` (the domain stays attached to the
+Vercel project until you remove it there).
 
 <br/>
 
@@ -191,12 +209,63 @@ const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody)
 
 <br/>
 
+## 🔄 Updating
+
+The order is always the same: **the cloud first, then the functions and the dashboard, and the computers last**, one at
+a time. It all lives under **Computers → Updates**, in the dashboard.
+
+- **The cloud (the database)** updates itself, **with no token at all**: the **Update the cloud** button asks, and the
+  cloud downloads the newest official published version, applies only the missing migrations (each one whole or
+  nothing, in a transaction) and records them. It only accepts an official version of the repository, newer than its
+  own.
+- **The cloud functions and the dashboard** need the Supabase and Vercel tokens. Without the full update, when a version
+  changes them the dashboard shows the manual step: run `npx github:dantaspaulo/reveza --atualizar` on the computer that
+  created the installation. With the **full update** on, a computer of the installation (the first one that is on and
+  calm, on any system) publishes them by itself; the old dashboard stays online until the new one is published.
+- **The computers** update through the buttons (**Check for updates**, **Update**, **Update all**) or by themselves, and
+  a computer only moves to a new version once the cloud is on it.
+
+**Update by itself** applies to everything, in the same order: **Off** (the default, buttons only), **Overnight** (3 to
+5 a.m.) or **As soon as it comes out**. If a step fails, the next ones stop, the dashboard shows why and an alert goes
+out (the "Automatic update stopped" event, on the channels you choose under Alerts).
+
+<details>
+<summary><b>Full update: the tokens kept encrypted (optional, off by default)</b></summary>
+
+<br/>
+
+```bash
+reveza atualizacao-completa ligar      # asks for both tokens without showing them
+reveza atualizacao-completa status
+reveza atualizacao-completa desligar   # or Turn off, in the dashboard
+```
+
+The installer also offers it at the end (default: no). The tokens go to the cloud **encrypted with the vault key**, the
+same one that protects the logins: the cloud stores text it cannot read, and only a computer of the installation opens
+it. They are never in clear text on disk, in a log or in an event. The cost: **whoever has a computer of the installation
+gets these tokens**. So prefer short-reach tokens with an expiry:
+
+- **Vercel** ([tokens](https://vercel.com/account/tokens)): scoped to the dashboard's team only, with an expiry;
+- **Supabase** ([tokens](https://supabase.com/dashboard/account/tokens)): with an expiry if the page offers one, from an
+  account that only has the Reveza organization (the token reaches everything the account reaches).
+
+Turning it off removes the tokens from the cloud; to revoke access for good, delete the tokens in Supabase and Vercel.
+The computer that publishes builds the dashboard locally (with the free React Bits downloaded there, as in the install)
+and sends only the result to your Vercel.
+
+</details>
+
+<br/>
+
 ## 🔐 Security
 
 - **The cloud stores, but cannot read.** Each login is encrypted on the computer (AES-256-GCM). The vault key lives only in the system keychain; Supabase receives ciphertext and Vercel not even that.
 - **Least privilege.** No server key outside Supabase. Every table has row-level security, every change goes through a function that checks the role and writes the audit log. Each computer has its own identity, revocable on its own.
 - **Dashboard sign-in** by invitation only, strong password, two-factor for admins (and the option to require it from everyone).
 - **Published dashboard** with a strict CSP, HSTS and no secret in the browser.
+- **Updates without secrets where none are needed.** The cloud applies its own migrations without a token, and only
+  from an official published version. The tokens that publish functions and dashboard are only kept if you turn on the
+  full update, and then encrypted with the vault key.
 - **Audited** with [Cloudflare's security audit skill](https://github.com/cloudflare/security-audit-skill): the confirmed findings were fixed, and the repository guard refuses secrets and personal data on every commit.
 
 The whole architecture is in [docs/ARQUITETURA.md](docs/ARQUITETURA.md) (Portuguese).

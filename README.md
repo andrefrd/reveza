@@ -96,7 +96,7 @@ Ele pergunta e monta tudo: confere o computador, instala o agente e o mod, cria 
 painel na Vercel (com domínio próprio, se quiser), conecta as contas, configura os alertas e faz uma prova final.
 As etapas contam de 1 até o total do seu caminho. Na hora de cada token, a página de criá-lo abre sozinha no navegador
 (com tela; o endereço também aparece no terminal), e os tokens do Supabase e da Vercel **não ficam guardados** em lugar
-nenhum. A troca automática já vem ligada, antes do limite (avisa em 90%, troca em 95%): muda no painel, em **Troca
+nenhum (a não ser que você ligue a [atualização completa](#-atualizar), que os guarda cifrados). A troca automática já vem ligada, antes do limite (avisa em 90%, troca em 95%): muda no painel, em **Troca
 automática**. Quem importa de outro gestor (`--importar`) fica com a configuração de lá.
 
 | Precisa de | |
@@ -105,7 +105,7 @@ automática**. Quem importa de outro gestor (`--importar`) fica com a configura�
 | 🪟 **No Windows** | o `npx github:` precisa do [Git](https://git-scm.com/download/win); sem ele, use o pacote da versão: `npx https://github.com/dantaspaulo/reveza/archive/refs/tags/v0.2.1.tar.gz` |
 | 🧡 **Claude Code** | instalado em cada computador que vai revezar contas |
 | ☁️ **Supabase e Vercel** | contas grátis bastam; sem elas, use `--sem-nuvem` |
-| 🌐 **Domínio** | opcional, com o passo a passo da Cloudflare |
+| 🌐 **Domínio** | opcional: sem ele, o painel fica em `<projeto>.vercel.app`, de graça e com HTTPS ([detalhes](#-endereço-do-painel)) |
 
 <details>
 <summary><b>Todas as opções do instalador</b></summary>
@@ -122,10 +122,27 @@ automática**. Quem importa de outro gestor (`--importar`) fica com a configura�
 | `--importar <pasta>` | copia contas e uso de outro gestor; a origem não muda |
 | `--doctor` | confere a instalação: agente, serviço, nuvem, painel e cabeçalhos de segurança |
 | `--desinstalar` | tira o serviço e o mod; logins, uso, chave do cofre e o computador na nuvem ficam (para tirar de vez, revogue o computador no painel) |
+| `--dominio contas.meudominio.com` | o painel no seu subdomínio, na instalação ou depois, com `--atualizar`; `--dominio vercel` volta ao endereço da Vercel |
 | `--idioma en` | perguntas em inglês |
 | `--sim` | sem perguntas (lê `SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`, `REVEZA_ADMIN_EMAIL`, `REVEZA_ADMIN_SENHA`, `REVEZA_SUPABASE_REF` e `REVEZA_DOMINIO` do ambiente) |
 
 </details>
+
+### 🌐 Endereço do painel
+
+Sem escolher nada, o painel fica no endereço gratuito da Vercel, `https://<projeto>.vercel.app`, já com HTTPS. Para usar
+um subdomínio seu (`contas.meudominio.com`), escolha na instalação ou rode depois, no computador que criou a instalação:
+
+```bash
+npx github:dantaspaulo/reveza --atualizar --dominio contas.meudominio.com
+```
+
+O instalador mostra o registro que a Vercel pede, para criar onde o domínio estiver (registro.br, Cloudflare, GoDaddy,
+Hostinger, Route 53 ou outro): um `CNAME` com o nome do subdomínio (ex.: `contas`) apontando para o valor que ele
+mostra (em geral `cname.vercel-dns.com`), ou um `A` para `76.76.21.21` quando é o domínio raiz. A Vercel emite o
+certificado HTTPS sozinha, e o endereço da Vercel passa a redirecionar para o seu. Na Cloudflare, deixe o proxy
+desligado (nuvem cinza, "DNS only"). Para voltar ao endereço da Vercel: `--atualizar --dominio vercel` (o domínio segue
+ligado ao projeto na Vercel até você tirar lá).
 
 <br/>
 
@@ -189,12 +206,62 @@ const esperado = "sha256=" + crypto.createHmac("sha256", segredo).update(corpoBr
 
 <br/>
 
+## 🔄 Atualizar
+
+A ordem é sempre a mesma: **a nuvem primeiro, depois as funções e o painel, e por último os computadores**, um por vez.
+Tudo fica em **Computadores → Atualizações**, no painel.
+
+- **A nuvem (o banco)** se atualiza sozinha, **sem token nenhum**: o botão **Atualizar a nuvem** pede, e a própria nuvem
+  baixa a versão oficial mais nova publicada, aplica só as migrações que faltam (cada uma inteira ou nada, numa
+  transação) e registra. Ela só aceita versão oficial do repositório e mais nova que a dela.
+- **As funções da nuvem e o painel** precisam dos tokens do Supabase e da Vercel. Sem a atualização completa, quando uma
+  versão mexe neles o painel mostra o passo manual: rodar `npx github:dantaspaulo/reveza --atualizar` no computador que
+  criou a instalação. Com a **atualização completa** ligada, um computador da instalação (o primeiro ligado e calmo, de
+  qualquer sistema) publica sozinho; o painel antigo continua no ar até o novo publicar.
+- **Os computadores** se atualizam pelos botões (**Verificar atualização**, **Atualizar**, **Atualizar todos**) ou
+  sozinhos, e um computador só sobe para uma versão nova quando a nuvem já está nela.
+
+**Atualizar sozinho** vale para tudo, na mesma ordem: **Desligada** (o padrão, só pelos botões), **De madrugada** (das
+3h às 5h) ou **Assim que sair**. Se um passo falhar, os seguintes param, o painel mostra o motivo e sai um alerta (o
+evento "Atualização sozinha parou", nos canais que você escolher em Alertas).
+
+<details>
+<summary><b>Atualização completa: os tokens guardados cifrados (opcional, desligada de fábrica)</b></summary>
+
+<br/>
+
+```bash
+reveza atualizacao-completa ligar      # pede os dois tokens sem mostrar na tela
+reveza atualizacao-completa status
+reveza atualizacao-completa desligar   # ou Desligar, no painel
+```
+
+A instalação também oferece no fim (padrão: não). Os tokens vão para a nuvem **cifrados com a chave do cofre**, a mesma
+dos logins: a nuvem guarda um texto que não lê, e só um computador da instalação abre. Nunca ficam em claro em disco,
+log ou evento. O que isso custa: **quem tiver um computador da instalação passa a ter esses tokens**. Por isso, prefira
+tokens de alcance curto e com validade:
+
+- **Vercel** ([tokens](https://vercel.com/account/tokens)): escopo só no time do painel e com validade;
+- **Supabase** ([tokens](https://supabase.com/dashboard/account/tokens)): com validade, se a página oferecer, e de uma
+  conta que só tenha a organização do Reveza (o token alcança tudo o que a conta alcança).
+
+Desligar tira os tokens da nuvem; para tirar o acesso de vez, apague os tokens no Supabase e na Vercel. Quem publica
+compila o painel no próprio computador (com o React Bits grátis baixado ali, como na instalação) e manda só o resultado
+para a sua Vercel.
+
+</details>
+
+<br/>
+
 ## 🔐 Segurança
 
 - **A nuvem guarda, mas não lê.** Cada login é cifrado no computador (AES-256-GCM). A chave do cofre mora só no chaveiro do sistema; o Supabase recebe texto cifrado e a Vercel nem isso.
 - **Menor privilégio.** Nenhuma chave de servidor fora do Supabase. Toda tabela tem segurança de linha, toda mudança passa por uma função que confere o papel e grava a auditoria. Cada computador tem identidade própria, revogável sozinha.
 - **Login do painel** só por convite, senha forte, duas etapas para quem administra (e a opção de exigir de todos).
 - **Painel publicado** com CSP restrita, HSTS e nenhum segredo no navegador.
+- **Atualização sem segredo onde não precisa.** A nuvem aplica as próprias migrações sem token, e só de versão oficial
+  publicada. Os tokens que publicam funções e painel só existem guardados se você ligar a atualização completa, e
+  então cifrados com a chave do cofre.
 - **Auditado** com a [skill de auditoria de segurança da Cloudflare](https://github.com/cloudflare/security-audit-skill): os achados foram corrigidos, e a trava do repositório recusa segredo e dado pessoal em todo commit.
 
 A arquitetura inteira está em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
