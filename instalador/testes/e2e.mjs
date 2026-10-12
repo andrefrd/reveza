@@ -161,6 +161,17 @@ try {
       conferir("segundo computador registrado na nuvem", n2 === 2, `${n2} computadores`);
       const [{ usadas }] = await sql("select count(*)::int as usadas from public.ligacoes where usado_em is not null");
       conferir("segundo computador recebeu a chave do cofre pela frase", usadas === 1 && /recebeu a chave do cofre/.test(r2.texto), "");
+      // atualizar o segundo computador não é instalação nova: nem com os tokens no ambiente ele mexe na nuvem ou no
+      // painel, e não pergunta nada disso (12/10/2026, o MacBook do Paulo pedia o token do Supabase)
+      const antes2 = readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8");
+      const consultasAntes = emu.estado.consultas;
+      const at2 = await rodar(process.execPath, ["instalador/instalar.mjs", "--sim", "--sem-servico", "--sem-react-bits", "--atualizar"],
+        { ...env, HOME: home2 }, { saida: false });
+      const depois2 = JSON.parse(readFileSync(path.join(home2, ".reveza", "instalacao.json"), "utf8"));
+      conferir("atualizar o segundo computador só atualiza o programa dele (sem token, sem nuvem, sem painel)",
+        at2.codigo === 0 && /Computador ligado a uma instalação/.test(at2.texto) && !/Projeto do Supabase|Token da Vercel/.test(at2.texto)
+          && emu.estado.consultas === consultasAntes && JSON.stringify(depois2.nuvem) === JSON.stringify(JSON.parse(antes2).nuvem) && !depois2.painel,
+        at2.codigo === 0 ? `${emu.estado.consultas - consultasAntes} consultas à nuvem` : at2.texto.slice(-300));
     }
     const [{ n }] = await sql("select count(*)::int as n from public.computadores where id = $1 and visto_em > now() - interval '1 minute'", [pc]);
     conferir("o computador aparece como visto agora", n === 1);

@@ -157,6 +157,10 @@ async function nuvem(ctx) {
     "The panel, the encrypted vault and the switching decision live in a Supabase project of YOURS. The free plan is enough."));
   info(t("Token pessoal: supabase.com/dashboard/account/tokens (Generate new token). Ele não é guardado.",
     "Personal token: supabase.com/dashboard/account/tokens (Generate new token). It is not stored."));
+  if (ctx.atualizar && ctx.inst?.nuvem) {
+    info(t("Para atualizar só este computador (sem mexer na nuvem e no painel), deixe em branco e tecle Enter.",
+      "To update only this computer (leaving the cloud and the panel as they are), leave it blank and press Enter."));
+  }
   let token = "";
   for (let i = 0; i < 3 && !token; i++) {
     token = await ctx.p.segredo(t("Token do Supabase:", "Supabase token:"), "SUPABASE_ACCESS_TOKEN");
@@ -556,6 +560,15 @@ async function ligar(ctx) {
   ctx.ligado = { url, anon };
 }
 
+/**
+ * Atualização só do programa deste computador, sem perguntar token nenhum: computador que entrou numa instalação pelo
+ * código do painel (a nuvem dele não tem `ref`) não cuida da nuvem nem do painel, quem cuida é o computador que criou a
+ * instalação. Antes ele pedia o token do Supabase (12/10/2026, MacBook do Paulo).
+ */
+export function soEsteComputador(inst, atualizar) {
+  return !!atualizar && !!inst?.nuvem && !inst.nuvem.ref;
+}
+
 // ── principal ─────────────────────────────────────────────────────────────────
 async function main() {
   const a = lerArgs(process.argv.slice(2));
@@ -603,7 +616,11 @@ async function main() {
     if (ctx.ligar) await ligar(ctx);
     else if (!ctx.atualizar && !ctx.importar) await perguntarTroca(ctx);
     else if (ctx.importar) info(t("Troca: fica a configuração importada (ajuste no painel).", "Switching: the imported settings stay (adjust in the panel)."));
-    if (!ctx.semNuvem && !ctx.ligar) {
+    ctx.soEsteComputador = soEsteComputador(inst, ctx.atualizar);
+    if (ctx.soEsteComputador) {
+      info(t("Computador ligado a uma instalação: atualizo só o programa deste computador. A nuvem e o painel são atualizados no computador que criou a instalação.",
+        "Computer joined to an installation: only this computer's program is updated. The cloud and the panel are updated on the computer that created the installation."));
+    } else if (!ctx.semNuvem && !ctx.ligar) {
       await nuvem(ctx);
       if (!ctx.manterNuvem) {
         await perguntarPainel(ctx);

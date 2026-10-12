@@ -11,7 +11,7 @@ import { dnsPronto, dominioValido, passosCloudflare } from "../lib/dominio.mjs";
 import { acharChatTelegram, testar, topicoNtfy } from "../lib/alertas.mjs";
 import { criarLancador, gravarConfigLocal, gravarInstalacao, lancadorWindows, lerInstalacao, linhaPath } from "../lib/programa.mjs";
 import { emailValido, senhaForte, t } from "../lib/texto.mjs";
-import { lerArgs } from "../instalar.mjs";
+import { lerArgs, soEsteComputador } from "../instalar.mjs";
 
 function rede(rotas) {
   const chamadas = [];
@@ -317,4 +317,14 @@ test("programa: copia mesmo quando o repositório vem de dentro de node_modules 
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+});
+
+test("atualizar um computador ligado (sem ref da nuvem) não pede token: só o programa dele", () => {
+  const ligado = { nuvem: { url: "https://abcdefghijklmnopqrst.supabase.co", anon: "x" }, painel: null };
+  const principal = { nuvem: { ref: "abcdefghijklmnopqrst", url: "https://abcdefghijklmnopqrst.supabase.co", anon: "x", adminId: "a" } };
+  assert.equal(soEsteComputador(ligado, true), true);
+  assert.equal(soEsteComputador(principal, true), false, "o computador que criou a instalação ainda pode atualizar a nuvem");
+  assert.equal(soEsteComputador(ligado, false), false, "sem --atualizar não vale");
+  assert.equal(soEsteComputador({ nuvem: null }, true), false);
+  assert.equal(soEsteComputador(null, true), false);
 });
