@@ -137,11 +137,10 @@ const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody)
 - **On the computer**: the agent only talks to the cloud (no port open to the outside) and the local bridge with the
   mod requires proof of a key only the computer's owner can read (the key itself never travels).
 - **New computer, in one step**: in the panel, Computers → Link new computer → Generate the link code. The computer
-  that already holds the vault key opens a window with a 4-letter code; you check it against the panel and click
-  Release. The panel joins the new computer's access and the 6-word phrase into a single code (`rvzl_...`, valid for
+  that already holds the vault key opens a window asking for the 4-character code shown in the panel; you type it and
+  click Release. The panel joins the new computer's access and the 6-word phrase into a single code (`rvzl_...`, valid for
   10 minutes); on the new computer, `npx github:dantaspaulo/reveza --ligar`, paste the code and that's it. The cloud
-  alone cannot release it: the click happens on the computer's screen, and a request forged in the database would
-  carry a different code. Without a screen (a server), the phrase comes from the terminal (`reveza ligar`), or the
+  alone cannot release it: whoever releases types, on the computer's screen, the code that only their own panel shows. Without a screen (a server), the phrase comes from the terminal (`reveza ligar`), or the
   computer releases without asking if you want (`reveza ligar --painel ligar`).
 - **Lost every computer?** The vault cannot be recovered (the price of a cloud that cannot read it). Accounts sign in
   again through the official login.

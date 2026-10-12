@@ -444,7 +444,7 @@ describe("comandos do painel", () => {
     assert.equal(banco.ligacoes.length, 0, "nenhuma ligação publicada");
   });
 
-  test("ligar pelo painel com confirmação na tela: a janela mostra o código do painel, e só o clique em Liberar solta a frase", async () => {
+  test("ligar pelo painel com confirmação na tela: só quem digita o código do painel e clica em Liberar solta a frase", async () => {
     const { webcrypto } = await import("node:crypto");
     const { codigoDeConfirmacao } = await import("../src/ligar.js");
     const { ExecutorFalso } = await import("./falsos.js");
@@ -461,7 +461,7 @@ describe("comandos do painel", () => {
         exec.chamadas.push({ argv });
         if (argv[0] !== "osascript") return { codigo: 0, saida: "", erro: "" };
         await clicou;
-        return clique === "Liberar" ? { codigo: 0, saida: "button returned:Liberar, gave up:false", erro: "" } : { codigo: 1, saida: "", erro: "User canceled." };
+        return clique === "Liberar" ? { codigo: 0, saida: `button returned:Liberar, text returned:${codigo}, gave up:false`, erro: "" } : { codigo: 1, saida: "", erro: "User canceled." };
       };
       await preparar({ exec });
       await ativaEm(m, "A", 10);
@@ -472,7 +472,7 @@ describe("comandos do painel", () => {
       // a busca terminou com a janela ainda aberta: a troca e as leituras não esperam o clique
       assert.equal(banco.comandos.find((x) => x.id === 1)!.estado, "reservado");
       const janela = exec.chamadas.find((c) => c.argv[0] === "osascript")!;
-      assert.ok(janela.argv.join(" ").includes(codigo), "a janela mostra o mesmo código do painel");
+      assert.ok(!janela.argv.join(" ").includes(codigo), "a janela pede o código, não o mostra (quem sabe é quem está no painel)");
       assert.ok(exec.chamadas.some((c) => c.argv[0] === "afplay"), "toca o som para chamar a atenção");
       soltar();
       await m.agente.emEspera;

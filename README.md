@@ -136,11 +136,10 @@ const esperado = "sha256=" + crypto.createHmac("sha256", segredo).update(corpoBr
 - **No computador**: o agente só fala com a nuvem (nenhuma porta aberta para fora) e a ponte local com o mod exige a
   prova de uma chave que só o dono do computador lê (a chave em si nunca viaja).
 - **Computador novo, em um passo**: no painel, Computadores → Ligar computador novo → Gerar o código de ligação. O
-  computador que já tem a chave do cofre abre uma janela com um código de 4 letras; você confere com o que o painel
-  mostra e clica em Liberar. O painel junta o acesso do computador novo e a frase de 6 palavras num código só
+  computador que já tem a chave do cofre abre uma janela pedindo o código de 4 caracteres que o painel mostra; você
+  digita e clica em Liberar. O painel junta o acesso do computador novo e a frase de 6 palavras num código só
   (`rvzl_...`, vale 10 minutos); no computador novo, `npx github:dantaspaulo/reveza --ligar`, cola o código e pronto.
-  A nuvem sozinha não consegue liberar: o clique é na tela do computador, e um pedido forjado no banco viria com outro
-  código. Sem tela (servidor), a frase sai pelo terminal (`reveza ligar`), ou o computador libera sem perguntar se você
+  A nuvem sozinha não consegue liberar: quem libera digita, na tela do computador, o código que só o painel dela mostra. Sem tela (servidor), a frase sai pelo terminal (`reveza ligar`), ou o computador libera sem perguntar se você
   quiser (`reveza ligar --painel ligar`).
 - **Perdeu todos os computadores?** O cofre não se recupera (é o preço de a nuvem não conseguir ler). As contas se
   conectam de novo pelo login oficial.

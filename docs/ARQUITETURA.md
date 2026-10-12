@@ -139,10 +139,11 @@ migração nova); as permissões (0099) fecham qualquer aplicação. As chaves d
   banco (`rvz_exigir_admin` = admin e `rvz_aal2`) e as Edge Functions (`servico_aal_ok`); não há servidor do painel.
 - Computador novo: pelo painel, em um passo. O painel cria o acesso do computador novo e manda o comando `ligar`
   (com a chave pública efêmera do navegador) a um computador que tem a chave do cofre. Esse computador abre uma janela
-  (macOS `osascript`, Windows `MessageBox`, Linux `zenity`) com um código de 4 caracteres tirado do SHA-256 da chave
-  pública do navegador; o painel mostra o mesmo código. Só com o clique em Liberar ele publica a ligação e devolve a
-  frase cifrada para o navegador, que junta acesso e frase num código só (`rvzl_`). Um pedido forjado direto no banco
-  viria com outra chave, e então com outro código (e uma janela que ninguém pediu). A janela espera até 90 s, à parte
+  (macOS `osascript`, Windows `InputBox`, Linux `zenity --entry`) que PEDE um código de 4 caracteres tirado do SHA-256
+  da chave pública do navegador; só o painel que fez o pedido mostra esse código. Só com o código certo e o clique em
+  Liberar ele publica a ligação e devolve a frase cifrada para o navegador, que junta acesso e frase num código só
+  (`rvzl_`). Um pedido forjado direto no banco não tem código na tela de ninguém. (No primeiro teste real, uma janela
+  que só pedia o clique foi liberada em 8 s, sem olhar o código; por isso ela pede para digitar.) A janela espera até 90 s, à parte
   da busca (a troca não para). Sem tela, a frase sai por `reveza ligar` no terminal; `reveza ligar --painel ligar`
   (arquivo `~/.reveza/ligar-pelo-painel`) libera sem perguntar, para quem aceita que a nuvem autorize.
 - Cadastro público desligado; entra só por convite (link de uso único, expira em 72 h).
