@@ -3,10 +3,16 @@
 -- reaplicável: apaga o que sobrou de ntfy (com o segredo dele no Vault), recria a restrição do canal e a conferência
 -- do destino (create or replace). Rodar de novo não muda nada.
 
--- um alerta ntfy que tenha sobrado sai junto com o tópico guardado no Vault (o tópico é o segredo do canal)
-delete from vault.secrets s
- using public.alertas a
- where a.canal = 'ntfy' and a.destino ? 'vault_id' and s.id::text = a.destino ->> 'vault_id';
+-- um alerta ntfy que tenha sobrado sai junto com o tópico guardado no Vault (o tópico é o segredo do canal); se o
+-- papel que aplica a migração não puder apagar do Vault, o tópico fica lá sem uso e a migração segue
+do $$
+begin
+  delete from vault.secrets s
+   using public.alertas a
+   where a.canal = 'ntfy' and a.destino ? 'vault_id' and s.id::text = a.destino ->> 'vault_id';
+exception when insufficient_privilege then
+  raise notice 'sem permissão para apagar do Vault: o tópico do ntfy fica lá, sem uso';
+end $$;
 delete from public.alertas where canal = 'ntfy';
 
 alter table public.alertas drop constraint if exists alertas_canal_check;
