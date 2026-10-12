@@ -97,16 +97,29 @@ export function painelAtras(versaoPainel: string, computadores: Computador[]): s
 // ------------------------------------------------------------------------------------------------ pedidos em andamento
 
 /** Os pedidos feitos nesta aba (computador → comando), para o cartão e a Saúde mostrarem o mesmo andamento. */
-const pedidos = new Map<string, number>()
+const pedidos = new Map<string, { comando: number; em: number }>()
 const ouvintes = new Set<() => void>()
+let mudancas = 0
 
-export function guardarPedido(computadorId: string, comandoId: number): void {
-  pedidos.set(computadorId, comandoId)
+export function guardarPedido(computadorId: string, comandoId: number, agora = Date.now()): void {
+  pedidos.set(computadorId, { comando: comandoId, em: agora })
+  mudancas++
   for (const o of ouvintes) o()
 }
 
 export function pedidoDe(computadorId: string): number | null {
-  return pedidos.get(computadorId) ?? null
+  return pedidos.get(computadorId)?.comando ?? null
+}
+
+/** Pedido feito nesta aba há menos de 15 minutos (o "Atualizar todos" não pede de novo a quem já está atualizando). */
+export function pedidoRecente(computadorId: string, agora = Date.now()): boolean {
+  const p = pedidos.get(computadorId)
+  return !!p && agora - p.em < 15 * 60_000
+}
+
+/** Muda a cada pedido novo (para quem mostra a lista inteira se redesenhar). */
+export function mudancasDosPedidos(): number {
+  return mudancas
 }
 
 export function assinarPedidos(fn: () => void): () => void {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { Comando, Computador, Evento } from "@/dados/tipos"
-import { andamentoDaAtualizacao, painelAtras, PEDIDO_ATUALIZAR, versaoDisponivel } from "./atualizar"
+import { andamentoDaAtualizacao, guardarPedido, painelAtras, PEDIDO_ATUALIZAR, pedidoDe, pedidoRecente, versaoDisponivel } from "./atualizar"
 
 const AGORA = new Date("2026-10-12T10:00:00.000Z")
 const min = (n: number) => new Date(AGORA.getTime() + n * 60_000).toISOString()
@@ -90,6 +90,14 @@ describe("botão de atualizar do painel", () => {
     // de outro computador: não conta
     const outro = { ...ev(-1, { atualizacao: "falhou", para: "0.1.7" }), dados: { computador: "pc-2", atualizacao: "falhou", para: "0.1.7" } }
     expect(andamentoDaAtualizacao(pc("0.1.6"), null, [outro], AGORA)).toBeNull()
+  })
+
+  it("o pedido desta aba fica guardado para o cartão e a Saúde, e o Atualizar todos não pede de novo por 15 minutos", () => {
+    guardarPedido("pc-x", 42, AGORA.getTime())
+    expect(pedidoDe("pc-x")).toBe(42)
+    expect(pedidoRecente("pc-x", AGORA.getTime() + 14 * 60_000)).toBe(true)
+    expect(pedidoRecente("pc-x", AGORA.getTime() + 16 * 60_000)).toBe(false)
+    expect(pedidoRecente("pc-y", AGORA.getTime())).toBe(false)
   })
 
   it("o painel atrás dos computadores aparece (ele é atualizado no computador principal)", () => {

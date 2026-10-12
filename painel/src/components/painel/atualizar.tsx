@@ -22,7 +22,9 @@ import {
   assinarPedidos,
   guardarPedido,
   painelAtras,
+  mudancasDosPedidos,
   pedidoDe,
+  pedidoRecente,
   PEDIDO_ATUALIZAR,
   versaoDisponivel,
   type AndamentoAtualizacao,
@@ -109,9 +111,11 @@ export function CartaoAtualizacoes() {
   const acao = useAcao()
   const { pode } = usePermissao()
   const [enviando, setEnviando] = React.useState(false)
+  React.useSyncExternalStore(assinarPedidos, mudancasDosPedidos)
   const ativos = estado.computadores.filter((c) => !c.revogado)
   const outros = versaoMaisNova(ativos.map((c) => c.versao))
-  const comAtualizacao = ativos.filter((pc) => versaoDisponivel(pc, outros))
+  // quem já está atualizando (pedido desta aba, ou o computador contou que está) não entra de novo
+  const comAtualizacao = ativos.filter((pc) => versaoDisponivel(pc, outros) && !pedidoRecente(pc.id) && !pc.diagnostico?.atualizacao)
   const atras = painelAtras(__VERSAO_PAINEL__, ativos)
   const atualizarTodos = async () => {
     setEnviando(true)
@@ -180,7 +184,7 @@ export function CartaoAtualizacoes() {
           <CircleAlertIcon />
           <AlertDescription className="flex flex-col gap-1">
             <span>{t("computadores.atualizacao.painelNuvem")}</span>
-            <code className="w-fit rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-all">{COMANDO_ATUALIZAR_PAINEL}</code>
+            <code className="w-fit max-w-full rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-words">{COMANDO_ATUALIZAR_PAINEL}</code>
             {atras ? (
               <span className="text-atencao">
                 {t("computadores.atualizacao.painelAtras", { painel: __VERSAO_PAINEL__, computadores: atras })}
