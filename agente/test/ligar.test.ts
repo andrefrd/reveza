@@ -274,6 +274,27 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
     assert.equal(await lerChave(nova), null, "nada guardado");
   });
 
+  test("envelope que abre (com o código certo) mas traz chave de outra instalação: o computador novo confere a impressão e não guarda", async () => {
+    const { banco, nn } = await cena();
+    const nova = new GuardaFalsa();
+    let codigoNaTela = "";
+    await assert.rejects(
+      pedirParaEntrar(nova, nn, {
+        aoMostrarCodigo: (c) => void (codigoNaTela = c),
+        dormir: async () => {
+          const p = banco.pedidos.get("pc-novo")!;
+          if (p.envelope || p.entreguePor) return;
+          // quem digitou o código certo num computador com a chave de OUTRA instalação (a impressão da nuvem é a desta)
+          const env = await cifrarChaveParaComputadorNovo(p.publica!, novaChave(), "pc-novo", codigoNaTela.slice(-4));
+          Object.assign(p, { envelope: env, entreguePor: "pc-de-outra-instalacao" });
+        },
+        intervaloMs: 0,
+      }),
+      /não é a desta instalação/,
+    );
+    assert.equal(await lerChave(nova), null);
+  });
+
   test("quem escreve no banco troca a chave pública do pedido (mesmo vendo o código na tela): não confere, nada é entregue", async () => {
     const { banco, velha, nv, nn } = await cena();
     const ped = await prepararPedido();
