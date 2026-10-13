@@ -18,10 +18,15 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { BotaoCopiar } from "@/components/painel/copiar"
 import { useAcao, useAgora, useDados, useEstado } from "@/dados/contexto"
 import { estadoComputador } from "@/dados/derivados"
 import type { Comando, Conta } from "@/dados/tipos"
 import { useT } from "@/i18n"
+
+/** Os domínios do login oficial. O Claude Code 2.1.29x passou a abrir o login em claude.com (antes, claude.ai): sem ele
+ * aqui, o painel jogava fora o endereço e a pessoa ficava sem o botão de abrir o login (relato de usuário, 12/10/2026). */
+const DOMINIOS_DO_LOGIN = ["claude.ai", "claude.com", "anthropic.com"]
 
 /** Só abre endereço do login oficial: quem manda a resposta é um computador, e o painel não abre link qualquer. */
 export function urlDeLogin(v: unknown): string | null {
@@ -29,8 +34,7 @@ export function urlDeLogin(v: unknown): string | null {
   try {
     const u = new URL(v)
     const host = u.hostname.toLowerCase()
-    const oficial =
-      host === "claude.ai" || host.endsWith(".claude.ai") || host === "anthropic.com" || host.endsWith(".anthropic.com")
+    const oficial = DOMINIOS_DO_LOGIN.some((d) => host === d || host.endsWith(`.${d}`))
     return u.protocol === "https:" && !u.username && !u.password && !u.port && oficial ? u.toString() : null
   } catch {
     return null
@@ -173,13 +177,23 @@ export function DialogoLogin({
             {estadoCmd === "feito" && url && !conectada ? (
               <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground">
                 <p>{t("contas.login.abrirAqui")}</p>
-                <Button asChild variant="outline" size="sm">
-                  <a href={url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLinkIcon data-icon="inline-start" />
-                    {t("contas.login.abrirLogin")}
-                  </a>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLinkIcon data-icon="inline-start" />
+                      {t("contas.login.abrirLogin")}
+                    </a>
+                  </Button>
+                  <BotaoCopiar texto={url} rotulo={t("contas.login.copiarLogin")} />
+                </div>
+                <p className="text-xs">{t("contas.login.anonima")}</p>
               </div>
+            ) : null}
+            {estadoCmd === "feito" && !url && !conectada ? (
+              <p className="text-sm text-muted-foreground">{t("contas.login.semEndereco", { email: email.trim().toLowerCase() })}</p>
+            ) : null}
+            {estadoCmd === "feito" && !conectada ? (
+              <p className="text-xs text-muted-foreground">{t("contas.login.terminal", { email: email.trim().toLowerCase() })}</p>
             ) : null}
             {estadoCmd === "feito" && loginId && !conectada ? (
               <form

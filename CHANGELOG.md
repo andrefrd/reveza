@@ -7,6 +7,20 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.3.3 · 12/10/2026
+
+Conectar conta quando o navegador não abre (relato de usuário: "diz que abriu e não abriu"). Atualize os computadores
+pelo botão do painel; o painel novo entra pela atualização da nuvem.
+
+- **O link do login volta a aparecer no painel.** O Claude Code passou a abrir o login em `claude.com` (antes,
+  `claude.ai`), e o painel jogava esse endereço fora: aparecia "o computador abriu o login no navegador dele" sem nenhum
+  botão. Agora aparecem **Abrir o login**, **Copiar o endereço** e o campo para colar o código que a página mostra.
+- **Janela anônima:** o painel e o terminal explicam que, com outra conta já aberta no navegador (ou vários perfis do
+  Chrome), o login entra na conta errada ou nem aparece; numa janela anônima não há conta aberta.
+- **Pelo terminal:** `reveza contas conectar <e-mail>` mostra o endereço logo de cara e aceita o código da página ali
+  mesmo (antes, só esperava o navegador).
+- O painel não diz mais que o navegador abriu antes de saber.
+
 ## 0.3.2 · 12/10/2026
 
 Correções da auditoria de segurança da 0.2.0 à 0.3.1 (skill da Cloudflare, rodada 3). Traz uma mudança pequena no banco:

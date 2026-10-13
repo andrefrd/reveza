@@ -1653,6 +1653,10 @@ export class Agente {
         const l = this.logins.iniciar(email);
         return { status: 200, corpo: { ok: true, id: l.id } };
       },
+      codigoLogin: (corpo: Record<string, unknown>): Resposta => {
+        const r = this.logins.codigo(String(corpo.id ?? ""), String(corpo.codigo ?? ""));
+        return { status: r.ok ? 200 : 400, corpo: r };
+      },
       adotar: async (): Promise<Resposta> => {
         const id = await this.trocador.conferirPrincipal();
         this.salvar();

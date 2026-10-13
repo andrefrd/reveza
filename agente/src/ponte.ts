@@ -70,6 +70,8 @@ export interface AlvoPonte {
   trocar(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   atualizar(): Resposta | Promise<Resposta>;
   conectar(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
+  /** O código que a página do login mostrou, para o login aberto por `conectar` (o `reveza contas conectar` manda). */
+  codigoLogin(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   adotar(): Resposta | Promise<Resposta>;
   som(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   /** Conserto do `reveza doctor` que precisa do agente rodando (só os da lista fechada, pelo nome). */
@@ -161,6 +163,7 @@ export function criarPonte(alvo: AlvoPonte, porta: number, chave: string | null 
         if (caminho === "/api/trocar") return alvo.trocar(c);
         if (caminho === "/api/atualizar") return alvo.atualizar();
         if (caminho === "/api/contas/conectar") return alvo.conectar(c);
+        if (caminho === "/api/contas/codigo") return alvo.codigoLogin(c);
         if (caminho === "/api/contas/adotar") return alvo.adotar();
         if (caminho === "/api/som") return alvo.som(c);
         if (caminho === "/api/consertar") return alvo.consertar(c);

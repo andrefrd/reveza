@@ -179,9 +179,14 @@ reveza trocar a@exemplo.com
 reveza uso --csv         # registro de uso em planilha
 reveza som desligar      # tira o som da troca (som ligar, som testar)
 reveza doctor            # diagnóstico
+reveza contas conectar b@exemplo.com   # conecta uma conta pelo terminal
 ```
 
 Dentro das sessões, **`/reveza`** mostra as contas, e a linha de status mostra a conta em uso e a janela de 5 horas.
+
+**Conectar conta quando o navegador não abre** (ou abre na conta errada, comum com vários perfis do Chrome): no painel
+ou no `reveza contas conectar`, copie o endereço do login, abra numa **janela anônima**, entre na conta e cole o código
+que a página mostrar.
 
 <details>
 <summary><b>🔌 API e webhooks</b></summary>

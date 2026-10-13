@@ -150,7 +150,8 @@ Uso: reveza <comando> [opções]
 
   status [--json]                 o que está em uso, o estado de cada conta e os últimos eventos
   contas [--json]                 as contas deste computador
-  contas conectar <email>         login oficial de uma conta nova (abre o navegador)
+  contas conectar <email>         login oficial de uma conta nova (abre o navegador; mostra o endereço e aceita o
+                                 código da página aqui mesmo, para quem usa janela anônima ou outro perfil)
   contas adotar                   adota a conta que já está em uso
   trocar <email> [--local]        troca a conta em uso (com nuvem, quem decide é o painel)
   som [ligar|desligar|testar]     som do sistema quando este computador troca de conta (ligado de fábrica)
@@ -343,7 +344,7 @@ async function cmdConectar(amb: Ambiente, a: Args): Promise<number> {
     amb.erro(corpo.erro ?? "não consegui iniciar o login");
     return 1;
   }
-  amb.saida("Login iniciado: termine no navegador que abriu.");
+  amb.saida("Abrindo o login oficial no navegador deste computador…");
   let mostrouUrl = false;
   for (let i = 0; i < 600; i++) {
     await amb.relogio.dormir(1000);
@@ -354,7 +355,18 @@ async function cmdConectar(amb: Ambiente, a: Args): Promise<number> {
     if (!con) continue;
     if (con.url && !mostrouUrl) {
       mostrouUrl = true;
-      amb.saida(`Se o navegador não abriu: ${con.url}`);
+      // O navegador pode não abrir, ou abrir no perfil de outra conta (relato de usuário com 3 perfis do Chrome,
+      // 12/10/2026): o endereço vai sempre na tela, e o código que a página mostra pode ser colado aqui mesmo.
+      amb.saida("");
+      amb.saida("Se o navegador não abriu, ou abriu na conta errada, abra este endereço numa janela anônima:");
+      amb.saida(`  ${con.url}`);
+      amb.saida(`Entre na conta${email ? ` ${email}` : ""}; a página mostra um código. Cole aqui e tecle Enter (ou só espere, se o navegador terminar sozinho).`);
+      void amb.perguntar("Código: ").then(async (codigo) => {
+        if (!codigo.trim()) return;
+        const r = await pedirPonte(porta, "POST", "/api/contas/codigo", { id: corpo.id, codigo: codigo.trim() }, chaveDaPonte(amb.c.ponteChave, false));
+        const c = r?.corpo as { ok?: boolean; erro?: string } | undefined;
+        if (!c?.ok) amb.erro(`o código não foi aceito: ${c?.erro ?? "o agente não respondeu"}`);
+      });
     }
     if (con.estado !== "aguardando") {
       (con.estado === "ok" ? amb.saida : amb.erro)(con.mensagem);

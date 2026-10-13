@@ -30,6 +30,13 @@ export interface Login {
 // do login, e nenhum caractere especial de shell chega ao programa, nem no Windows (auditoria de 11/10/2026).
 export const EMAIL_VALIDO = /^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
 
+/**
+ * O que dizer a quem conecta, com o endereço na mão. O navegador do computador pode não abrir, ou abrir no perfil de
+ * outra conta (quem usa vários perfis do Chrome caiu nisso, 12/10/2026): numa janela anônima não há conta aberta.
+ */
+export const TEXTO_DO_LOGIN =
+  "Abra o endereço do login (de preferência numa janela anônima, para não entrar com a conta que já está aberta no navegador), entre na conta e cole aqui o código que a página mostrar.";
+
 export class Logins {
   mapa = new Map<string, Login>();
 
@@ -63,7 +70,7 @@ export class Logins {
       email: email ? email.toLowerCase() : null,
       estado: "aguardando",
       url: null,
-      mensagem: "Termine o login no navegador que abriu.",
+      mensagem: "Abrindo o login oficial…",
       iniciadaEm: this.relogio.agora(),
       conta: null,
       pasta,
@@ -75,8 +82,13 @@ export class Logins {
     proc.aoLinha((linha) => {
       login.saida.push(linha.slice(0, 300));
       login.saida.splice(0, Math.max(0, login.saida.length - 40));
-      const m = /https:\/\/\S+/.exec(linha);
-      if (m && !login.url) login.url = m[0];
+      // o primeiro endereço https da saída é o do login oficial (o Claude Code 2.1.29x imprime "If the browser didn't
+      // open, visit: https://claude.com/cai/oauth/authorize?..."); sem pontuação grudada no fim
+      const m = /https:\/\/[^\s"'<>]+/.exec(linha);
+      if (m && !login.url) {
+        login.url = m[0].replace(/[).,;]+$/, "");
+        login.mensagem = TEXTO_DO_LOGIN;
+      }
     });
     login.concluido = new Promise<void>((resolve) => {
       proc.aoFim(() => void this.finalizar(login).catch(() => undefined).finally(resolve));

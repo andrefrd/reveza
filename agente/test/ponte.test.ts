@@ -117,6 +117,18 @@ describe("ponte local", () => {
     assert.equal(m.agente.estado.fila.find((f) => f.sessao === "sessao-1")!.estado, "retomada");
   });
 
+  test("conectar pela linha de comando e o código da página do login pela ponte", async () => {
+    const r = await pedir("POST", "/api/contas/conectar", { corpo: { email: "b@exemplo.com" } });
+    assert.equal(r.status, 200);
+    const id = (r.corpo as { id: string }).id;
+    const proc = m.cli.logins[m.cli.logins.length - 1]!.proc;
+    const c = await pedir("POST", "/api/contas/codigo", { corpo: { id, codigo: "codigo-da-pagina" } });
+    assert.equal(c.status, 200);
+    assert.deepEqual(proc.escrito, ["codigo-da-pagina\n"]);
+    assert.equal((await pedir("POST", "/api/contas/codigo", { corpo: { id: "outro", codigo: "x" } })).status, 400);
+    assert.equal((await pedir("POST", "/api/contas/codigo", { corpo: { id, codigo: "x" }, cabecalho: false })).status, 403);
+  });
+
   test("trocar pela linha de comando (sem nuvem) e conta desconhecida", async () => {
     const r = await pedir("POST", "/api/trocar", { corpo: { email: "ninguem@exemplo.com" } });
     assert.equal(r.status, 404);

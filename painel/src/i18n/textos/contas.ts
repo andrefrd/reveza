@@ -81,13 +81,19 @@ export default secao({
         estados: {
           pendente: "Pedido enviado. O computador pega na próxima atualização…",
           reservado: "O computador está abrindo o login oficial…",
-          feito: "O computador abriu o login oficial no navegador dele. Termine lá ou aqui.",
+          feito: "O login oficial está pronto no computador. Se o navegador dele não abriu (ou abriu na conta errada), termine por aqui.",
           recusado: "O computador recusou o pedido.",
           expirado: "O computador não pegou o pedido a tempo. Ele está ligado?",
         },
         conectada: "Pronto: a conta está conectada.",
-        abrirAqui: "Não está nesse computador? Abra o login aqui, entre na conta e, se a página mostrar um código, cole abaixo.",
+        abrirAqui: "Abra o login, entre na conta e cole abaixo o código que a página mostrar.",
         abrirLogin: "Abrir o login",
+        copiarLogin: "Copiar o endereço",
+        anonima:
+          "Dica: copie o endereço e abra numa janela anônima (ou no perfil do navegador dessa conta). Com outra conta já aberta no navegador, o login entra nela, ou a página nem aparece.",
+        semEndereco:
+          "O computador não mandou o endereço do login. No terminal dele, rode: reveza contas conectar {email}",
+        terminal: "Prefere o terminal? No computador escolhido: reveza contas conectar {email}",
         codigo: "Código que a página do login mostrou",
         enviarCodigo: "Enviar o código",
         cancelar: "Cancelar o login",
@@ -176,13 +182,19 @@ export default secao({
         estados: {
           pendente: "Request sent. The computer picks it up on the next update…",
           reservado: "The computer is opening the official sign-in…",
-          feito: "The computer opened the official sign-in in its browser. Finish it there or here.",
+          feito: "The official sign-in is ready on the computer. If its browser did not open (or opened the wrong account), finish here.",
           recusado: "The computer refused the request.",
           expirado: "The computer didn't pick up the request in time. Is it on?",
         },
         conectada: "Done: the account is connected.",
-        abrirAqui: "Not at that computer? Open the sign-in here, sign in and, if the page shows a code, paste it below.",
+        abrirAqui: "Open the sign-in, sign in to the account and paste below the code the page shows.",
         abrirLogin: "Open the sign-in",
+        copiarLogin: "Copy the address",
+        anonima:
+          "Tip: copy the address and open it in a private window (or in that account's browser profile). With another account already open in the browser, the sign-in goes to it, or the page does not even show.",
+        semEndereco:
+          "The computer did not send the sign-in address. In its terminal, run: reveza contas conectar {email}",
+        terminal: "Prefer the terminal? On the chosen computer: reveza contas conectar {email}",
         codigo: "Code shown by the sign-in page",
         enviarCodigo: "Send the code",
         cancelar: "Cancel sign-in",

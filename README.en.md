@@ -182,9 +182,14 @@ reveza trocar a@example.com
 reveza uso --csv         # usage log as a spreadsheet
 reveza som desligar      # turns off the switch sound (som ligar, som testar)
 reveza doctor            # diagnostics
+reveza contas conectar b@example.com   # connects an account from the terminal
 ```
 
 Inside sessions, **`/reveza`** shows the accounts, and the status line shows the account in use and the 5-hour window.
+
+**Connecting an account when the browser does not open** (or opens the wrong account, common with several Chrome
+profiles): in the dashboard or in `reveza contas conectar`, copy the sign-in address, open it in a **private window**,
+sign in and paste the code the page shows.
 
 <details>
 <summary><b>🔌 API and webhooks</b></summary>

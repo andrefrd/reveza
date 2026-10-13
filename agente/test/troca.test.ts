@@ -515,6 +515,22 @@ describe("conexão de conta", () => {
     assert.equal(path.dirname(l.pasta), m.c.contas);
   });
 
+  test("o endereço do login vem da saída do Claude Code 2.1.29x (claude.com, código colado), com o texto de janela anônima", async () => {
+    m = await montar();
+    const l = m.agente.logins.iniciar("b@exemplo.com");
+    assert.equal(l.mensagem, "Abrindo o login oficial…", "não diz que o navegador abriu antes de saber");
+    const proc = m.cli.logins[m.cli.logins.length - 1]!.proc;
+    // a saída de verdade (12/10/2026), com o endereço depois do "If the browser didn't open"
+    proc.emitir("Opening browser to sign in…");
+    proc.emitir("If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y.");
+    proc.emitir("Paste code here if prompted >");
+    assert.equal(l.url, "https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y");
+    assert.match(l.mensagem, /janela anônima/);
+    // o código colado no painel ou no terminal vai para o login aberto
+    assert.deepEqual(m.agente.logins.codigo(l.id, "  codigo-da-pagina  "), { ok: true });
+    assert.deepEqual(proc.escrito, ["codigo-da-pagina\n"]);
+  });
+
   test("login que pede Enter no fim: quando a credencial aparece, confirma", async () => {
     m = await montar();
     const l = m.agente.logins.iniciar("b@exemplo.com");
