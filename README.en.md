@@ -12,6 +12,7 @@
 <img src="https://img.shields.io/badge/license-MIT-1F1E1D?style=for-the-badge" alt="MIT license" />
 <a href="README.md"><img src="https://img.shields.io/badge/Portugu%C3%AAs-1F1E1D?style=for-the-badge" alt="Português" /></a>
 <a href="#-support-the-project"><img src="https://img.shields.io/badge/support-%F0%9F%92%9B-1F1E1D?style=for-the-badge" alt="Support the project" /></a>
+<a href="https://chat.whatsapp.com/GpWGlonYkLm9R3wMF6FquB"><img src="https://img.shields.io/badge/WhatsApp%20group-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp group" /></a>
 
 <br/><br/>
 
@@ -278,6 +279,8 @@ The whole architecture is in [docs/ARQUITETURA.md](docs/ARQUITETURA.md) (Portugu
 <br/>
 
 ## 🤝 Contribute
+
+Questions, news and help: join the [Reveza group on WhatsApp](https://chat.whatsapp.com/GpWGlonYkLm9R3wMF6FquB) (in Portuguese).
 
 Found a bug or have an idea? [Open an issue](https://github.com/dantaspaulo/reveza/issues). Want to change the code?
 Pull requests are welcome, translations included. If Reveza saved you from a stop at the limit, leave a ⭐.
