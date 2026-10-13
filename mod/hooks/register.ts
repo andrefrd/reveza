@@ -7,6 +7,26 @@ import type { HttpInit, Register, SessionRateLimit } from 'claude-code'
 //    continuar de onde parou. Sessão de terminal (`-p`) quem retoma é o agente, pelo --resume.
 
 export const PORTA_PADRAO = 7788
+
+/**
+ * Entre os erros que o Claude Code chama de `rate_limit`, só o limite de USO da conta se resolve trocando de conta. Caem
+ * em `rate_limit` também (Claude Code 2.1.29x): "Usage credits required for 1M context" (a conversa passou de 200 mil
+ * tokens numa conta sem uso extra; trocar não resolve e a retomada bate no mesmo erro, relato do Paulo de 13/10/2026),
+ * "model requires usage credits" e "Request rejected (429) · this may be a temporary capacity issue" (momentâneo).
+ * Sem texto nenhum (versão antiga do Claude Code), segue valendo como limite de uso, como antes.
+ */
+export type TipoDoLimite = 'uso' | 'contexto_longo' | 'outro'
+const CONTEXTO_LONGO = /long context|1M context|context window/i
+const OUTRO_429 = /usage credits|requires? usage credits|temporary capacity|Request rejected \(429\)|overloaded/i
+const LIMITE_DE_USO = /hit your [^.·\n]*limit|usage limit|limit reached|out of (extra )?usage|resets? (at |in )?\d/i
+
+export function tipoDoLimite(detalhe: string | undefined, mensagem: string | undefined): TipoDoLimite {
+  const texto = `${detalhe ?? ''} ${mensagem ?? ''}`.trim()
+  if (!texto) return 'uso'
+  if (CONTEXTO_LONGO.test(texto)) return 'contexto_longo'
+  if (OUTRO_429.test(texto)) return 'outro'
+  return LIMITE_DE_USO.test(texto) ? 'uso' : 'outro'
+}
 const ESPERA_MAXIMA_MS = 2 * 60 * 60 * 1000
 const LEITURA_MS = 30_000
 
@@ -238,6 +258,12 @@ export const register: Register = (on, options) => {
 
   on('classic.StopFailure', async ($, e, next) => {
     if (e.error !== 'rate_limit') return next(e)
+    const tipoLimite = tipoDoLimite(e.error_details, e.last_assistant_message)
+    if (tipoLimite === 'contexto_longo') {
+      $.ui.toast('A conversa passou do contexto que esta conta usa sem crédito extra: rode /compact (ou comece outra sessão). Trocar de conta não resolve.')
+      return next(e)
+    }
+    if (tipoLimite !== 'uso') return next(e)
     const superficies = await $.session.surfaces().catch(() => [])
     const tipo = interativa || superficies.length > 0 ? 'interativa' : 'headless'
     const antes = versao

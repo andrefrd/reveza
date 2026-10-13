@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { hmacHex } from './register'
+import { hmacHex, tipoDoLimite } from './register'
 
 // Agente falso: responde /api/ativa com a versão do momento e guarda o que o mod mandou.
 function agente(on: On) {
@@ -11,7 +11,8 @@ function agente(on: On) {
   on('session.surfaces', () => ({ value: ['terminal' as const] }))
   on('command.register', () => ({ value: undefined }) as never)
   on('ui.status', () => ({ value: undefined }))
-  on('ui.toast', () => ({ value: undefined }))
+  const avisos: string[] = []
+  on('ui.toast', ($, e) => (avisos.push(JSON.stringify(e)), { value: undefined }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('classic.StopFailure', () => ({}) as never)
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -49,7 +50,7 @@ function agente(on: On) {
     if (e.path === '/home/teste/.reveza/ponte.chave') return { value: `${'c'.repeat(64)}\n` }
     throw new Error('ENOENT')
   })
-  return { recebidos, estado }
+  return { recebidos, estado, avisos }
 }
 
 test('no limite, avisa o agente e continua sozinha quando a conta troca', async ($, on) => {
@@ -107,6 +108,30 @@ test('a pessoa digitou durante a espera: não manda continuar por cima', async (
   await relogio.advance(5000)
   await relogio.settle()
   expect(enviados).toHaveLength(0)
+})
+
+test('rate_limit que não é limite de uso (contexto de 1M sem crédito, 429 momentâneo) não troca de conta nem manda continuar', async ($, on) => {
+  const { recebidos, avisos } = agente(on)
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  // as mensagens de verdade do Claude Code 2.1.296
+  await $.classic.StopFailure({
+    error: 'rate_limit',
+    error_details: '429 {"type":"error","error":{"type":"rate_limit_error","message":"Extra usage is required for long context requests."}}',
+    last_assistant_message: 'API Error: Usage credits required for 1M context · run /usage-credits to turn them on',
+  } as never)
+  await $.classic.StopFailure({
+    error: 'rate_limit',
+    last_assistant_message: 'API Error: Request rejected (429) · this may be a temporary capacity issue.',
+  } as never)
+  expect(recebidos.some(r => r.url.endsWith('/api/limite'))).toBe(false)
+  expect(avisos.some(a => a.includes('/compact'))).toBe(true)
+})
+
+test('limite de uso de verdade (com o texto do Claude Code) avisa o agente', async ($, on) => {
+  const { recebidos } = agente(on)
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await $.classic.StopFailure({ error: 'rate_limit', last_assistant_message: "You've hit your session limit · resets 1pm (America/Fortaleza)" } as never)
+  expect(recebidos.filter(r => r.url.endsWith('/api/limite'))).toHaveLength(1)
 })
 
 test('outro erro de API não mexe no agente', async ($, on) => {
@@ -183,3 +208,16 @@ test('outro programa na porta (sem a prova do agente) não controla o /reveza ne
   expect(String(r.text)).not.toContain('Org A')
 })
 
+
+test('o tipo do limite pelas mensagens reais do Claude Code', async () => {
+  expect(tipoDoLimite(undefined, "You've hit your session limit · resets 1pm (America/Fortaleza)")).toBe('uso')
+  expect(tipoDoLimite(undefined, "You've hit your weekly limit · resets 6am (America/Fortaleza)")).toBe('uso')
+  expect(
+    tipoDoLimite(undefined, "You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 2:20am (America/Fortaleza)"),
+  ).toBe('uso')
+  expect(tipoDoLimite('Extra usage is required for long context requests.', undefined)).toBe('contexto_longo')
+  expect(tipoDoLimite(undefined, 'API Error: Usage credits required for 1M context · run /usage-credits to turn them on')).toBe('contexto_longo')
+  expect(tipoDoLimite(undefined, 'API Error: Request rejected (429) · this may be a temporary capacity issue.')).toBe('outro')
+  expect(tipoDoLimite(undefined, 'API Error: This model requires usage credits · /model to switch models.')).toBe('outro')
+  expect(tipoDoLimite(undefined, undefined)).toBe('uso')
+})

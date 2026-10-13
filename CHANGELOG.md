@@ -7,6 +7,21 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.1 · 13/10/2026
+
+Sessão que trava com "prompt is too long" (relato do Paulo, 13/10/2026). Atualize os computadores pelo painel; o mod das
+sessões vai junto.
+
+- **O que acontece:** numa conta de equipe sem uso extra liberado, a conversa que passa de 200 mil tokens precisa de
+  crédito para o contexto de 1 milhão. O Claude Code recusa com "Usage credits required for 1M context" e chama esse
+  erro de `rate_limit`, o mesmo nome do limite de uso. O mod do Reveza entendia como limite da conta: marcava a conta
+  como esgotada, trocava de conta à toa e mandava a sessão continuar, que batia no mesmo erro.
+- **Agora:** o mod só avisa o agente quando é limite de uso de verdade ("You've hit your session limit", "weekly
+  limit", "spend limit"). O erro do contexto de 1 milhão mostra o que fazer: `/compact`, ou outra sessão; trocar de
+  conta não resolve. O 429 momentâneo ("this may be a temporary capacity issue") também não troca de conta.
+- **Sessão que já travou:** rode `/compact`. Se ele também recusar, volte a uma mensagem anterior (Esc duas vezes) e
+  rode `/compact` dali, ou comece outra sessão.
+
 ## 0.4.0 · 13/10/2026
 
 Ligar um computador novo com um código que tem uma parte secreta. Sem mudança no banco: atualize os computadores pelo
