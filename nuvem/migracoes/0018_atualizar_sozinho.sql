@@ -7,14 +7,18 @@
 -- Se um voltou para a anterior (ou não voltou em 45 minutos), os outros não atualizam sozinhos e sai um alerta
 -- (`atualizacao_falhou`); desligar e ligar a opção destrava.
 
+-- A lista é a completa de hoje, igual à da última migração que recria a restrição (0.4.6): reaplicada numa nuvem
+-- em uso, uma lista antiga recusaria as linhas que já usam os valores novos e a atualização pararia no meio.
 alter table public.config drop constraint if exists config_chave_check;
 alter table public.config add constraint config_chave_check check (chave in ('auto', 'modo', 'aviso', 'troca',
   'rodizio_minutos', 'rodizio_ordem', 'intervalo_s', 'retomar_terminal', 'espera_entre_trocas_s', 'proximo_rodizio_em',
-  'fuso', 'alertas_ate', 'exigir_duas_etapas', 'cofre_impressao', 'atualizar_sozinho', 'atualizacao_vez'));
+  'fuso', 'alertas_ate', 'exigir_duas_etapas', 'cofre_impressao', 'atualizar_sozinho', 'atualizacao_vez',
+  'nuvem_versao', 'nuvem_atualizacao', 'publicado', 'impressoes', 'painel_publicacao', 'atualizacao_completa',
+  'publicacao_vez'));
 
 alter table public.alertas drop constraint if exists alertas_eventos_check;
 alter table public.alertas add constraint alertas_eventos_check check (eventos <@ array['sem_livre', 'precisa_login',
-  'computador_parado', 'login_vence', 'resumo_dia', 'troca', 'limite', 'atualizacao_falhou']);
+  'computador_parado', 'login_vence', 'resumo_dia', 'troca', 'limite', 'atualizacao_falhou', 'troca_falhou']);
 
 create or replace function public.painel_config(p_chave text, p_valor jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$

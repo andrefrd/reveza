@@ -3,10 +3,14 @@
 -- senha, a não ser que a instalação exija (config exigir_duas_etapas, ligada no painel).
 -- reaplicável: restrição recriada e funções (create or replace); o instalador roda de novo quando o arquivo muda.
 
+-- A lista é a completa de hoje, igual à da última migração que recria a restrição (0.4.6): reaplicada numa nuvem
+-- em uso, uma lista antiga recusaria as linhas que já usam os valores novos e a atualização pararia no meio.
 alter table public.config drop constraint if exists config_chave_check;
 alter table public.config add constraint config_chave_check check (chave in ('auto', 'modo', 'aviso', 'troca',
   'rodizio_minutos', 'rodizio_ordem', 'intervalo_s', 'retomar_terminal', 'espera_entre_trocas_s', 'proximo_rodizio_em',
-  'fuso', 'alertas_ate', 'exigir_duas_etapas'));
+  'fuso', 'alertas_ate', 'exigir_duas_etapas', 'cofre_impressao', 'atualizar_sozinho', 'atualizacao_vez',
+  'nuvem_versao', 'nuvem_atualizacao', 'publicado', 'impressoes', 'painel_publicacao', 'atualizacao_completa',
+  'publicacao_vez'));
 
 -- A instalação exige as duas etapas de todo administrador?
 create or replace function public.rvz_exige_duas_etapas() returns boolean

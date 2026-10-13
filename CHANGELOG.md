@@ -7,6 +7,20 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.6 · 13/10/2026
+
+Correção preventiva na atualização da nuvem. Três regras antigas do banco guardavam listas desatualizadas das opções de
+configuração e dos tipos de alerta. Se uma delas precisasse rodar de novo numa nuvem em uso, a atualização da nuvem
+pararia no meio e voltaria atrás sem atualizar. Até aqui isso não aconteceu: essas regras não tinham mudado. Atualize
+os computadores pelo painel; a nuvem se atualiza sozinha (ou pelo **Atualizar a nuvem**) e, desta vez, roda de novo as
+regras corrigidas.
+
+- **Listas completas:** as três regras passam a ter as mesmas listas da regra mais nova, então rodar qualquer uma de novo
+  aceita as configurações e os alertas que já existem.
+- **Teste novo:** monta um banco com uma linha para cada valor que cada lista aceita, roda de novo, duas vezes e em
+  ordem, todas as regras que a atualização pode rodar, e confere que nenhuma falha e que nenhum dado muda. Lista nova
+  que o teste não sabe povoar faz o teste falhar, para não passar sem ser coberta.
+
 ## 0.4.5 · 13/10/2026
 
 Troca de conta que não firmou vira alerta. Um usuário perguntou se o Reveza avisa quando a troca falha ou se segue sem
