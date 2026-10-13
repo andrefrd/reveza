@@ -182,11 +182,17 @@ reveza status            # account in use, usage per account, next switch
 reveza trocar a@example.com
 reveza uso --csv         # usage log as a spreadsheet
 reveza som desligar      # turns off the switch sound (som ligar, som testar)
+reveza resumo 300k       # how many tokens before the conversation is summarized (default 180k; resumo desligar)
 reveza doctor            # diagnostics
 reveza contas conectar b@example.com   # connects an account from the terminal
 ```
 
 Inside sessions, **`/reveza`** shows the accounts, and the status line shows the account in use and the 5-hour window.
+
+**Conversation summary:** on accounts that are not 20x, Claude Code summarizes the conversation near 180k tokens (its
+own default for Opus 5.5 is 1 million). Conversations kept for days went past 600k, got stuck with "Prompt is too
+long", and not even `/compact` helped; and every message sends the whole conversation, so a smaller one makes the
+account last longer. On 20x accounts, Claude Code's default stays. Your own `/autocompact` takes precedence.
 
 **Connecting an account:** the computer opens the official sign-in in a **private window** of its browser (Chrome,
 Edge, Brave, Chromium or Firefox), without the account already open in it (people with several Chrome profiles ended up

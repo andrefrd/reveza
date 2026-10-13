@@ -134,6 +134,17 @@ test('limite de uso de verdade (com o texto do Claude Code) avisa o agente', asy
   expect(recebidos.filter(r => r.url.endsWith('/api/limite'))).toHaveLength(1)
 })
 
+test('Prompt is too long: mostra como sair e manda ao agente o tamanho da conversa', async ($, on) => {
+  const { recebidos, avisos } = agente(on)
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 615000, window: 1000000, percent: 61 }, rateLimits: [] } }) as never)
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await $.classic.StopFailure({ error: 'invalid_request', last_assistant_message: 'Prompt is too long' } as never)
+  const erro = recebidos.find(r => r.url.endsWith('/api/sessao/erro'))
+  expect(erro?.corpo).toMatchObject({ sessao: 'sessao-teste', tipo: 'contexto', tokens: 615000, janela: 1000000 })
+  expect(avisos.some(a => a.includes('/rewind'))).toBe(true)
+  expect(recebidos.some(r => r.url.endsWith('/api/limite'))).toBe(false)
+})
+
 test('outro erro de API não mexe no agente', async ($, on) => {
   const { recebidos } = agente(on)
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })

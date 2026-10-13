@@ -7,6 +7,20 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.2 · 13/10/2026
+
+Sessão que trava com "Prompt is too long" (pedido do Paulo, depois de duas sessões travadas no MacBook em 12 e 13/10).
+Atualize os computadores pelo painel; o mod das sessões vai junto.
+
+- **Resumo da conversa:** nas contas que não são 20x, o agente deixa o Claude Code resumir a conversa perto de 180 mil
+  tokens. O automático dele, no Opus 5.5, é 1 milhão: uma sessão de dias chegou a 615 mil, travou e nem o `/compact`
+  resolvia, porque para resumir ele manda a conversa inteira. Cada mensagem também manda a conversa inteira, então
+  conversa menor faz a conta durar mais. Nas contas de 20x fica o automático. O valor acompanha a conta a cada troca.
+- **No terminal:** `reveza resumo` mostra; `reveza resumo 300k` muda; `reveza resumo desligar` devolve o automático.
+  Um `/autocompact` seu vale por cima, e um valor que você pôs à mão no settings.json o agente não mexe.
+- **Sessão que travou:** o mod mostra como sair (`/rewind`, voltar algumas mensagens, `/compact`) e o tamanho da
+  conversa fica nos eventos do painel, para saber por que travou.
+
 ## 0.4.1 · 13/10/2026
 
 Sessão que trava com "prompt is too long" (relato do Paulo, 13/10/2026). Atualize os computadores pelo painel; o mod das

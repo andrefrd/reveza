@@ -959,6 +959,8 @@ async function main() {
     if (ctx.site) console.log(`  ${t("Painel", "Panel")}: ${verde(ctx.site)}  ${fraco(ctx.admin ? `(${ctx.admin.email})` : "")}`);
     console.log(`  ${t("No terminal", "In the terminal")}: ${verde("reveza status")}, ${verde("reveza contas")}, ${verde("reveza uso")}, ${verde("reveza doctor")}`);
     console.log(`  ${t("Nas sessões do Claude Code", "In Claude Code sessions")}: ${verde("/reveza")}`);
+    // resumo da conversa (agente/src/resumo.ts): o agente aplica na conta em uso e a cada troca
+    if (!ctx.sombra) console.log(`  ${t("Resumo da conversa", "Conversation summary")}: ${t("nas contas que não são 20x, o Claude Code resume a conversa perto de 180 mil tokens (evita sessão travada e faz a conta durar mais). Mudar:", "on accounts that are not 20x, Claude Code summarizes the conversation near 180k tokens (avoids stuck sessions and makes the account last longer). Change it:")} ${verde("reveza resumo 300k")} ${t("ou", "or")} ${verde("reveza resumo desligar")}`);
     if (ctx.sombra) console.log(`  ${negrito(t("Modo sombra", "Shadow mode"))}: ${t("nada troca. Quando parar o outro gestor, rode --atualizar: ele pergunta se sai do modo sombra.", "nothing switches. After stopping the other manager, run --atualizar: it asks whether to leave shadow mode.")}`);
     console.log(fraco(t("  Cada pessoa responde pelo uso das próprias contas e pelos termos do serviço de IA que usa.\n", "  Each person is responsible for the use of their own accounts and for the terms of the AI service they use.\n")));
   } catch (e) {

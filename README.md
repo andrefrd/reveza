@@ -179,11 +179,17 @@ reveza status            # conta em uso, uso de cada conta, próxima troca
 reveza trocar a@exemplo.com
 reveza uso --csv         # registro de uso em planilha
 reveza som desligar      # tira o som da troca (som ligar, som testar)
+reveza resumo 300k       # perto de quantos tokens a conversa é resumida (de fábrica, 180k; resumo desligar)
 reveza doctor            # diagnóstico
 reveza contas conectar b@exemplo.com   # conecta uma conta pelo terminal
 ```
 
 Dentro das sessões, **`/reveza`** mostra as contas, e a linha de status mostra a conta em uso e a janela de 5 horas.
+
+**Resumo da conversa:** nas contas que não são 20x, o Claude Code resume a conversa perto de 180 mil tokens (o
+automático dele, no Opus 5.5, é 1 milhão). Conversa de dias passava de 600 mil, travava com "Prompt is too long" e nem o
+`/compact` resolvia; e cada mensagem manda a conversa inteira, então conversa menor faz a conta durar mais. Nas contas de
+20x fica o automático. Um `/autocompact` seu vale por cima disso.
 
 **Conectar conta:** o computador abre o login oficial numa **janela anônima** do navegador (Chrome, Edge, Brave,
 Chromium ou Firefox), sem a conta que já estiver aberta nele (quem tem vários perfis do Chrome caía na conta errada).

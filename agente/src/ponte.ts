@@ -74,6 +74,10 @@ export interface AlvoPonte {
   codigoLogin(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   adotar(): Resposta | Promise<Resposta>;
   som(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
+  /** O resumo da conversa (autoCompactWindow do Claude Code) nas contas que não são 20x (`reveza resumo`). */
+  resumo(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
+  /** A sessão que parou com "Prompt is too long" (o mod manda o tamanho da conversa). */
+  sessaoErro(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
   /** Conserto do `reveza doctor` que precisa do agente rodando (só os da lista fechada, pelo nome). */
   consertar(corpo: Record<string, unknown>): Resposta | Promise<Resposta>;
 }
@@ -166,6 +170,8 @@ export function criarPonte(alvo: AlvoPonte, porta: number, chave: string | null 
         if (caminho === "/api/contas/codigo") return alvo.codigoLogin(c);
         if (caminho === "/api/contas/adotar") return alvo.adotar();
         if (caminho === "/api/som") return alvo.som(c);
+        if (caminho === "/api/resumo") return alvo.resumo(c);
+        if (caminho === "/api/sessao/erro") return alvo.sessaoErro(c);
         if (caminho === "/api/consertar") return alvo.consertar(c);
         const m = /^\/api\/fila\/([^/]+)\/(retomada|descartar)$/.exec(caminho);
         if (m) {

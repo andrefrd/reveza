@@ -61,6 +61,7 @@ import {
 import { compararVersao } from "./doctor.js";
 import { abrirTokens, completaLigada, PUBLICA_DESDE, pendenteDaPublicacao, semSegredos } from "./completa.js";
 import { gravarAtomico, gravarJson, lerJson } from "./util/arquivos.js";
+import { aplicarResumo, contaGrande, janelaDaConta, RESUMO_MAXIMO, RESUMO_MINIMO } from "./resumo.js";
 
 export interface Dependencias {
   c: Caminhos;
@@ -216,6 +217,8 @@ export class Agente {
   /** O que a nuvem já sabe de cada conta sobre precisar de login (e quando foi a última tentativa recusada). */
   private loginInformado = new Map<string, boolean>();
   private loginTentado = new Map<string, number>();
+  /** Sessões que já avisaram "Prompt is too long" (uma vez a cada 10 min por sessão). */
+  private errosAvisados = new Map<string, number>();
 
   constructor(private d: Dependencias) {
     this.estado = carregarEstado(d.c.estado);
@@ -228,7 +231,10 @@ export class Agente {
         // A nuvem gera os próprios alertas; daqui vai o resto (alerta local chega lá como aviso).
         const t = tipo === "alerta" ? "aviso" : tipo;
         if (d.nuvem && !d.sombra && tipo !== "info" && TIPOS_EVENTO_NUVEM.has(t)) void d.nuvem.evento(t, texto, dados).catch(() => undefined);
-        if (tipo === "troca") this.somDaTroca(); // em sombra o trocador não troca, então não chega aqui
+        if (tipo === "troca") {
+          this.somDaTroca(); // em sombra o trocador não troca, então não chega aqui
+          this.aplicarResumo();
+        }
       },
       aoRenovarPrincipal: () => {
         if (this.posse) this.posse.subirAtiva = true;
@@ -257,6 +263,28 @@ export class Agente {
 
   get comNuvem(): boolean {
     return !!this.d.nuvem;
+  }
+
+  /**
+   * O resumo da conversa acompanha a conta em uso: perto de `config.resumo` tokens nas que não são 20x, o automático do
+   * Claude Code nas de 20x (resumo.ts). Em modo sombra não mexe em nada.
+   */
+  aplicarResumo(): void {
+    if (this.d.sombra) return;
+    const conta = this.estado.ativa ? this.estado.contas[this.estado.ativa] : null;
+    const desejado = janelaDaConta(conta, this.estado.config.resumo ?? false);
+    const antes = this.estado.resumoEscrito ?? null;
+    try {
+      const r = aplicarResumo(path.join(this.d.c.principalDir, "settings.json"), desejado, antes);
+      if (r.daPessoa && antes !== null) this.d.log.info("resumo da conversa: o autoCompactWindow do assistente de código foi mudado à mão; o agente não mexe mais nele");
+      if (r.mudou) this.d.log.info(`resumo da conversa: ${desejado === null ? "automático do assistente de código" : `perto de ${Math.round(desejado / 1000)} mil tokens`}${conta ? ` (${conta.email})` : ""}`);
+      if (r.escrito !== antes) {
+        this.estado.resumoEscrito = r.escrito;
+        this.salvar();
+      }
+    } catch (e) {
+      this.d.log.erro(`resumo da conversa: ${(e as Error).message}`);
+    }
   }
 
   /** Toca o som de troca, se estiver ligado. Solto: a troca não espera o som. */
@@ -289,6 +317,7 @@ export class Agente {
     if (this.chave && this.chave.length !== 32) this.chave = null;
     this.d.log.info(`agente ${VERSAO} ${this.d.sombra ? "em modo sombra " : ""}${this.comNuvem ? "com nuvem" : "sem nuvem"}`);
     if (opcoes.ponte !== false) await this.abrirPonte();
+    this.aplicarResumo();
     if (opcoes.laços === false) return;
     this.laco(() => this.ciclo(), CICLO_S * 1000);
     if (this.comNuvem) this.laco(() => this.busca(), () => Math.max(2, Math.min(60, this.estado.config.intervaloS || 5)) * 1000);
@@ -1679,6 +1708,45 @@ export class Agente {
         }
         const tocou = corpo.testar === true ? await this.somDaTroca(true) : null;
         return { status: 200, corpo: { ok: true, ligado: this.estado.config.som !== false, tocou } };
+      },
+      resumo: (corpo: Record<string, unknown>): Resposta => {
+        // { tokens: 100000..1000000 } liga ou muda; { tokens: false } desliga (o agente tira o que escreveu); {} só lê
+        if (corpo.tokens === false) this.estado.config.resumo = false;
+        else if (corpo.tokens !== undefined) {
+          const n = Number(corpo.tokens);
+          if (!Number.isInteger(n) || n < RESUMO_MINIMO || n > RESUMO_MAXIMO) {
+            return { status: 400, corpo: { ok: false, erro: "o resumo vai de 100 mil a 1 milhão de tokens (ex.: 180k), ou desligar" } };
+          }
+          this.estado.config.resumo = n;
+        }
+        this.salvar();
+        this.aplicarResumo();
+        const conta = this.estado.ativa ? this.estado.contas[this.estado.ativa] : null;
+        return {
+          status: 200,
+          corpo: {
+            ok: true,
+            tokens: this.estado.config.resumo ?? false,
+            emUso: this.estado.resumoEscrito ?? null,
+            contaGrande: contaGrande(conta),
+            conta: conta?.email ?? null,
+          },
+        };
+      },
+      sessaoErro: (corpo: Record<string, unknown>): Resposta => {
+        // a sessão que travou com "Prompt is too long" (o mod manda): fica nos eventos, com o tamanho da conversa, para
+        // dar para saber depois por que travou (13/10/2026: sem isso, foi preciso ler as transcrições do computador)
+        const sessao = String(corpo.sessao ?? "").slice(0, 80);
+        const tokens = Number(corpo.tokens);
+        const janela = Number(corpo.janela);
+        const mil = (n: number) => (Number.isFinite(n) && n > 0 ? `${Math.round(n / 1000)} mil` : "?");
+        const agora = this.d.relogio.agora();
+        if (corpo.tipo !== "contexto" || (this.errosAvisados.get(sessao) ?? 0) > agora - 600) return { status: 200, corpo: { ok: true } };
+        this.errosAvisados.set(sessao, agora);
+        this.trocador.evento("erro", `Uma sessão parou com "Prompt is too long": conversa em ${mil(tokens)} de ${mil(janela)} tokens.`, {
+          sessao: sessao.slice(0, 8),
+        });
+        return { status: 200, corpo: { ok: true } };
       },
     };
   }

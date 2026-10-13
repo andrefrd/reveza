@@ -257,6 +257,19 @@ export const register: Register = (on, options) => {
   })
 
   on('classic.StopFailure', async ($, e, next) => {
+    if (e.error === 'invalid_request' && /^Prompt is too long/i.test(e.last_assistant_message ?? '')) {
+      // A conversa passou do limite e nem o /compact cabe mais (relato do Paulo, 13/10/2026): diz como sair e manda ao
+      // agente o tamanho dela, que fica nos eventos (sem isso, só lendo as transcrições do computador).
+      $.ui.toast('A conversa passou do limite: rode /rewind, volte algumas mensagens e rode /compact (ou comece outra sessão).')
+      const uso = await $.session.usage().catch(() => null)
+      await $.http
+        .fetch(
+          `${BASE}/api/sessao/erro`,
+          (await pedido('POST', '/api/sessao/erro', { sessao, tipo: 'contexto', tokens: uso?.context.tokens ?? null, janela: uso?.context.window ?? null })).init,
+        )
+        .catch(() => undefined)
+      return next(e)
+    }
     if (e.error !== 'rate_limit') return next(e)
     const tipoLimite = tipoDoLimite(e.error_details, e.last_assistant_message)
     if (tipoLimite === 'contexto_longo') {

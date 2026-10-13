@@ -7,6 +7,7 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { Agente } from "./agente.js";
+import { lerJanela } from "./resumo.js";
 import { ApiAnthropic, ROTULOS, type ApiContas } from "./anthropic.js";
 import { ClaudeCli, type Cli } from "./claudecli.js";
 import { caminhos, PORTA_PADRAO, PORTA_SOMBRA, sistemaAtual, VERSAO, type Caminhos, type Sistema } from "./config.js";
@@ -155,6 +156,8 @@ Uso: reveza <comando> [opções]
   contas adotar                   adota a conta que já está em uso
   trocar <email> [--local]        troca a conta em uso (com nuvem, quem decide é o painel)
   som [ligar|desligar|testar]     som do sistema quando este computador troca de conta (ligado de fábrica)
+  resumo [180k|desligar]          perto de quantos tokens o assistente resume a conversa nas contas que não são 20x
+                                 (de fábrica, 180k: evita sessão travada e faz a conta durar mais)
   uso [--dias N] [--csv|--json]   tokens e custo equivalente por dia, conta, modelo e projeto
   doctor [--so-ver] [--json]      confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões, e conserta o que
                                   tem conserto seguro (serviço, mod, conta em uso sem login); --so-ver só confere
@@ -311,6 +314,44 @@ async function cmdSom(amb: Ambiente, a: Args): Promise<number> {
   }
   const c = r.corpo as { ligado?: boolean; tocou?: boolean | null };
   amb.saida(`som na troca de conta: ${c.ligado ? "ligado" : "desligado"}${c.tocou === false ? " (este sistema não tem tocador de som)" : ""}`);
+  return 0;
+}
+
+/**
+ * reveza resumo [180k|desligar]: perto de quantos tokens o assistente resume a conversa nas contas que não são 20x
+ * (nas de 20x fica o automático dele). Ver resumo.ts.
+ */
+async function cmdResumo(amb: Ambiente, a: Args): Promise<number> {
+  const acao = a.pos[1] ?? "";
+  let corpo: Record<string, unknown> = {};
+  if (acao === "desligar") corpo = { tokens: false };
+  else if (acao) {
+    const n = lerJanela(acao);
+    if (n === null) {
+      amb.erro("uso: reveza resumo [180k|desligar] (de 100k a 1m tokens)");
+      return 2;
+    }
+    corpo = { tokens: n };
+  }
+  const r = await pedirPonte(portaDe(amb, a), "POST", "/api/resumo", corpo, chaveDaPonte(amb.c.ponteChave, false));
+  if (!r) {
+    amb.erro("o agente não está rodando");
+    return 1;
+  }
+  const c = r.corpo as { ok?: boolean; erro?: string; tokens?: number | false; emUso?: number | null; contaGrande?: boolean; conta?: string | null };
+  if (!c.ok) {
+    amb.erro(c.erro ?? "o agente recusou");
+    return 1;
+  }
+  if (c.tokens === false) amb.saida("resumo da conversa: desligado (o assistente de código usa o automático dele)");
+  else amb.saida(`resumo da conversa: perto de ${Math.round((c.tokens ?? 0) / 1000)} mil tokens nas contas que não são 20x`);
+  if (c.conta) {
+    amb.saida(
+      c.emUso
+        ? `agora (${c.conta}): perto de ${Math.round(c.emUso / 1000)} mil tokens`
+        : `agora (${c.conta}): automático do assistente de código${c.contaGrande ? " (conta de 20x)" : ""}`,
+    );
+  }
   return 0;
 }
 
@@ -961,6 +1002,8 @@ export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()
         return await cmdTrocar(amb, a);
       case "som":
         return await cmdSom(amb, a);
+      case "resumo":
+        return await cmdResumo(amb, a);
       case "uso":
         return await cmdUso(amb, a);
       case "doctor":

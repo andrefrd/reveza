@@ -62,6 +62,11 @@ export interface ConfigLocal {
   intervaloS: number;
   /** Som do sistema quando este computador troca de conta. */
   som: boolean;
+  /**
+   * Resumo da conversa (autoCompactWindow do Claude Code) nas contas que não são 20x, em tokens; false: o agente não
+   * mexe (ver resumo.ts).
+   */
+  resumo: number | false;
 }
 
 export interface PontoHistorico {
@@ -86,6 +91,8 @@ export interface EstadoLocal {
   /** Linha do tempo de qual conta estava em uso: [desde, id]. É ela que diz de quem foi cada resposta. */
   linhaContas: [number, string][];
   nuvem: { computadorId: string | null; atribuicaoVersao: number; atribuicaoConta: string | null };
+  /** O autoCompactWindow que o agente deixou no settings.json do Claude Code (null: nada dele lá). */
+  resumoEscrito?: number | null;
 }
 
 export const CONFIG_INICIAL: ConfigLocal = {
@@ -98,6 +105,7 @@ export const CONFIG_INICIAL: ConfigLocal = {
   esperaEntreTrocasS: 90,
   intervaloS: 5,
   som: true,
+  resumo: 180_000,
 };
 
 export function estadoInicial(): EstadoLocal {
