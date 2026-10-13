@@ -188,9 +188,11 @@ reveza contas conectar b@example.com   # connects an account from the terminal
 
 Inside sessions, **`/reveza`** shows the accounts, and the status line shows the account in use and the 5-hour window.
 
-**Connecting an account when the browser does not open** (or opens the wrong account, common with several Chrome
-profiles): in the dashboard or in `reveza contas conectar`, copy the sign-in address, open it in a **private window**,
-sign in and paste the code the page shows.
+**Connecting an account:** the computer opens the official sign-in in a **private window** of its browser (Chrome,
+Edge, Brave, Chromium or Firefox), without the account already open in it (people with several Chrome profiles ended up
+in the wrong account). Sign in and that's it: the sign-in finishes on its own. On another device, or the window did not
+open? In the dashboard or in `reveza contas conectar`, open the sign-in address, sign in and paste the code the page
+shows. On Windows, the sign-in opens in the default browser.
 
 <details>
 <summary><b>🔌 API and webhooks</b></summary>

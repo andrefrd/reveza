@@ -185,9 +185,11 @@ reveza contas conectar b@exemplo.com   # conecta uma conta pelo terminal
 
 Dentro das sessões, **`/reveza`** mostra as contas, e a linha de status mostra a conta em uso e a janela de 5 horas.
 
-**Conectar conta quando o navegador não abre** (ou abre na conta errada, comum com vários perfis do Chrome): no painel
-ou no `reveza contas conectar`, copie o endereço do login, abra numa **janela anônima**, entre na conta e cole o código
-que a página mostrar.
+**Conectar conta:** o computador abre o login oficial numa **janela anônima** do navegador (Chrome, Edge, Brave,
+Chromium ou Firefox), sem a conta que já estiver aberta nele (quem tem vários perfis do Chrome caía na conta errada).
+Entre na conta e pronto: o login termina sozinho. Está em outro aparelho, ou a janela não abriu? No painel ou no
+`reveza contas conectar`, abra o endereço do login, entre na conta e cole o código que a página mostrar. No Windows, o
+login abre no navegador padrão.
 
 <details>
 <summary><b>🔌 API e webhooks</b></summary>

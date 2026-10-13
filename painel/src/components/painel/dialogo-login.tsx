@@ -1,5 +1,7 @@
 // Conectar uma conta nova ou entrar de novo numa conta: o painel só pede; quem abre o login oficial é um computador
-// (comando "conectar" ou "entrar_de_novo" com o e-mail). Se o login pedir um código, ele vai por "codigo_login".
+// (comando "conectar" ou "entrar_de_novo" com o e-mail), numa janela anônima do navegador dele, e termina sozinho quando
+// a pessoa entra na conta. O endereço que o painel mostra é para outro aparelho: lá a página dá um código, que vai por
+// "codigo_login".
 
 import * as React from "react"
 import { CheckCircle2Icon, ExternalLinkIcon, Loader2Icon, XCircleIcon } from "lucide-react"
@@ -41,6 +43,17 @@ export function urlDeLogin(v: unknown): string | null {
   }
 }
 
+/** Onde o login abriu no computador (agente 0.3.4+): o painel diz "janela anônima do Chrome", e não "se não abriu". */
+export type JanelaDoLogin = { aberto: boolean; navegador: string | null; privado: boolean }
+
+export function janelaDoLogin(v: unknown): JanelaDoLogin | null {
+  if (!v || typeof v !== "object") return null
+  const j = v as Record<string, unknown>
+  if (typeof j.aberto !== "boolean" || typeof j.privado !== "boolean") return null
+  const navegador = typeof j.navegador === "string" && /^[A-Za-z ]{1,40}$/.test(j.navegador) ? j.navegador : null
+  return { aberto: j.aberto, navegador, privado: j.privado }
+}
+
 /** Acompanha um comando até ele terminar (o computador busca a cada 5 s). */
 export function useComando(id: number | null) {
   const { fonte } = useDados()
@@ -62,6 +75,19 @@ export function useComando(id: number | null) {
     }
   }, [fonte, id])
   return lido && lido.id === id ? lido : null
+}
+
+function textoDaJanela(
+  t: ReturnType<typeof useT>["t"],
+  janela: JanelaDoLogin,
+  computador: string,
+  email: string
+): string {
+  if (!janela.aberto) return t("contas.login.janela.naoAbriu", { computador })
+  if (!janela.privado) return t("contas.login.janela.normal", { computador, email })
+  return janela.navegador
+    ? t("contas.login.janela.anonimaDo", { navegador: janela.navegador, computador, email })
+    : t("contas.login.janela.anonima", { computador, email })
 }
 
 export function DialogoLogin({
@@ -90,6 +116,8 @@ export function DialogoLogin({
   // A resposta do "conectar" traz o login aberto no computador: o id (para mandar o código) e o endereço oficial.
   const loginId = typeof cmd?.resposta?.login_id === "string" ? cmd.resposta.login_id : null
   const url = urlDeLogin(cmd?.resposta?.url)
+  const janela = janelaDoLogin(cmd?.resposta?.janela)
+  const nomePc = estado.computadores.find((c) => c.id === pc)?.nome ?? ""
   // Conectada de verdade: a conta nova apareceu, ou a que pedia login deixou de pedir (comparando com o pedido).
   const [antes, setAntes] = React.useState<{ existia: boolean; precisava: boolean } | null>(null)
   const alvo = estado.contas.find((c) => c.email === email.trim().toLowerCase())
@@ -171,12 +199,18 @@ export function DialogoLogin({
                 <Loader2Icon className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
               )}
               <span>
-                {conectada ? t("contas.login.conectada") : estadoCmd ? t(`contas.login.estados.${estadoCmd}`) : null}
+                {conectada
+                  ? t("contas.login.conectada")
+                  : estadoCmd === "feito" && janela
+                    ? textoDaJanela(t, janela, nomePc, email.trim().toLowerCase())
+                    : estadoCmd
+                      ? t(`contas.login.estados.${estadoCmd}`)
+                      : null}
               </span>
             </div>
             {estadoCmd === "feito" && url && !conectada ? (
               <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground">
-                <p>{t("contas.login.abrirAqui")}</p>
+                <p>{janela?.aberto ? t("contas.login.outroAparelho") : t("contas.login.abrirAqui")}</p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild variant="outline" size="sm">
                     <a href={url} target="_blank" rel="noopener noreferrer">
@@ -186,7 +220,7 @@ export function DialogoLogin({
                   </Button>
                   <BotaoCopiar texto={url} rotulo={t("contas.login.copiarLogin")} />
                 </div>
-                <p className="text-xs">{t("contas.login.anonima")}</p>
+                {janela?.privado ? null : <p className="text-xs">{t("contas.login.anonima")}</p>}
               </div>
             ) : null}
             {estadoCmd === "feito" && !url && !conectada ? (

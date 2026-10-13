@@ -1424,8 +1424,8 @@ export class Agente {
         const lista = this.permitidas();
         if (lista && !lista.has(email)) return recusa(403, "este computador só conecta as contas da lista dele (contas-permitidas.txt)");
         const l = this.logins.iniciar(email);
-        for (let i = 0; i < 30 && !l.url && l.estado === "aguardando"; i++) await this.d.relogio.dormir(500);
-        return { status: 200, corpo: { ok: true, login_id: l.id, url: l.url, estado: l.estado, mensagem: l.mensagem } };
+        await this.logins.aguardarEndereco(l);
+        return { status: 200, corpo: { ok: true, login_id: l.id, url: l.url, janela: l.janela, estado: l.estado, mensagem: l.mensagem } };
       }
       case "codigo_login": {
         const r = this.logins.codigo(String(corpo.login_id ?? ""), String(corpo.codigo ?? ""));

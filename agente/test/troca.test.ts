@@ -486,7 +486,7 @@ describe("conexão de conta", () => {
   async function loginQueEntrouComo(letra: string, pedido: string) {
     const l = m.agente.logins.iniciar(pedido);
     const proc = m.cli.logins[m.cli.logins.length - 1]!.proc;
-    proc.emitir("Abrindo https://exemplo.com/oauth/authorize?x=1");
+    proc.emitir("Abrindo https://claude.com/cai/oauth/authorize?x=1");
     m.cred.d.set(l.pasta, blob(letra + "1"));
     proc.fim(0);
     await l.concluido;
@@ -509,7 +509,7 @@ describe("conexão de conta", () => {
     await ativaEm(m, "A", 10);
     const l = await loginQueEntrouComo("B", "B@exemplo.com");
     assert.equal(l.estado, "ok");
-    assert.equal(l.url, "https://exemplo.com/oauth/authorize?x=1");
+    assert.equal(l.url, "https://claude.com/cai/oauth/authorize?x=1");
     const b = Object.values(e().contas).find((c) => c.email === "b@exemplo.com")!;
     assert.equal(b.pasta, l.pasta);
     assert.equal(path.dirname(l.pasta), m.c.contas);

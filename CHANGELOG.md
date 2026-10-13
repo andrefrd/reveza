@@ -7,6 +7,24 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.3.4 · 12/10/2026
+
+Conectar conta sem cair na conta errada e sem código para colar. A 0.3.3 explicava o atalho da janela anônima; esta
+versão faz o computador abrir a janela anônima ele mesmo. Atualize os computadores pelo botão do painel; o painel novo
+entra pela atualização da nuvem.
+
+- **O que estava errado:** o Claude Code abre dois caminhos de login ao mesmo tempo. O navegador do computador recebe
+  um endereço que termina sozinho; a tela mostra outro, que dá um código para colar. O navegador abria no perfil que
+  estivesse aberto (com vários perfis do Chrome, na conta errada), e o painel mostrava o endereço do código.
+- **Agora:** o computador abre o login numa **janela anônima** (Chrome, Edge, Brave, Chromium ou Firefox, o primeiro
+  que tiver). Nela não há conta aberta: é o "sair e limpar antes" sem mexer no navegador de todo dia. Entrou na conta,
+  o login termina sozinho, sem código.
+- **No painel:** aparece onde o login abriu ("numa janela anônima do Google Chrome no computador X"). O endereço com
+  código continua lá para quem está em outro aparelho.
+- **No terminal:** `reveza contas conectar <e-mail>` diz o mesmo e aceita o código ali, para outro aparelho.
+- **No Windows** o login segue abrindo no navegador padrão, e a conta pedida continua conferida no fim. Em Linux sem
+  tela, o painel avisa que não deu para abrir e o login segue pelo código.
+
 ## 0.3.3 · 12/10/2026
 
 Conectar conta quando o navegador não abre (relato de usuário: "diz que abriu e não abriu"). Atualize os computadores

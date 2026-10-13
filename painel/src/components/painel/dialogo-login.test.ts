@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { urlDeLogin } from "./dialogo-login"
+import { janelaDoLogin, urlDeLogin } from "./dialogo-login"
 
 describe("urlDeLogin", () => {
   it("abre só o login oficial em https", () => {
@@ -29,5 +29,27 @@ describe("urlDeLogin", () => {
       null,
     ])
       expect(urlDeLogin(v)).toBeNull()
+  })
+})
+
+describe("janelaDoLogin", () => {
+  it("lê onde o login abriu no computador (agente 0.3.4+)", () => {
+    expect(janelaDoLogin({ aberto: true, navegador: "Google Chrome", privado: true })).toEqual({
+      aberto: true,
+      navegador: "Google Chrome",
+      privado: true,
+    })
+    expect(janelaDoLogin({ aberto: false, navegador: null, privado: false })).toEqual({
+      aberto: false,
+      navegador: null,
+      privado: false,
+    })
+  })
+  it("agente antigo (sem o campo) ou resposta estranha: nada, e o painel diz o texto de sempre", () => {
+    for (const v of [undefined, null, "sim", 1, {}, { aberto: "true", privado: true }, { aberto: true }]) expect(janelaDoLogin(v)).toBeNull()
+  })
+  it("nome de navegador com qualquer coisa além de letras e espaço não aparece", () => {
+    expect(janelaDoLogin({ aberto: true, navegador: "<img src=x onerror=alert(1)>", privado: true })?.navegador).toBeNull()
+    expect(janelaDoLogin({ aberto: true, navegador: "x".repeat(41), privado: true })?.navegador).toBeNull()
   })
 })

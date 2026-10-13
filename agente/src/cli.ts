@@ -150,8 +150,8 @@ Uso: reveza <comando> [opções]
 
   status [--json]                 o que está em uso, o estado de cada conta e os últimos eventos
   contas [--json]                 as contas deste computador
-  contas conectar <email>         login oficial de uma conta nova (abre o navegador; mostra o endereço e aceita o
-                                 código da página aqui mesmo, para quem usa janela anônima ou outro perfil)
+  contas conectar <email>         login oficial de uma conta nova, numa janela anônima deste computador (termina
+                                 sozinho); mostra também o endereço para outro aparelho e aceita o código aqui
   contas adotar                   adota a conta que já está em uso
   trocar <email> [--local]        troca a conta em uso (com nuvem, quem decide é o painel)
   som [ligar|desligar|testar]     som do sistema quando este computador troca de conta (ligado de fábrica)
@@ -331,6 +331,38 @@ async function cmdTrocar(amb: Ambiente, a: Args): Promise<number> {
   return corpo.ok ? 0 : 1;
 }
 
+interface ConexaoNoEstado {
+  id: string;
+  estado: string;
+  url: string | null;
+  janela?: { aberto: boolean; navegador: string | null; privado: boolean } | null;
+  mensagem: string;
+}
+
+/**
+ * O que o terminal diz quando o login está no ar. Neste computador, entrar na conta na janela que abriu basta (o login
+ * termina sozinho); o endereço é para outro aparelho, ou para quando a janela não abriu: lá a página mostra um código,
+ * que se cola aqui. Quem tem vários perfis no navegador caía na conta errada (12/10/2026): por isso a janela anônima.
+ */
+export function textoDoTerminal(janela: ConexaoNoEstado["janela"], url: string, email: string | null): string[] {
+  const conta = email ? ` ${email}` : "";
+  const linhas = [""];
+  if (janela?.aberto && janela.privado) {
+    linhas.push(`Abri o login numa janela anônima${janela.navegador ? ` do ${janela.navegador}` : ""}: entre na conta${conta} e pronto, o login termina sozinho.`);
+  } else if (janela?.aberto) {
+    linhas.push(`Abri o login no navegador: entre na conta${conta} e pronto, o login termina sozinho.`);
+    linhas.push("Se ele abriu já logado em outra conta, use o endereço abaixo numa janela anônima.");
+  } else if (janela) {
+    linhas.push("Não consegui abrir o navegador deste computador.");
+  } else {
+    linhas.push(`Se o navegador abriu, entre na conta${conta} e pronto, o login termina sozinho.`);
+  }
+  linhas.push("");
+  linhas.push(`${janela?.aberto ? "Em outro aparelho, ou se a janela não aparecer" : "Ou"}: abra este endereço (de preferência numa janela anônima), entre na conta${conta} e cole aqui o código que a página mostrar.`);
+  linhas.push(`  ${url}`);
+  return linhas;
+}
+
 async function cmdConectar(amb: Ambiente, a: Args): Promise<number> {
   const porta = portaDe(amb, a);
   const email = a.pos[2] ?? null;
@@ -344,24 +376,19 @@ async function cmdConectar(amb: Ambiente, a: Args): Promise<number> {
     amb.erro(corpo.erro ?? "não consegui iniciar o login");
     return 1;
   }
-  amb.saida("Abrindo o login oficial no navegador deste computador…");
+  amb.saida("Abrindo o login oficial neste computador…");
   let mostrouUrl = false;
+  let esperas = 0;
   for (let i = 0; i < 600; i++) {
     await amb.relogio.dormir(1000);
     const e = await pedirPonte(porta, "GET", "/api/estado", undefined, chaveDaPonte(amb.c.ponteChave, false));
-    const con = ((e?.corpo as Record<string, unknown>)?.conexoes as { id: string; estado: string; url: string | null; mensagem: string }[] | undefined)?.find(
-      (x) => x.id === corpo.id,
-    );
+    const con = ((e?.corpo as Record<string, unknown>)?.conexoes as ConexaoNoEstado[] | undefined)?.find((x) => x.id === corpo.id);
     if (!con) continue;
-    if (con.url && !mostrouUrl) {
+    // o aviso de onde o login abriu chega um instante depois do endereço (no Windows, não chega)
+    if (con.url && !mostrouUrl && (con.janela || ++esperas >= 3)) {
       mostrouUrl = true;
-      // O navegador pode não abrir, ou abrir no perfil de outra conta (relato de usuário com 3 perfis do Chrome,
-      // 12/10/2026): o endereço vai sempre na tela, e o código que a página mostra pode ser colado aqui mesmo.
-      amb.saida("");
-      amb.saida("Se o navegador não abriu, ou abriu na conta errada, abra este endereço numa janela anônima:");
-      amb.saida(`  ${con.url}`);
-      amb.saida(`Entre na conta${email ? ` ${email}` : ""}; a página mostra um código. Cole aqui e tecle Enter (ou só espere, se o navegador terminar sozinho).`);
-      void amb.perguntar("Código: ").then(async (codigo) => {
+      for (const linha of textoDoTerminal(con.janela, con.url, email)) amb.saida(linha);
+      void amb.perguntar("Código (ou só espere): ").then(async (codigo) => {
         if (!codigo.trim()) return;
         const r = await pedirPonte(porta, "POST", "/api/contas/codigo", { id: corpo.id, codigo: codigo.trim() }, chaveDaPonte(amb.c.ponteChave, false));
         const c = r?.corpo as { ok?: boolean; erro?: string } | undefined;

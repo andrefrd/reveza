@@ -4,7 +4,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { sistemaAtual, type Sistema } from "./config.js";
+import { aspasSh } from "./navegador.js";
 import { envDaPasta, type Executor, type Processo } from "./util/executor.js";
+
+/** O "navegador" do login (abrir-login.js), compilado ao lado deste arquivo. */
+const ABRIR_LOGIN = fileURLToPath(new URL("./abrir-login.js", import.meta.url));
 
 export interface Cli {
   binario(): string;
@@ -56,6 +62,7 @@ export class ClaudeCli implements Cli {
   constructor(
     private exec: Executor,
     bin?: string,
+    private sistema: Sistema = sistemaAtual(),
   ) {
     this.bin = bin ?? acharBinario();
   }
@@ -78,10 +85,22 @@ export class ClaudeCli implements Cli {
     await this.exec.rodar(argv, { cwd: pasta, env: envDaPasta(pasta), timeoutMs: 120_000 });
   }
 
+  /**
+   * O login oficial na pasta da conta. O navegador deste computador abre numa janela anônima (BROWSER = abrir-login.js,
+   * ver navegador.ts) e o login termina sozinho; o endereço da saída, com o código, serve para outro aparelho. No
+   * Windows o Claude Code abre o navegador padrão (o BROWSER lá precisaria de um .exe), e a conta pedida segue conferida.
+   */
   login(pasta: string, email: string | null): Processo {
     const argv = [this.bin, "auth", "login", "--claudeai"];
     if (email) argv.push("--email", email);
-    return this.exec.iniciar(argv, { cwd: pasta, env: envDaPasta(pasta) });
+    const env = envDaPasta(pasta);
+    if (this.sistema !== "windows") {
+      const navegador = path.join(pasta, ".abrir-login");
+      fs.writeFileSync(navegador, `#!/bin/sh\nexec ${aspasSh(process.execPath)} ${aspasSh(ABRIR_LOGIN)} "$@"\n`, { mode: 0o700 });
+      env.BROWSER = navegador;
+      env.REVEZA_LOGIN_ABERTO = path.join(pasta, ".login-aberto");
+    }
+    return this.exec.iniciar(argv, { cwd: pasta, env });
   }
 
   retomar(sessao: string, cwd: string, texto: string, saida: number): void {

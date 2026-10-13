@@ -85,12 +85,23 @@ export default secao({
           recusado: "O computador recusou o pedido.",
           expirado: "O computador não pegou o pedido a tempo. Ele está ligado?",
         },
+        janela: {
+          anonimaDo:
+            "O login abriu numa janela anônima do {navegador} em {computador}. Entre lá na conta {email} e pronto: o login termina sozinho.",
+          anonima:
+            "O login abriu numa janela anônima em {computador}. Entre lá na conta {email} e pronto: o login termina sozinho.",
+          normal:
+            "O login abriu no navegador de {computador}. Entre lá na conta {email} e pronto: o login termina sozinho. Se ele abriu já logado em outra conta, termine por aqui.",
+          naoAbriu: "{computador} não conseguiu abrir o navegador. Termine o login por aqui.",
+        },
         conectada: "Pronto: a conta está conectada.",
         abrirAqui: "Abra o login, entre na conta e cole abaixo o código que a página mostrar.",
+        outroAparelho:
+          "Não está nesse computador? Abra o login aqui, entre na conta e cole abaixo o código que a página mostrar.",
         abrirLogin: "Abrir o login",
         copiarLogin: "Copiar o endereço",
         anonima:
-          "Dica: copie o endereço e abra numa janela anônima (ou no perfil do navegador dessa conta). Com outra conta já aberta no navegador, o login entra nela, ou a página nem aparece.",
+          "Dica: abra numa janela anônima (ou no perfil do navegador dessa conta). Com outra conta já aberta no navegador, o login entra nela, ou a página nem aparece.",
         semEndereco:
           "O computador não mandou o endereço do login. No terminal dele, rode: reveza contas conectar {email}",
         terminal: "Prefere o terminal? No computador escolhido: reveza contas conectar {email}",
@@ -186,12 +197,23 @@ export default secao({
           recusado: "The computer refused the request.",
           expirado: "The computer didn't pick up the request in time. Is it on?",
         },
+        janela: {
+          anonimaDo:
+            "The sign-in opened in a {navegador} private window on {computador}. Sign in to {email} there and that's it: the sign-in finishes on its own.",
+          anonima:
+            "The sign-in opened in a private window on {computador}. Sign in to {email} there and that's it: the sign-in finishes on its own.",
+          normal:
+            "The sign-in opened in the browser on {computador}. Sign in to {email} there and that's it: the sign-in finishes on its own. If it opened already signed in to another account, finish here.",
+          naoAbriu: "{computador} could not open the browser. Finish the sign-in here.",
+        },
         conectada: "Done: the account is connected.",
         abrirAqui: "Open the sign-in, sign in to the account and paste below the code the page shows.",
+        outroAparelho:
+          "Not at that computer? Open the sign-in here, sign in to the account and paste below the code the page shows.",
         abrirLogin: "Open the sign-in",
         copiarLogin: "Copy the address",
         anonima:
-          "Tip: copy the address and open it in a private window (or in that account's browser profile). With another account already open in the browser, the sign-in goes to it, or the page does not even show.",
+          "Tip: open it in a private window (or in that account's browser profile). With another account already open in the browser, the sign-in goes to it, or the page does not even show.",
         semEndereco:
           "The computer did not send the sign-in address. In its terminal, run: reveza contas conectar {email}",
         terminal: "Prefer the terminal? On the chosen computer: reveza contas conectar {email}",
