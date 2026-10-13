@@ -15,6 +15,7 @@ export default secao({
         troca: "Cada troca de conta",
         limite: "Sessão bateu o limite",
         atualizacao_falhou: "Atualização sozinha parou",
+        troca_falhou: "Troca de conta que não firmou",
       },
       eventosDica: {
         sem_livre: "Todas as contas no limite, pausadas ou em uso.",
@@ -25,6 +26,7 @@ export default secao({
         troca: "Uma mensagem a cada troca (pode ser muita coisa).",
         limite: "Uma sessão foi barrada e trocou de conta.",
         atualizacao_falhou: "A atualização da nuvem, a publicação das funções e do painel, ou a de um computador parou; os passos seguintes esperam.",
+        troca_falhou: "O computador tentou trocar de conta e não conseguiu: segue na conta de antes. No máximo um aviso por computador por hora.",
       },
       vazio: {
         titulo: "Nenhum alerta ainda",
@@ -109,6 +111,7 @@ export default secao({
         troca: "Every account switch",
         limite: "Session hit the limit",
         atualizacao_falhou: "Automatic update stopped",
+        troca_falhou: "Account switch that didn't take",
       },
       eventosDica: {
         sem_livre: "All accounts at the limit, paused or in use.",
@@ -119,6 +122,7 @@ export default secao({
         troca: "One message per switch (could be a lot).",
         limite: "A session was blocked and switched accounts.",
         atualizacao_falhou: "The cloud update, the publishing of the functions and the panel, or the update of a computer stopped; the next steps wait.",
+        troca_falhou: "The computer tried to switch accounts and couldn't: it stays on the previous one. At most one alert per computer per hour.",
       },
       vazio: {
         titulo: "No alerts yet",

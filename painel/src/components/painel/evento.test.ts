@@ -113,3 +113,24 @@ describe("textoEvento do erro", () => {
     expect(ev("texto", { computador: "pc-1", erro: "o erro de verdade" }).detalhe).toBe("o erro de verdade")
   })
 })
+
+describe("textoEvento da troca que não firmou (0.4.5)", () => {
+  it("o painel monta o título com as contas que conhece; sem conta, fica genérico", async () => {
+    const { textoEvento } = await import("./evento")
+    const t = ((k: string, v?: Record<string, unknown>) => `[${k}${v ? ` ${JSON.stringify(v)}` : ""}]`) as never
+    const estado = {
+      contas: [{ id: "c-a", email: "a@exemplo.com" } as never, { id: "c-b", email: "b@exemplo.com" } as never],
+      computadores: [{ id: "pc-1", nome: "MacBook" } as never],
+    }
+    const ev = (dados: Record<string, unknown>) =>
+      textoEvento({ id: 1, em: "2026-10-13T18:00:00.000Z", tipo: "alerta", texto: "texto do banco", dados }, estado, { t, tx: t, idioma: "pt-BR" } as never)
+    const r = ev({ motivo: "troca_falhou", computador: "pc-1", de: "c-a", para: "c-b" })
+    expect(r.titulo).toContain("evento.trocaFalhou ")
+    expect(r.titulo).toContain('"computador":"MacBook"')
+    expect(r.titulo).toContain('"para":"b@exemplo.com"')
+    expect(r.detalhe).toContain('"de":"a@exemplo.com"')
+    const s = ev({ motivo: "troca_falhou", computador: "pc-1", de: null, para: null })
+    expect(s.titulo).toContain("evento.trocaFalhouSemConta")
+    expect(s.detalhe).toBeNull()
+  })
+})

@@ -62,6 +62,7 @@ export const ICONE_CANAL: Record<CanalAlerta, typeof BellIcon> = {
 const CANAIS: CanalAlerta[] = ["push", "telegram", "email", "webhook"]
 export const EVENTOS: EventoAlerta[] = [
   "sem_livre",
+  "troca_falhou",
   "precisa_login",
   "computador_parado",
   "limite",
@@ -263,7 +264,7 @@ function NovoAlerta({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
     fonte.recursos.push && suportePush() === "ok" ? "push" : "telegram"
   )
   const [campos, setCampos] = React.useState<Record<string, string>>({})
-  const [eventos, setEventos] = React.useState<EventoAlerta[]>(["sem_livre", "precisa_login", "computador_parado"])
+  const [eventos, setEventos] = React.useState<EventoAlerta[]>(["sem_livre", "troca_falhou", "precisa_login", "computador_parado"])
   const [enviando, setEnviando] = React.useState(false)
   const [erro, setErro] = React.useState<string | null>(null)
   const mudarCanal = (c: CanalAlerta) => {

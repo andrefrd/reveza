@@ -233,6 +233,7 @@ export type EventoAlerta =
   | "troca"
   | "limite"
   | "atualizacao_falhou"
+  | "troca_falhou"
 
 export interface Alerta {
   id: string

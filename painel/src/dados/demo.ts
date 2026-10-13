@@ -586,7 +586,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       canal: "telegram",
       destino: "chat 4821",
       destinoBruto: { chat_id: "4821", vault_id: "vault-1" },
-      eventos: ["sem_livre", "precisa_login", "computador_parado", "limite"],
+      eventos: ["sem_livre", "troca_falhou", "precisa_login", "computador_parado", "limite"],
       ativo: true,
     },
     {
@@ -594,7 +594,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       canal: "push",
       destino: "",
       destinoBruto: {},
-      eventos: ["sem_livre", "precisa_login", "computador_parado"],
+      eventos: ["sem_livre", "troca_falhou", "precisa_login", "computador_parado"],
       ativo: true,
     },
     {
@@ -630,7 +630,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
     {
       id: "wh-1",
       url: "https://n8n.exemplo.com/webhook/reveza",
-      eventos: ["troca", "limite", "sem_livre"],
+      eventos: ["troca", "limite", "sem_livre", "troca_falhou"],
       ativo: true,
     },
   ]

@@ -303,6 +303,10 @@ Menu lateral, nada empilhado numa tela só:
 5. **Plano da semana**: cota semanal por conta dividida pelos dias, quanto já foi, alerta de ritmo.
 6. **Troca automática**: liga e desliga, modo (só no limite, limiar, rodízio), limiares, intervalo, ordem, agenda.
 7. **Alertas**: canais (Telegram, e-mail, webhook, notificação no celular), quais eventos, botão de teste; e, por navegador, o aviso de troca de conta com notificação e som enquanto o painel está aberto.
+   A troca que não firmou (0.4.5) é um desses eventos: o computador grava um erro com `motivo: troca_falhou` e os ids
+   das contas quando a troca não firma depois de 3 tentativas, ou quando a conta que a nuvem atribuiu não entra há 5
+   minutos e 3 buscas; um gatilho da nuvem (migração 0023) lê só os ids e escreve o alerta com o nome do computador e
+   os e-mails das tabelas dela, no máximo um por computador por hora.
 8. **Integrações**: chaves de API, webhooks de saída, exemplos prontos (n8n, curl, script).
 9. **Time**: membros, papéis, convites, auditoria.
 10. **Minha conta**: senha, verificação em duas etapas, sessões abertas, idioma.

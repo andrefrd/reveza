@@ -139,6 +139,10 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
               ? t("evento.publicacaoFalhou", { para: versao(d.para), computador: vars.computador })
               : t("evento.atualizacaoSozinhoFalhou", { computador: vars.computador, para: versao(d.para) })
         detalhe = typeof d.erro === "string" && d.erro ? d.erro.slice(0, 200) : null
+      } else if (d.motivo === "troca_falhou") {
+        // o texto que foi pelos canais é da nuvem; aqui o painel monta o seu com as contas que ele conhece
+        titulo = d.para ? t("evento.trocaFalhou", vars) : t("evento.trocaFalhouSemConta", vars)
+        detalhe = d.de ? t("evento.trocaFalhouContinua", vars) : null
       } else if (d.motivo === "sem_livre") titulo = t("evento.semLivre", vars)
       else if (d.motivo === "teste") titulo = t("evento.teste", { canal: canal(d.canal) })
       else titulo = t("evento.alertaEnviado", { canal: canal(d.canal) })

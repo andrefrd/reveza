@@ -151,6 +151,13 @@ export const TENTATIVAS_CODIGO = 3;
 export const ERRO_DO_LOG_REPETIDO_S = 1800;
 export const ERROS_DO_LOG_POR_HORA = 10;
 
+/**
+ * A conta que a nuvem mandou e não entra vira alerta depois de 5 min e 3 tentativas (um por sequência): o agente grava
+ * um erro com o motivo troca_falhou e os ids das contas, e a nuvem escreve e manda o alerta pelos canais (0023).
+ */
+export const TROCA_FALHOU_APOS_S = 300;
+export const TROCA_FALHOU_TENTATIVAS = 3;
+
 export class Agente {
   estado: EstadoLocal;
   trocador: Trocador;
@@ -188,6 +195,8 @@ export class Agente {
   private janelasAbertas = new Set<string>();
   private semTelaAvisado = new Set<string>();
   private falhaAtribuicao = new Map<string, number>();
+  /** A conta atribuída que não está entrando: desde quando, quantas tentativas e se já virou alerta. */
+  private trocaQueNaoSai: { conta: string; desde: number; vezes: number; avisado: boolean } | null = null;
   private emFundo = new Set<Promise<unknown>>();
   private possesLimpas = false;
   private impressaoConferida = false;
@@ -734,6 +743,7 @@ export class Agente {
     if (destino && destino === ativa && !principalSemConta) {
       this.estado.nuvem.atribuicaoVersao = Math.max(this.estado.nuvem.atribuicaoVersao, a.versao);
       this.estado.nuvem.atribuicaoConta = a.conta_id;
+      this.trocaQueNaoSai = null;
       return { ok: true };
     }
     if (this.d.sombra) {
@@ -751,19 +761,16 @@ export class Agente {
     const r = await nuvem.pegarPosse(a.conta_id, "uso", POSSE_S);
     if (!r.ok) {
       this.d.log.info(`a conta atribuída (${a.email ?? a.conta_id}) não veio: ${r.erro ?? "sem motivo"}; espero a nuvem`);
-      return { ok: false, erro: `a nuvem não entregou a conta atribuída (${r.erro ?? "sem motivo"})` };
+      return this.falhouAtribuir(a, principalSemConta, `a nuvem não entregou a conta atribuída (${r.erro ?? "sem motivo"})`);
     }
     let id = destino;
     if (!id) {
       id = await this.posse!.materializar(a.conta_id, a.email, r.cofre, (pasta) => this.d.cli.renovar(pasta, 0));
       if (!id) {
         await nuvem.soltarPosse(a.conta_id).catch(() => undefined);
-        return {
-          ok: false,
-          erro: this.chave
-            ? "o login da conta atribuída não abriu do cofre: entre de novo nela pelo painel (Contas, Entrar de novo)"
-            : "este computador não tem a chave do cofre: ligue-o pelo painel (Computadores, Ligar computador novo) ou com reveza ligar",
-        };
+        return this.falhouAtribuir(a, principalSemConta, this.chave
+          ? "o login da conta atribuída não abriu do cofre: entre de novo nela pelo painel (Contas, Entrar de novo)"
+          : "este computador não tem a chave do cofre: ligue-o pelo painel (Computadores, Ligar computador novo) ou com reveza ligar");
       }
     } else {
       await this.posse!.sincronizar(id, r.cofre, principalSemConta);
@@ -779,9 +786,10 @@ export class Agente {
         await this.posse!.devolver(id).catch(() => false);
         await this.posse!.soltar(id).catch(() => undefined);
       }
-      return { ok: false, erro: res.erro };
+      return this.falhouAtribuir(a, principalSemConta, res.erro);
     }
     this.falhaAtribuicao.delete(chave);
+    this.trocaQueNaoSai = null;
     this.estado.nuvem.atribuicaoVersao = a.versao;
     this.estado.nuvem.atribuicaoConta = a.conta_id;
     if (res.de && res.de !== id && this.estado.contas[res.de]?.contaId) {
@@ -791,6 +799,29 @@ export class Agente {
     this.retomarHeadless();
     this.salvar();
     return { ok: true };
+  }
+
+  /**
+   * Mais uma tentativa de pôr a conta atribuída que não deu certo. Com TROCA_FALHOU_TENTATIVAS tentativas em
+   * TROCA_FALHOU_APOS_S, vira o erro com o motivo troca_falhou que a nuvem transforma em alerta. Um por sequência:
+   * volta a avisar depois que uma troca firmar ou a nuvem mandar outra conta. O conserto da credencial não conta (o
+   * painel já mostra o erro a quem pediu).
+   */
+  private falhouAtribuir(a: Atribuicao, principalSemConta: boolean, erro: string | undefined): { ok: false; erro?: string } {
+    if (principalSemConta || !a.conta_id) return { ok: false, erro };
+    const agora = this.d.relogio.agora();
+    if (this.trocaQueNaoSai?.conta !== a.conta_id) this.trocaQueNaoSai = { conta: a.conta_id, desde: agora, vezes: 0, avisado: false };
+    const s = this.trocaQueNaoSai;
+    s.vezes++;
+    if (s.avisado || s.vezes < TROCA_FALHOU_TENTATIVAS || agora - s.desde < TROCA_FALHOU_APOS_S) return { ok: false, erro };
+    s.avisado = true;
+    const destino = this.posse?.porContaId(a.conta_id);
+    const email = a.email ?? (destino ? this.estado.contas[destino]?.email : null) ?? a.conta_id;
+    const ativa = this.estado.ativa;
+    this.trocador.evento("erro",
+      `A troca para ${email} não firmou em ${Math.round((agora - s.desde) / 60)} min (${s.vezes} tentativas): ${erro ?? "sem motivo"}.`,
+      { motivo: "troca_falhou", de: ativa ? this.estado.contas[ativa]?.contaId ?? null : null, para: a.conta_id });
+    return { ok: false, erro };
   }
 
   // ------------------------------------------------------------------------------------------------ atualização

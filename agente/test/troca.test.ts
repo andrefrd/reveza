@@ -229,15 +229,18 @@ describe("troca", () => {
     assert.ok(m.relogio.tarefas.some((x) => !x.cancelada), "confere de novo depois de refazer");
   });
 
-  test("a conferência desiste depois de 3 refeitas e avisa", async () => {
+  test("a conferência desiste depois de 3 refeitas e avisa, com o motivo e os ids da nuvem para virar alerta", async () => {
     m = await montar();
     const a = await ativaEm(m, "A", 99);
-    const b = contaEstacionada(m, "B", 3);
+    const b = contaEstacionada(m, "B", 3, { contaId: "nuvem-b" });
+    e().contas[a]!.contaId = "nuvem-a";
     await tr().trocar(b, "teste");
     m.cred.d.set("principal", blob("A3"));
     await tr().conferirTroca(b, a, 4);
     assert.equal(m.cred.token("principal"), "A3");
     assert.match(e().eventos[0]!.texto, /3 tentativas/);
+    assert.equal(e().eventos[0]!.tipo, "erro");
+    assert.deepEqual(e().eventos[0]!.dados, { motivo: "troca_falhou", de: "nuvem-a", para: "nuvem-b" });
   });
 
   test("linha do tempo marca a troca", async () => {

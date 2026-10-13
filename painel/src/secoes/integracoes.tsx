@@ -42,14 +42,16 @@ import { useT } from "@/i18n"
 import { toast } from "sonner"
 import { fmtRelativo } from "@/lib/formato"
 
+// Só o que a nuvem manda para fora (alertas_pendentes): aviso e conexão são do computador e nunca saíam, por isso
+// deixaram a lista; webhook antigo que os tenha continua mostrando o nome.
 const EVENTOS_WEBHOOK = [
   "troca",
-  "aviso",
   "limite",
   "sem_livre",
+  "troca_falhou",
   "precisa_login",
   "computador_parado",
-  "conexao",
+  "atualizacao_falhou",
 ] as const
 
 function baseApi() {
@@ -361,7 +363,7 @@ function NovoWebhook({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => vo
   const { recarregar } = useDados()
   const [erro, setErro] = React.useState<string | null>(null)
   const [url, setUrl] = React.useState("")
-  const [eventos, setEventos] = React.useState<string[]>(["troca", "limite", "sem_livre"])
+  const [eventos, setEventos] = React.useState<string[]>(["troca", "limite", "sem_livre", "troca_falhou"])
   const [enviando, setEnviando] = React.useState(false)
   const [segredo, setSegredo] = React.useState<string | null>(null)
   return (

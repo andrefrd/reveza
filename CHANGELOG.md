@@ -7,6 +7,25 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.5 · 13/10/2026
+
+Troca de conta que não firmou vira alerta. Um usuário perguntou se o Reveza avisa quando a troca falha ou se segue sem
+registro: até aqui, a falha ficava só nos eventos do painel. Agora ela sai pelos canais de alerta, como a falta de conta
+livre. Atualize os computadores pelo painel: a nuvem se atualiza sozinha (ou pelo **Atualizar a nuvem**).
+
+- **Alerta "Troca de conta que não firmou":** Telegram, e-mail, webhook e notificação no celular. O texto é escrito pela
+  nuvem, com o nome do computador e os e-mails que ela conhece ("No computador X, a troca para Y não firmou: a conta em
+  uso continua Z"); o que o computador escreve nunca vai para fora. No máximo um aviso por computador por hora.
+- **Quando o computador avisa:** a troca não firmou depois de 3 tentativas (uma sessão regravou a conta antiga), ou a
+  conta que a nuvem escolheu não entra há 5 minutos e 3 buscas (cofre vazio, posse recusada, credencial que não se
+  grava). A mesma conta que não entra avisa uma vez; volta a avisar depois de uma troca que dá certo ou de a nuvem
+  escolher outra conta.
+- **Canais que já existem:** quem recebe "Sem conta livre" passa a receber também a troca que não firmou (só na
+  atualização; tirar pelo painel vale para sempre). Canal novo já vem com ela marcada.
+- **Webhooks:** a lista de eventos mostra só o que a nuvem manda de fato. "Aviso" e "Conexão" saíram (eram eventos do
+  computador e nunca saíam); entraram "Troca que não firmou" e "Atualização parou". Webhook antigo que tenha os dois
+  continua mostrando o nome.
+
 ## 0.4.4 · 13/10/2026
 
 Os testes não deixam mais pastas na pasta temporária do computador. Em 13/10, com o disco do Mac mini quase cheio,

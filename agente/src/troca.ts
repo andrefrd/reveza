@@ -386,7 +386,10 @@ export class Trocador {
           this.evento("info", "Uma sessão renovou o login antigo no meio da troca; refiz a troca.");
           this.relogio.agendar(() => void this.conferirTroca(destino, de, tentativa + 1), CONFERIR_TROCA_MS);
         } else if (tentativa > 3) {
-          this.evento("erro", "A troca não firmou depois de 3 tentativas; a principal continua em outra conta.");
+          // o motivo e os ids das contas (os da nuvem) fazem a nuvem mandar o alerta pelos canais (0023)
+          const nuvemDe = id ? this.estado.contas[id]?.contaId ?? null : null;
+          this.evento("erro", "A troca não firmou depois de 3 tentativas; a principal continua em outra conta.",
+            { motivo: "troca_falhou", de: nuvemDe, para: this.estado.contas[destino]?.contaId ?? null });
         }
       } catch (e) {
         this.log.erro(`conferir a troca: ${(e as Error).message}`);

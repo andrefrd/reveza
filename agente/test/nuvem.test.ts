@@ -190,6 +190,101 @@ describe("atribuição", () => {
   });
 });
 
+describe("troca que não firmou vira alerta", () => {
+  async function semLogin(opcoes: { sombra?: boolean } = {}) {
+    await preparar(opcoes);
+    const a = await ativaEm(m, "A", 10);
+    await m.agente.esperar();
+    await m.agente.busca();
+    const bId = await semear("B");
+    const b = contaEstacionada(m, "B", 3, { contaId: bId });
+    m.cred.d.set(pasta(b), blob("B1", false)); // B não tem login: a troca para ela não entra
+    banco.contas.get(bId)!.cofre = null;
+    banco.atribuir("pc-1", bId, "chegou a 95%");
+    return { a, b, aId: e().contas[a]!.contaId!, bId };
+  }
+  const atrib = (bId: string, versao = 1) => ({ conta_id: bId, email: "b@exemplo.com", versao, motivo: "chegou a 95%" });
+  const alertas = () => e().eventos.filter((x) => (x.dados as { motivo?: string } | undefined)?.motivo === "troca_falhou");
+
+  test("3 tentativas em 5 min: um erro com o motivo e os ids da nuvem, que sobe; um só por sequência", async () => {
+    const { aId, bId } = await semLogin();
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await m.agente.aplicarAtribuicao(atrib(bId))).ok, false);
+      m.relogio.t += 61;
+    }
+    assert.equal(alertas().length, 0, "4 min ainda não é alerta");
+    await m.agente.aplicarAtribuicao(atrib(bId));
+    assert.equal(alertas().length, 1);
+    assert.equal(alertas()[0]!.tipo, "erro");
+    assert.deepEqual(alertas()[0]!.dados, { motivo: "troca_falhou", de: aId, para: bId });
+    assert.match(alertas()[0]!.texto, /b@exemplo\.com não firmou em 5 min \(6 tentativas\)/);
+    assert.doesNotMatch(alertas()[0]!.texto, /não entregou/, "a posse veio; quem falhou foi a troca");
+    await m.agente.esperar();
+    assert.ok(banco.eventos.some((x) => x.tipo === "erro" && (x.dados as { motivo?: string }).motivo === "troca_falhou"), "vai à nuvem");
+    for (let i = 0; i < 5; i++) {
+      m.relogio.t += 61;
+      await m.agente.aplicarAtribuicao(atrib(bId, 2)); // versão nova da mesma conta: a mesma sequência
+    }
+    assert.equal(alertas().length, 1, "não repete na mesma sequência");
+  });
+
+  test("a troca que firma zera a sequência; a próxima falha volta a contar do começo", async () => {
+    const { a, b, bId } = await semLogin();
+    for (let i = 0; i < 4; i++) {
+      await m.agente.aplicarAtribuicao(atrib(bId));
+      m.relogio.t += 61;
+    }
+    m.cred.d.set(pasta(b), blob("B1", true, 3600, m.relogio.agora())); // B ganhou login
+    const r = await m.agente.aplicarAtribuicao(atrib(bId));
+    assert.equal(r.ok, true, r.erro);
+    assert.equal(e().ativa, b);
+    assert.ok((await m.agente.trocador.trocar(a, "teste")).ok); // A volta (pela mão de alguém) e B perde o login
+    m.cred.d.set(pasta(b), blob("B1", false));
+    m.relogio.t += 61;
+    await m.agente.aplicarAtribuicao(atrib(bId, 2));
+    assert.equal(alertas().length, 0, "sem a sequência zerada, esta já seria a 5ª tentativa em 5 min");
+    for (let i = 0; i < 5; i++) {
+      m.relogio.t += 61;
+      await m.agente.aplicarAtribuicao(atrib(bId, 2));
+    }
+    assert.equal(alertas().length, 1, "a sequência nova chega a 5 min e avisa");
+  });
+
+  test("a nuvem manda outra conta: começa sequência nova", async () => {
+    const { bId } = await semLogin();
+    const cId = banco.conta("c@exemplo.com").id; // C sem cofre: nunca entra
+    for (let i = 0; i < 3; i++) {
+      await m.agente.aplicarAtribuicao(atrib(bId));
+      m.relogio.t += 120;
+    }
+    banco.atribuir("pc-1", cId);
+    await m.agente.aplicarAtribuicao({ conta_id: cId, email: "c@exemplo.com", versao: 2, motivo: "x" });
+    assert.equal(alertas().length, 0, "a contagem de B não vale para C");
+    for (let i = 0; i < 3; i++) {
+      m.relogio.t += 120;
+      await m.agente.aplicarAtribuicao({ conta_id: cId, email: "c@exemplo.com", versao: 2, motivo: "x" });
+    }
+    assert.equal(alertas().length, 1);
+    assert.match(alertas()[0]!.texto, /c@exemplo\.com/);
+  });
+
+  test("o conserto da credencial e o modo sombra não viram alerta", async () => {
+    const { bId } = await semLogin();
+    for (let i = 0; i < 6; i++) {
+      await m.agente.aplicarAtribuicao(atrib(bId), true);
+      m.relogio.t += 120;
+    }
+    assert.equal(alertas().length, 0, "conserto: quem pediu já vê o erro no painel");
+    m.limpar();
+    const s = await semLogin({ sombra: true });
+    for (let i = 0; i < 6; i++) {
+      await m.agente.aplicarAtribuicao(atrib(s.bId));
+      m.relogio.t += 120;
+    }
+    assert.equal(alertas().length, 0);
+  });
+});
+
 describe("leitura e renovação com posse", () => {
   test("conta parada é lida com posse curta, o número vai à nuvem e a posse é solta", async () => {
     await preparar();

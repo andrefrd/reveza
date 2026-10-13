@@ -167,7 +167,8 @@ create table alertas (
   id uuid primary key default gen_random_uuid(),
   canal text not null check (canal in ('telegram', 'email', 'webhook', 'push')),
   destino jsonb not null,                    -- sem segredo em claro: segredos ficam no Vault do Supabase (vault_id)
-  eventos text[] not null,                   -- 'sem_livre', 'precisa_login', 'computador_parado', 'login_vence', 'resumo_dia', 'troca'
+  eventos text[] not null,                   -- 'sem_livre', 'precisa_login', 'computador_parado', 'login_vence', 'resumo_dia', 'troca',
+                                             -- 'limite', 'atualizacao_falhou', 'troca_falhou' (0023)
   ativo boolean not null default true,
   criado_por uuid not null references auth.users
 );
@@ -244,6 +245,8 @@ create table auditoria (
 -- agente_reservar_comando(id)                                   -> {ok, comando?}  (pendente -> reservado, atômico)
 -- agente_responder_comando(id, http, resposta)                  -> {ok}
 -- agente_evento(tipo, texto, dados)                             -> {ok}
+--     (erro com dados.motivo = 'troca_falhou' e os ids de conta de/para: a nuvem escreve o alerta com o texto dela,
+--      no máximo um por computador por hora, 0023; o texto do computador nunca sai pelos canais)
 -- agente_ligacao_publicar(embrulho bytea, sal bytea)            -> {ok, expira_em}  (frase de emergência, 10 min)
 -- agente_ligacao_buscar()                                       -> {embrulho, sal}  (computador já ativo, uma vez)
 -- agente_ligacoes_abertas()                                     -> {pedidos: [{computador_id, publica, expira_em, para_mim, idioma}]}

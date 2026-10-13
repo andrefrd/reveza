@@ -55,6 +55,8 @@ export default secao({
           precisa_login: "precisa de login",
           computador_parado: "computador parado",
           conexao: "conta conectada",
+          troca_falhou: "troca que não firmou",
+          atualizacao_falhou: "atualização parou",
         },
         testado: "Teste enviado para {url}",
         dialogo: {
@@ -143,6 +145,8 @@ export default secao({
           precisa_login: "needs sign-in",
           computador_parado: "computer stopped",
           conexao: "account connected",
+          troca_falhou: "switch that didn't take",
+          atualizacao_falhou: "update stopped",
         },
         testado: "Test sent to {url}",
         dialogo: {
