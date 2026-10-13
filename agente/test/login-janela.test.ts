@@ -165,7 +165,7 @@ describe("o login no Claude Code", () => {
     assert.equal(op.env?.BROWSER, nav);
     assert.equal(op.env?.REVEZA_LOGIN_ABERTO, path.join(pasta, ".login-aberto"));
     assert.equal(op.env?.CLAUDE_CONFIG_DIR, pasta);
-    assert.equal(fs.statSync(nav).mode & 0o777, 0o700);
+    if (process.platform !== "win32") assert.equal(fs.statSync(nav).mode & 0o777, 0o700);
     const script = fs.readFileSync(nav, "utf8");
     assert.match(script, /^#!\/bin\/sh\nexec '.+' '.+abrir-login\.js' "\$@"\n$/);
     // o script roda de verdade (com o Node e o abrir-login.js compilado), mesmo com espaço e aspas no caminho:

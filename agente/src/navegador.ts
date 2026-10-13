@@ -44,7 +44,10 @@ interface Candidato {
   privado: string;
 }
 
-/** Os navegadores que abrem janela privada pela linha de comando, na ordem de preferência. */
+/**
+ * Os navegadores que abrem janela privada pela linha de comando, na ordem de preferência. Os caminhos seguem o sistema
+ * pedido, não o de quem roda (os testes rodam os três sistemas em qualquer um).
+ */
 export function candidatos(sistema: Sistema, env: NodeJS.ProcessEnv = process.env, home = os.homedir()): Candidato[] {
   if (sistema === "macos") {
     const apps: [string, string, string][] = [
@@ -55,13 +58,13 @@ export function candidatos(sistema: Sistema, env: NodeJS.ProcessEnv = process.en
       ["Firefox", "Firefox.app", "-private-window"],
     ];
     return apps.flatMap(([nome, app, privado]) =>
-      ["/Applications", path.join(home, "Applications")].map((d) => ({ nome, caminho: path.join(d, app), privado })),
+      ["/Applications", path.posix.join(home, "Applications")].map((d) => ({ nome, caminho: path.posix.join(d, app), privado })),
     );
   }
   if (sistema === "windows") {
     const pf = env.ProgramFiles ?? "C:\\Program Files";
     const pf86 = env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
-    const local = env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
+    const local = env.LOCALAPPDATA ?? path.win32.join(home, "AppData", "Local");
     return [
       { nome: "Google Chrome", caminho: path.win32.join(pf, "Google", "Chrome", "Application", "chrome.exe"), privado: "--incognito" },
       { nome: "Google Chrome", caminho: path.win32.join(pf86, "Google", "Chrome", "Application", "chrome.exe"), privado: "--incognito" },
@@ -80,8 +83,8 @@ export function candidatos(sistema: Sistema, env: NodeJS.ProcessEnv = process.en
     ["Brave", "brave-browser", "--incognito"],
     ["Firefox", "firefox", "-private-window"],
   ];
-  const dirs = (env.PATH ?? "/usr/local/bin:/usr/bin:/bin").split(path.delimiter).filter(Boolean);
-  return bins.flatMap(([nome, bin, privado]) => dirs.map((d) => ({ nome, caminho: path.join(d, bin), privado })));
+  const dirs = (env.PATH ?? "/usr/local/bin:/usr/bin:/bin").split(":").filter(Boolean);
+  return bins.flatMap(([nome, bin, privado]) => dirs.map((d) => ({ nome, caminho: path.posix.join(d, bin), privado })));
 }
 
 /**
