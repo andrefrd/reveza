@@ -147,6 +147,10 @@ export type ResultadoAtualizar =
 /** Até 3 tentativas de digitar o código na janela; na terceira errada, o pedido é recusado. */
 export const TENTATIVAS_CODIGO = 3;
 
+/** O mesmo erro do log sobe ao painel no máximo a cada 30 min, e no máximo 10 erros por hora. */
+export const ERRO_DO_LOG_REPETIDO_S = 1800;
+export const ERROS_DO_LOG_POR_HORA = 10;
+
 export class Agente {
   estado: EstadoLocal;
   trocador: Trocador;
@@ -219,6 +223,9 @@ export class Agente {
   private loginTentado = new Map<string, number>();
   /** Sessões que já avisaram "Prompt is too long" (uma vez a cada 10 min por sessão). */
   private errosAvisados = new Map<string, number>();
+  /** Erros do log que já subiram (chave sem números) e quando, para não repetir; e os da última hora. */
+  private errosDoLog = new Map<string, number>();
+  private errosDoLogNaHora: number[] = [];
 
   constructor(private d: Dependencias) {
     this.estado = carregarEstado(d.c.estado);
@@ -790,6 +797,27 @@ export class Agente {
 
   private arquivoAtualizacao(): string {
     return path.join(this.d.c.base, "atualizacao.json");
+  }
+
+  /**
+   * Erro escrito no log do agente (disco cheio, cofre recusando, arquivo que não se grava) vai ao painel como evento,
+   * para quem acompanha de longe ver na hora. O mesmo erro sobe uma vez a cada 30 min, e no máximo 10 por hora.
+   * O que já é evento (linha "[erro] ...", escrita pelo trocador) já subiu pelo aoEvento.
+   */
+  erroDoLog(texto: string): void {
+    if (!this.d.nuvem || this.d.sombra || texto.startsWith("[")) return;
+    const t = this.d.relogio.agora();
+    const home = this.d.c.home;
+    const limpo = (home && home.length > 1 ? texto.split(home).join("~") : texto).slice(0, 280);
+    const chave = limpo.replace(/[0-9a-f]{6,}|\d+/gi, "#");
+    const ultimo = this.errosDoLog.get(chave);
+    if (ultimo !== undefined && t - ultimo < ERRO_DO_LOG_REPETIDO_S) return;
+    this.errosDoLogNaHora = this.errosDoLogNaHora.filter((e) => t - e < 3600);
+    if (this.errosDoLogNaHora.length >= ERROS_DO_LOG_POR_HORA) return;
+    this.errosDoLog.set(chave, t);
+    if (this.errosDoLog.size > 200) this.errosDoLog.delete(this.errosDoLog.keys().next().value!);
+    this.errosDoLogNaHora.push(t);
+    void this.d.nuvem.evento("erro", `Erro no agente: ${limpo}`, { log: true }).catch(() => undefined);
   }
 
   /** Evento local e na nuvem (o "info" não sobe sozinho pelo aoEvento: aqui sobe de propósito). */

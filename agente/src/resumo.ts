@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { ContaLocal } from "./estado.js";
+import { apagarSemErro } from "./util/arquivos.js";
 
 /** A janela que o agente usa de fábrica nas contas que não são 20x. */
 export const RESUMO_PADRAO = 180_000;
@@ -79,7 +80,12 @@ export function aplicarResumo(arquivo: string, desejado: number | null, escritoA
   }
   fs.mkdirSync(path.dirname(arquivo), { recursive: true });
   const tmp = `${arquivo}.tmp.reveza.${process.pid}.${randomBytes(6).toString("hex")}`;
-  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + "\n", { mode: modo, flag: "wx" });
-  fs.renameSync(tmp, arquivo);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + "\n", { mode: modo, flag: "wx" });
+    fs.renameSync(tmp, arquivo);
+  } catch (e) {
+    apagarSemErro(tmp);
+    throw e;
+  }
   return { escrito: desejado, mudou: true, daPessoa: false };
 }

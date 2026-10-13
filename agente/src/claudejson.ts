@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import type { Relogio } from "./util/tempo.js";
 import type { Log } from "./util/log.js";
+import { apagarSemErro } from "./util/arquivos.js";
 
 export class ClaudeJson {
   constructor(
@@ -68,13 +69,18 @@ export class ClaudeJson {
       }
       dados.oauthAccount = conta;
       const tmp = `${caminho}.tmp.reveza.${process.pid}.${randomBytes(8).toString("hex")}`;
-      fs.writeFileSync(tmp, JSON.stringify(dados, null, 2), { mode: 0o600, flag: "wx" });
       try {
-        fs.chmodSync(tmp, 0o600);
-      } catch {
-        // Windows
+        fs.writeFileSync(tmp, JSON.stringify(dados, null, 2), { mode: 0o600, flag: "wx" });
+        try {
+          fs.chmodSync(tmp, 0o600);
+        } catch {
+          // Windows
+        }
+        fs.renameSync(tmp, caminho);
+      } catch (e) {
+        apagarSemErro(tmp);
+        throw e;
       }
-      fs.renameSync(tmp, caminho);
     } finally {
       if (trava) {
         try {

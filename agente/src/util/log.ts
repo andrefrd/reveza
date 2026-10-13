@@ -20,7 +20,12 @@ function hora(): string {
 /** No modo sombra o mesmo "faria" se repete a cada ciclo: vai ao log uma vez por hora. */
 export const FARIA_REPETIDO_MS = 3_600_000;
 
-export function logEmArquivo(caminho: string, eco = false, agora: () => number = Date.now): Log {
+/** O log em arquivo do serviço: quem roda o agente liga `aoErro` para o erro também ir ao painel. */
+export interface LogArquivo extends Log {
+  aoErro?: (texto: string) => void;
+}
+
+export function logEmArquivo(caminho: string, eco = false, agora: () => number = Date.now): LogArquivo {
   const vistos = new Map<string, number>();
   const escrever = (tipo: string, texto: string) => {
     const linha = `${hora()} [${tipo}] ${texto}\n`;
@@ -37,9 +42,16 @@ export function logEmArquivo(caminho: string, eco = false, agora: () => number =
       // o log não pode derrubar o agente
     }
   };
-  return {
+  const log: LogArquivo = {
     info: (t) => escrever("info", t),
-    erro: (t) => escrever("erro", t),
+    erro: (t) => {
+      escrever("erro", t);
+      try {
+        log.aoErro?.(t);
+      } catch {
+        // o aviso não pode derrubar o agente
+      }
+    },
     faria: (t) => {
       const ultimo = vistos.get(t);
       if (ultimo !== undefined && agora() - ultimo < FARIA_REPETIDO_MS) return;
@@ -48,6 +60,7 @@ export function logEmArquivo(caminho: string, eco = false, agora: () => number =
       escrever("sombra", `faria: ${t}`);
     },
   };
+  return log;
 }
 
 export class LogMemoria implements Log {

@@ -123,9 +123,13 @@ export function textoEvento(e: Evento, estado: Pick<Instantaneo, "contas" | "com
     case "conexao":
       titulo = d.conta ? t("evento.conexao", vars) : t("evento.conexaoComputador", vars)
       break
-    case "erro":
+    case "erro": {
       titulo = d.motivo === "precisa_login" ? t("evento.erroLogin", vars) : t("evento.erro", vars)
+      // o que deu errado vem no texto do computador (o título só diz onde); erro do log chega com o prefixo do agente
+      const texto = typeof d.erro === "string" && d.erro ? d.erro : typeof e.texto === "string" ? e.texto.replace(/^Erro no agente: /, "") : ""
+      detalhe = d.motivo === "precisa_login" || !texto.trim() ? null : texto.slice(0, 200)
       break
+    }
     case "alerta":
       if (d.motivo === "atualizacao_falhou") {
         titulo =

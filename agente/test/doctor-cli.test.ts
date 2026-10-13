@@ -30,6 +30,7 @@ describe("doctor", () => {
       nuvemConfigurada: async () => ({ url: "https://exemplo.supabase.co" }),
       horaNuvem: async () => T0 + 5,
       agora: () => T0,
+      espacoLivre: () => 50 * 1024 ** 3,
       ...extra,
     };
   }
@@ -39,7 +40,7 @@ describe("doctor", () => {
     const d = deps();
     await d.guarda.gravar(SEGREDO_COFRE, Buffer.alloc(32, 1).toString("base64"));
     const r = await doctor(d);
-    assert.deepEqual(r.map((x) => x.id), ["agente", "servico", "ponte", "mod", "credenciais", "contas", "chaveiro", "nuvem", "relogio", "assistente"]);
+    assert.deepEqual(r.map((x) => x.id), ["agente", "disco", "servico", "ponte", "mod", "credenciais", "contas", "chaveiro", "nuvem", "relogio", "assistente"]);
     assert.equal(r.find((x) => x.id === "credenciais")!.situacao, "ok");
     assert.match(r.find((x) => x.id === "credenciais")!.detalhe, /a@exemplo\.com/);
     assert.equal(r.find((x) => x.id === "relogio")!.situacao, "ok");

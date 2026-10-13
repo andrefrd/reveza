@@ -16,13 +16,27 @@ export function gravarAtomico(caminho: string, conteudo: string | Buffer, modo =
   fs.mkdirSync(path.dirname(caminho), { recursive: true, mode: 0o700 });
   // nome imprevisível e criação exclusiva ("wx"): nunca segue um link deixado no lugar do temporário
   const tmp = `${caminho}.tmp.${process.pid}.${randomBytes(8).toString("hex")}`;
-  fs.writeFileSync(tmp, conteudo, { mode: modo, flag: "wx" });
   try {
-    fs.chmodSync(tmp, modo);
-  } catch {
-    // Windows: o modo não se aplica; vale a ACL do perfil
+    fs.writeFileSync(tmp, conteudo, { mode: modo, flag: "wx" });
+    try {
+      fs.chmodSync(tmp, modo);
+    } catch {
+      // Windows: o modo não se aplica; vale a ACL do perfil
+    }
+    fs.renameSync(tmp, caminho);
+  } catch (e) {
+    // disco cheio no meio da gravação deixava o temporário pela metade ao lado do arquivo (visto em 13/10/2026)
+    apagarSemErro(tmp);
+    throw e;
   }
-  fs.renameSync(tmp, caminho);
+}
+
+export function apagarSemErro(caminho: string): void {
+  try {
+    fs.rmSync(caminho, { force: true });
+  } catch {
+    // o erro que importa é o da gravação
+  }
 }
 
 export function gravarJson(caminho: string, dados: unknown, modo = 0o600): void {

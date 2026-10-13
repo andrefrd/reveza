@@ -7,6 +7,22 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.3 · 13/10/2026
+
+Problema no computador visto pelo painel, na hora (pedido do Paulo: acompanhar o Mac mini e o MacBook enquanto
+funcionam). Em 13/10 o disco de um computador encheu por alguns minutos e o erro só ficou no log local. Atualize os
+computadores pelo painel.
+
+- **Erro do agente no painel:** o que o agente escreve como erro no log (disco cheio, arquivo que não se grava) também
+  vai para os eventos, sem a pasta do usuário. O mesmo erro sobe uma vez a cada 30 minutos (números e nomes de arquivo
+  temporário não contam como erro novo) e no máximo 10 por hora por computador.
+- **O texto do erro aparece:** os eventos de erro mostravam só "Erro em <computador>"; agora mostram o que deu errado.
+- **Disco no diagnóstico:** o `reveza doctor` e a tela Saúde conferem o espaço livre. Abaixo de 5 GB é aviso; abaixo de
+  2 GB é falha, porque com o disco cheio o agente não grava o estado nem o uso das contas, e o assistente de código
+  também para.
+- **Gravação que falha não deixa lixo:** o arquivo temporário de uma gravação que não terminou (disco cheio no meio) é
+  apagado, em vez de ficar ao lado do arquivo.
+
 ## 0.4.2 · 13/10/2026
 
 Sessão que trava com "Prompt is too long" (pedido do Paulo, depois de duas sessões travadas no MacBook em 12 e 13/10).

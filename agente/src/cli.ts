@@ -816,6 +816,8 @@ async function cmdRodar(amb: Ambiente, a: Args): Promise<number> {
       return { diagnostico: paraPainel(r.depois), resumo: resumoConserto(r.depois), corrigidos: contar("corrigido"), naoDeu: contar("nao_deu") };
     },
   });
+  // erro escrito no log (disco cheio, arquivo que não se grava) também vai ao painel, com limite (agente.erroDoLog)
+  log.aoErro = (t) => agente.erroDoLog(t);
   const instalacao = lerInstalacao(amb.c);
   const depsDentro = (): DepsDoctor => ({
     c: amb.c,

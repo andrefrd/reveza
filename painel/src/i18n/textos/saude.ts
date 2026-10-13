@@ -22,6 +22,7 @@ export default secao({
       pedido: "Diagnóstico pedido a {computador}",
       itens: {
         agente: "Agente",
+        disco: "Disco",
         servico: "Serviço do agente",
         ponte: "Ponte local",
         mod: "Mod das sessões",
@@ -94,6 +95,7 @@ export default secao({
       pedido: "Diagnostics requested from {computador}",
       itens: {
         agente: "Agent",
+        disco: "Disk",
         servico: "Agent service",
         ponte: "Local bridge",
         mod: "Session mod",

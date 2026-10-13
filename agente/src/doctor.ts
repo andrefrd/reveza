@@ -56,6 +56,21 @@ export interface DepsDoctor {
   sombra?: boolean;
   /** Instalação feita com `--sem-servico`: o serviço não é instalado sozinho. */
   semServico?: boolean;
+  /** Bytes livres no disco da pasta do usuário (testes); de fábrica, lido do sistema. */
+  espacoLivre?: () => number;
+}
+
+/** Abaixo disto o disco vira aviso, e abaixo de DISCO_FALHA, falha: com o disco cheio nada do agente se grava. */
+export const DISCO_AVISO = 5 * 1024 ** 3;
+export const DISCO_FALHA = 2 * 1024 ** 3;
+
+export function espacoLivreEm(pasta: string): number {
+  const s = fs.statfsSync(pasta);
+  return Number(s.bavail) * Number(s.bsize);
+}
+
+function gb(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1).replace(".", ",")} GB`;
 }
 
 /** O comando de instalar o assistente de código (a única menção ao nome fica na instalação e nos requisitos). */
@@ -126,6 +141,15 @@ export async function doctor(d: DepsDoctor): Promise<Conferencia[]> {
   add("agente", "Agente", compararVersao(node, "18.17.0") >= 0 ? "ok" : "falha", `versão ${VERSAO}, Node ${node}`, {
     fazer: "instale um Node mais novo (20.19 ou depois, https://nodejs.org) e rode o instalador com --atualizar",
   });
+
+  try {
+    const livre = d.espacoLivre ? d.espacoLivre() : espacoLivreEm(d.c.home);
+    add("disco", "Disco", livre < DISCO_FALHA ? "falha" : livre < DISCO_AVISO ? "aviso" : "ok", `${gb(livre)} livres`, {
+      fazer: "libere espaço neste computador: com o disco cheio, o agente não grava o estado nem o uso das contas, e o assistente de código também para",
+    });
+  } catch (e) {
+    add("disco", "Disco", "aviso", `não consegui conferir: ${(e as Error).message}`, { fazer: "confira o espaço livre do disco deste computador" });
+  }
 
   try {
     const s = await d.statusServico();

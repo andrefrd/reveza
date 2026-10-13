@@ -90,3 +90,26 @@ describe("textoEvento da nuvem e do painel (0.3.0)", () => {
     expect(ev("info", { atualizacao_completa: "desligada", computador: null }).titulo).toMatch(/evento\.completaDesligada/)
   })
 })
+
+describe("textoEvento do erro", () => {
+  const t = ((k: string, v?: Record<string, unknown>) => `[${k}${v ? ` ${JSON.stringify(v)}` : ""}]`) as never
+  const estado = { contas: [], computadores: [{ id: "pc-1", nome: "Mac mini" } as never] }
+  const ev = (texto: string, dados: Record<string, unknown>) =>
+    textoEvento({ id: 1, em: "2026-10-13T17:00:00.000Z", tipo: "erro", texto, dados }, estado, { t, tx: t, idioma: "pt-BR" } as never)
+  let textoEvento: typeof import("./evento").textoEvento
+  it("mostra o que deu errado, não só onde (antes o texto do computador sumia)", async () => {
+    textoEvento = (await import("./evento")).textoEvento
+    const r = ev("Não consegui identificar a conta em uso (sem rede?); troca adiada.", { computador: "pc-1" })
+    expect(r.titulo).toContain("evento.erro")
+    expect(r.titulo).toContain("Mac mini")
+    expect(r.detalhe).toBe("Não consegui identificar a conta em uso (sem rede?); troca adiada.")
+  })
+  it("erro do log: sem o prefixo do agente e com no máximo 200 caracteres; login vencido fica só no título", async () => {
+    textoEvento = (await import("./evento")).textoEvento
+    expect(ev("Erro no agente: não consegui salvar o estado: ENOSPC", { computador: "pc-1", log: true }).detalhe).toBe("não consegui salvar o estado: ENOSPC")
+    expect(ev("Erro no agente: " + "x".repeat(400), { computador: "pc-1", log: true }).detalhe).toHaveLength(200)
+    expect(ev("o login venceu", { computador: "pc-1", conta: "c1", motivo: "precisa_login" }).detalhe).toBeNull()
+    expect(ev("", { computador: "pc-1" }).detalhe).toBeNull()
+    expect(ev("texto", { computador: "pc-1", erro: "o erro de verdade" }).detalhe).toBe("o erro de verdade")
+  })
+})
