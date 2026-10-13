@@ -1,5 +1,5 @@
 // A janela de liberar computador novo em cada sistema, e o que conta como liberar, código errado, recusar, sem
-// resposta e "sem tela". O código (8 caracteres) aparece no computador novo; a janela só pede.
+// resposta e "sem tela". O código (12 caracteres) aparece no computador novo; a janela só pede.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { comandoDaJanela, pedirConfirmacao } from "../src/confirmar.js";

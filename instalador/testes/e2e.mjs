@@ -173,7 +173,7 @@ try {
       if (codigoLig) {
         // assíncrono de propósito: o emulador da nuvem roda neste mesmo processo, e um spawnSync travaria o laço de
         // eventos que responde ao `reveza ligar` (o primeiro ensaio da 0.2.0 no GitHub esperou 5 minutos e caiu assim)
-        const errado = await rodar(process.execPath, [cli, "ligar", "AAAA-AAAA"], env, { saida: false });
+        const errado = await rodar(process.execPath, [cli, "ligar", codigoLig.startsWith("AAAA") ? "BBBB-BBBB-CCCC" : "AAAA-AAAA-CCCC"], env, { saida: false });
         conferir("reveza ligar com o código errado não libera", errado.codigo !== 0 && /não confere/.test(errado.texto), errado.texto.slice(-200));
         const lib = await rodar(process.execPath, [cli, "ligar", codigoLig.toLowerCase()], env, { saida: false });
         conferir("reveza ligar CODIGO no computador que tem a chave entrega a chave cifrada", lib.codigo === 0, lib.texto.slice(-200));
