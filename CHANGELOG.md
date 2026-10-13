@@ -7,6 +7,18 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.4 · 13/10/2026
+
+Os testes não deixam mais pastas na pasta temporária do computador. Em 13/10, com o disco do Mac mini quase cheio,
+havia mais de mil pastas `reveza-*` deixadas por rodadas de teste e de ensaio. Só quem roda os testes do projeto é
+afetado; o agente instalado não muda.
+
+- **Testes do agente:** cada rodada usa uma pasta temporária só dela, apagada no fim, mesmo quando um teste esquece de
+  limpar o que criou.
+- **Teste de instalação de ponta a ponta:** as casas de teste (uns 40 MB cada, com o painel compilado) são apagadas no
+  fim. `--manter` guarda as duas para olhar depois de uma falha.
+- **Ensaio:** a pasta do ensaio era deixada para trás quando a criação do gist falhava.
+
 ## 0.4.3 · 13/10/2026
 
 Problema no computador visto pelo painel, na hora (pedido do Paulo: acompanhar o Mac mini e o MacBook enquanto

@@ -2,7 +2,7 @@
 // ambiente), o banco montado pelas migrações, o painel compilado e publicado, e o agente de verdade se registrando e
 // respondendo a um comando do painel. Rode num contêiner (scripts/e2e-docker.sh): ele instala serviço e mexe no HOME.
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +34,9 @@ const sql = async (q, params = []) => {
   return r.json();
 };
 const home = mkdtempSync(path.join(os.tmpdir(), "reveza-e2e-"));
+// fora do contêiner, as casas de teste (uns 40 MB cada, com o painel compilado) ficavam na pasta temporária; --manter
+// guarda para olhar depois de uma falha
+const casas = [home];
 const env = {
   ...process.env,
   HOME: home,
@@ -149,6 +152,7 @@ try {
       await sql(comoAdmin(adminId, `public.painel_ligacao_aprovador(${uuid(pc2)}, ${uuid(pc)}, ${texto("pt-BR")})`));
       const codigoAcesso = "rvzc_" + Buffer.from(JSON.stringify({ u: `https://${emu.ref}.supabase.co`, k: "anon-emulador", e: "pc-segundo@computadores.reveza.invalid", s: senha2 })).toString("base64url");
       const home2 = mkdtempSync(path.join(os.tmpdir(), "reveza-e2e-pc2-"));
+      casas.push(home2);
       const env2 = { ...env, HOME: home2, REVEZA_CODIGO: codigoAcesso };
       delete env2.SUPABASE_ACCESS_TOKEN;
       delete env2.VERCEL_TOKEN;
@@ -211,6 +215,8 @@ try {
   if (agente) agente.kill("SIGTERM");
   await esperar(500);
   await emu.fechar();
+  if (args.has("--manter")) console.log(`casas de teste mantidas: ${casas.join(" ")}`);
+  else for (const c of casas) rmSync(c, { recursive: true, force: true, maxRetries: 3 });
 }
 const falhas = resultados.filter((r) => !r.ok);
 console.log(`\n${resultados.length - falhas.length}/${resultados.length} conferências ok`);

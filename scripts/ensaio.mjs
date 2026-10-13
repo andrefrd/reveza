@@ -122,18 +122,19 @@ async function principal() {
   // o campo `ensaio` do disparo: "-f ensaio=" (a main como está), o endereço do gist, ou o arquivo (`-F ensaio=@arq`)
   let campo = ["-f", "ensaio="];
   const tmp = mkdtempSync(path.join(os.tmpdir(), "reveza-ensaio-"));
-  const arq = path.join(tmp, "ensaio.txt");
-  const b64 = diff.length ? gzipSync(diff, { level: 9 }).toString("base64") : "";
-  writeFileSync(arq, b64);
-  // mudança pequena vai no próprio disparo, lida de um arquivo (sem gist: serve também a fork de organização, que não
-  // tem gist; e sem passar do limite de linha de comando do Windows); grande, num gist secreto de quem roda
-  if (b64.length && b64.length <= CABE_NO_DISPARO) campo = ["-F", `ensaio=@${arq}`];
-  else if (b64.length) {
-    const url = gh("gist", "create", "--desc", "Reveza: ensaio antes de publicar (apagado no fim)", arq).split(/\s+/).pop();
-    gist = url.split("/").pop();
-    campo = ["-f", `ensaio=${gh("api", `gists/${gist}`, "--jq", ".files | to_entries[0].value.raw_url")}`];
-  }
+  // o try começa logo depois da pasta: um gist que falhava ao ser criado deixava a pasta para trás
   try {
+    const arq = path.join(tmp, "ensaio.txt");
+    const b64 = diff.length ? gzipSync(diff, { level: 9 }).toString("base64") : "";
+    writeFileSync(arq, b64);
+    // mudança pequena vai no próprio disparo, lida de um arquivo (sem gist: serve também a fork de organização, que não
+    // tem gist; e sem passar do limite de linha de comando do Windows); grande, num gist secreto de quem roda
+    if (b64.length && b64.length <= CABE_NO_DISPARO) campo = ["-F", `ensaio=@${arq}`];
+    else if (b64.length) {
+      const url = gh("gist", "create", "--desc", "Reveza: ensaio antes de publicar (apagado no fim)", arq).split(/\s+/).pop();
+      gist = url.split("/").pop();
+      campo = ["-f", `ensaio=${gh("api", `gists/${gist}`, "--jq", ".files | to_entries[0].value.raw_url")}`];
+    }
     // cada disparo leva um id, e o fluxo dá à execução o nome "ensaio <id>": acha a dele mesmo com outro ensaio em
     // paralelo e sem depender do relógio deste computador
     const id = randomBytes(6).toString("hex");
