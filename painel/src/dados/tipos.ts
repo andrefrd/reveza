@@ -110,6 +110,8 @@ export interface Computador {
   criadoEm: string
   diagnostico: Diagnostico | null
   atribuicao: Atribuicao | null
+  /** A conta que este computador usa sempre que ela estiver livre. Uma conta é preferida de um computador só. */
+  contaPreferidaId: string | null
 }
 
 export interface ConfigTroca {

@@ -95,6 +95,32 @@ describe("FonteDemo", () => {
     expect((await f.carregar()).convites.some((c) => c.email === "nova@exemplo.com")).toBe(true)
   })
 
+  it("conta preferida: uma por computador, passa para ela se estiver livre e sai com o computador revogado", async () => {
+    const f = nova()
+    // a do Notebook não pode ser preferida do Desktop
+    await expect(f.preferirConta("pc-desktop", "conta-trabalho")).rejects.toMatchObject({ codigo: "preferida_de_outro" })
+    // ocupada pelo Desktop: fica gravada, mas o Notebook continua na dele
+    await f.preferirConta("pc-notebook", "conta-pessoal")
+    let e = await f.carregar()
+    let pc = e.computadores.find((c) => c.id === "pc-notebook")
+    expect(pc?.contaPreferidaId).toBe("conta-pessoal")
+    expect(pc?.atribuicao?.contaId).toBe("conta-trabalho")
+    expect((await f.auditoria(1))[0].acao).toBe("preferida")
+    // livre: passa para ela na hora, com o motivo da regra
+    await f.preferirConta("pc-desktop", "conta-cliente")
+    e = await f.carregar()
+    pc = e.computadores.find((c) => c.id === "pc-desktop")
+    expect(pc?.atribuicao).toMatchObject({ contaId: "conta-cliente", motivo: "conta preferida deste computador" })
+    expect(e.contas.find((c) => c.id === "conta-pessoal")?.posse).toBeNull()
+    // tirar e revogar
+    await f.preferirConta("pc-notebook", null)
+    expect((await f.carregar()).computadores.find((c) => c.id === "pc-notebook")?.contaPreferidaId).toBeNull()
+    await f.revogarComputador("pc-desktop")
+    expect((await f.carregar()).computadores.find((c) => c.id === "pc-desktop")?.contaPreferidaId).toBeNull()
+    await f.preferirConta("pc-notebook", "conta-cliente")
+    expect((await f.carregar()).computadores.find((c) => c.id === "pc-notebook")?.contaPreferidaId).toBe("conta-cliente")
+  })
+
   it("revogar computador solta as contas dele", async () => {
     const f = nova()
     await f.revogarComputador("pc-desktop")

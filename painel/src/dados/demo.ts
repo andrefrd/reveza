@@ -487,6 +487,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       criadoEm: iso(t0 - 41 * DIA),
       diagnostico: diagnostico(versao, 180, false),
       atribuicao: { contaId: "conta-trabalho", motivo: "limite", decididoEm: iso(t0 - 2 * H - 4 * MIN) },
+      contaPreferidaId: "conta-trabalho",
     },
     {
       id: "pc-desktop",
@@ -498,6 +499,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       criadoEm: iso(t0 - 12 * DIA),
       diagnostico: diagnostico(anterior ?? versao, 420, anterior !== null),
       atribuicao: { contaId: "conta-pessoal", motivo: "rodizio", decididoEm: iso(t0 - 6 * H - 11 * MIN) },
+      contaPreferidaId: null,
     },
   ]
 
@@ -970,6 +972,38 @@ export class FonteDemo implements Fonte {
     })
   }
 
+  preferirConta(computadorId: string, contaId: string | null) {
+    return this.escrever(() => {
+      const pc = this.computador(computadorId)
+      if (pc.revogado) throw new ErroPainel("computador_revogado")
+      const conta = contaId ? this.conta(contaId) : null
+      if (conta && this.d.computadores.some((q) => q.id !== computadorId && !q.revogado && q.contaPreferidaId === conta.id))
+        throw new ErroPainel("preferida_de_outro")
+      pc.contaPreferidaId = conta?.id ?? null
+      this.auditar("preferida", `${pc.nome} · ${conta?.email ?? "nenhuma"}`)
+      // como na nuvem: se a preferida estiver livre (sem outro computador, com login, fora de pausa), passa para ela na hora
+      const livre =
+        conta &&
+        pc.atribuicao?.contaId !== conta.id &&
+        !conta.pausada &&
+        !conta.precisaLogin &&
+        !(conta.posse && conta.posse.computadorId !== computadorId) &&
+        !this.d.computadores.some((q) => q.id !== computadorId && q.atribuicao?.contaId === conta.id)
+      if (conta && livre) {
+        const de = pc.atribuicao?.contaId ?? null
+        if (de) {
+          const antiga = this.d.contas.find((c) => c.id === de)
+          if (antiga) antiga.posse = null
+        }
+        const agora = this.agora()
+        const motivo = "conta preferida deste computador"
+        conta.posse = { computadorId, motivo: "uso", expiraEm: new Date(agora.getTime() + 2 * MIN).toISOString() }
+        pc.atribuicao = { contaId: conta.id, motivo, decididoEm: agora.toISOString() }
+        this.evento("troca", "troca", { computador: computadorId, de, para: conta.id, motivo })
+      }
+    })
+  }
+
   async comando(computadorId: string, acao: AcaoComando, corpo: Record<string, unknown> = {}): Promise<Comando> {
     const pc = this.computador(computadorId)
     const cmd = await this.escrever(() => {
@@ -1136,6 +1170,7 @@ export class FonteDemo implements Fonte {
       criadoEm: this.agora().toISOString(),
       diagnostico: null,
       atribuicao: null,
+      contaPreferidaId: null,
     })
     this.ligacoesDemo.set(id, { criadoEm: this.agora().getTime(), aprovador: null })
     this.auditar("computador_novo", "acesso criado")
@@ -1210,6 +1245,7 @@ export class FonteDemo implements Fonte {
     return this.escrever(() => {
       const pc = this.computador(id)
       pc.revogado = true
+      pc.contaPreferidaId = null
       for (const c of this.d.contas) if (c.posse?.computadorId === id) c.posse = null
       pc.atribuicao = null
       this.evento("info", "computador revogado", { computador: id, motivo: "revogado" })

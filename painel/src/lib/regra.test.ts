@@ -143,6 +143,50 @@ describe("regra de alternar (espelho de decidir())", () => {
     expect(d.fila).toEqual(["calma", "rapida"])
   })
 
+  it("conta preferida: vem primeiro; o computador volta para ela; a de outro vem depois e é devolvida", () => {
+    // sem conta: a preferida vem antes de uma de prioridade melhor
+    const nova = decidir(
+      entrada({ atualId: null, contas: [conta("a", 10, { prioridade: 1 }), conta("b", 50, { preferida: true })] })
+    )
+    expect(nova).toMatchObject({ contaId: "b", motivo: "primeira_escolha" })
+    expect(nova.fila).toEqual(["b", "a"])
+
+    // livre de novo: volta para ela, mas respeita a espera mínima
+    const contas = [conta("a", 10), conta("b", 50, { preferida: true })]
+    expect(decidir(entrada({ contas }))).toMatchObject({ contaId: "b", trocou: true, motivo: "troca_preferida" })
+    expect(decidir(entrada({ contas, segundosDesdeUltimaTroca: 30 }))).toMatchObject({ contaId: "a", trocou: false })
+    // ocupada (outro computador com ela) ou acima do aviso: não volta
+    const ocupada = [conta("a", 10), conta("b", 50, { preferida: true, ocupada: true })]
+    expect(decidir(entrada({ contas: ocupada }))).toMatchObject({ contaId: "a", motivo: "fica_abaixo_aviso" })
+    const cheia = [conta("a", 10), conta("b", 92, { preferida: true })]
+    expect(decidir(entrada({ contas: cheia }))).toMatchObject({ contaId: "a", motivo: "fica_abaixo_aviso" })
+
+    // a preferida de outro vem depois das outras, antes da reserva
+    const fila = decidir(
+      entrada({
+        atualId: null,
+        contas: [conta("a", 1, { preferidaDeOutro: true }), conta("b", 60), conta("c", 0, { reserva: true })],
+      })
+    )
+    expect(fila.fila).toEqual(["b", "a", "c"])
+
+    // estando nela, devolve se houver outra que não seja reserva nem preferida de um terceiro
+    const devolve = decidir(entrada({ contas: [conta("a", 10, { preferidaDeOutro: true }), conta("b", 60)] }))
+    expect(devolve).toMatchObject({ contaId: "b", trocou: true, motivo: "devolve_preferida" })
+    const semOutra = decidir(
+      entrada({ contas: [conta("a", 10, { preferidaDeOutro: true }), conta("b", 0, { reserva: true })] })
+    )
+    expect(semOutra).toMatchObject({ contaId: "a", trocou: false })
+  })
+
+  it("rodízio: o computador na preferida fica nela; no limite troca como qualquer outra", () => {
+    const contas = [conta("a", 20, { preferida: true }), conta("b", 5)]
+    const rodizio = decidir(entrada({ modo: "rodizio", rodizioVenceu: true, contas }))
+    expect(rodizio).toMatchObject({ contaId: "a", trocou: false, motivo: "fica_preferida" })
+    const limite = decidir(entrada({ contas: [conta("a", 96, { preferida: true }), conta("b", 5)] }))
+    expect(limite).toMatchObject({ contaId: "b", trocou: true, motivo: "troca_limiar" })
+  })
+
   it("faixa e frequência do rodízio", () => {
     expect(faixaRodizio(90)).toEqual({ min: 68, max: 113 })
     expect(trocasPorDia(90)).toBe(16)

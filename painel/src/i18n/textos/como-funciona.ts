@@ -111,6 +111,10 @@ export default secao({
             "Precisava trocar, mas a última troca foi há pouco: espera a espera mínima para não ficar trocando à toa.",
           sem_livre: "Precisava trocar, mas nenhuma conta está livre: fica na atual e a nuvem manda o alerta.",
           rodizio_sem_livre: "Hora do rodízio, mas nenhuma outra conta está livre: fica.",
+          troca_preferida: "A conta preferida deste computador ficou livre: ele volta para ela.",
+          devolve_preferida:
+            "A conta em uso é a preferida de outro computador ligado: devolve e passa para a primeira livre da fila.",
+          fica_preferida: "Hora do rodízio, mas o computador está na conta preferida dele: fica nela.",
         },
         porConta: {
           atual: "em uso",
@@ -123,6 +127,8 @@ export default secao({
           teto_semana: "no teto da semana",
           reserva: "reserva (por último)",
           acima_ritmo: "acima do ritmo (depois das outras)",
+          preferida: "preferida deste computador (primeiro)",
+          preferida_de_outro: "preferida de outro computador (depois das outras)",
           livre: "livre",
         },
       },
@@ -238,6 +244,10 @@ export default secao({
             "It should switch, but the last switch was recent: it waits the minimum wait to avoid pointless switching.",
           sem_livre: "It should switch, but no account is free: it stays and the cloud sends the alert.",
           rodizio_sem_livre: "Rotation time, but no other account is free: it stays.",
+          troca_preferida: "This computer's preferred account is free again: it goes back to it.",
+          devolve_preferida:
+            "The account in use is another powered-on computer's preferred one: it gives it back and takes the first free one in line.",
+          fica_preferida: "Rotation time, but the computer is on its preferred account: it stays there.",
         },
         porConta: {
           atual: "in use",
@@ -250,6 +260,8 @@ export default secao({
           teto_semana: "at the weekly cap",
           reserva: "backup (last)",
           acima_ritmo: "above pace (after the others)",
+          preferida: "this computer's preferred (first)",
+          preferida_de_outro: "another computer's preferred (after the others)",
           livre: "free",
         },
       },

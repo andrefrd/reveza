@@ -1,6 +1,7 @@
 // A regra de alternar contas, para o simulador da página "Como funciona". É o espelho, em TypeScript, das funções
-// decidir() e rvz_candidatas() do banco (nuvem/migracoes/0003_decidir.sql). Quem decide de verdade é o banco; isto
-// aqui explica, com as mesmas condições e a mesma ordem.
+// decidir() e rvz_candidatas() do banco (nuvem/migracoes/0003_decidir.sql e 0024_conta_preferida.sql). Quem decide de
+// verdade é o banco; isto aqui explica, com as mesmas condições e a mesma ordem. Olha um computador só: a troca pedida à
+// mão (que a conta preferida não desfaz) e se o dono da preferida de outro está sem ela ficam por conta de quem chama.
 
 import type { Modo, OrdemRodizio } from "@/dados/tipos"
 
@@ -25,6 +26,10 @@ export interface ContaRegra {
   tetoSemana?: number | null
   /** Plano da semana: quanto já devia ter ido até agora. Acima disso, a conta vai para depois das outras. */
   ritmoEsperado?: number | null
+  /** A conta preferida deste computador: vem antes de todas, e ele volta para ela quando ela fica livre. */
+  preferida?: boolean
+  /** Preferida de outro computador ligado: vem depois das outras, e quem está com ela devolve se tiver outra. */
+  preferidaDeOutro?: boolean
 }
 
 export interface EntradaRegra {
@@ -57,6 +62,8 @@ export type MotivoConta =
   | "teto_semana"
   | "reserva"
   | "acima_ritmo"
+  | "preferida"
+  | "preferida_de_outro"
 
 const BLOQUEIOS: MotivoConta[] = [
   "atual",
@@ -84,6 +91,9 @@ export type MotivoDecisao =
   | "espera_minima"
   | "sem_livre"
   | "rodizio_sem_livre"
+  | "troca_preferida"
+  | "devolve_preferida"
+  | "fica_preferida"
 
 export interface AvaliacaoConta {
   id: string
@@ -129,6 +139,8 @@ export function avaliarConta(c: ContaRegra, e: EntradaRegra): AvaliacaoConta {
   if (c.tetoSemana != null && c.p7 >= c.tetoSemana) motivos.push("teto_semana")
   if (c.reserva) motivos.push("reserva")
   if (c.ritmoEsperado != null && c.p7 > c.ritmoEsperado) motivos.push("acima_ritmo")
+  if (c.preferida) motivos.push("preferida")
+  if (c.preferidaDeOutro) motivos.push("preferida_de_outro")
   return {
     id: c.id,
     efetivo: ef,
@@ -141,13 +153,18 @@ export function avaliarConta(c: ContaRegra, e: EntradaRegra): AvaliacaoConta {
 type ContaAvaliada = ContaRegra & { av: AvaliacaoConta; sorteio: number }
 
 /**
- * A ordem de rvz_candidatas: reserva por último; depois, no rodízio, o sorteio ou o menor uso; depois prioridade,
- * quem está acima do ritmo da semana por último e, por fim, o menor uso.
+ * A ordem de rvz_candidatas: a preferida deste computador primeiro; reserva por último, e a preferida de outro
+ * computador logo antes dela; depois, no rodízio, o sorteio ou o menor uso; depois prioridade, quem está acima do ritmo
+ * da semana por último e, por fim, o menor uso.
  */
 function ordenar(lista: ContaAvaliada[], ordem: "preferencia" | OrdemRodizio): ContaAvaliada[] {
   return [...lista].sort((a, b) => {
+    const p = Number(!!b.preferida) - Number(!!a.preferida)
+    if (p) return p
     const r = Number(!!a.reserva) - Number(!!b.reserva)
     if (r) return r
+    const o = Number(!!a.preferidaDeOutro) - Number(!!b.preferidaDeOutro)
+    if (o) return o
     if (ordem === "aleatoria" && a.sorteio !== b.sorteio) return a.sorteio - b.sorteio
     if (ordem === "menor_uso" && a.av.efetivo !== b.av.efetivo) return a.av.efetivo - b.av.efetivo
     if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade
@@ -204,14 +221,29 @@ export function decidir(e: EntradaRegra): Decisao {
     return resultado(proxima.id, e.modo === "limite" ? "troca_limite" : "troca_limiar")
   }
 
-  if (e.modo === "rodizio" && e.rodizioVenceu && esperou) {
+  // Volta para a preferida quando ela está livre de novo.
+  const preferida = contas.find((c) => c.preferida)
+  if (preferida && preferida !== atual && preferida.av.candidata && esperou) {
+    return resultado(preferida.id, "troca_preferida")
+  }
+
+  // Devolve a preferida de outro computador ligado, se houver outra boa (nem reserva nem preferida de um terceiro).
+  if (atual.preferidaDeOutro && esperou) {
+    const outra = fila.find((c) => !c.reserva && !c.preferidaDeOutro)
+    if (outra) return resultado(outra.id, "devolve_preferida")
+  }
+
+  // No rodízio, o computador que está na preferida fica nela.
+  if (e.modo === "rodizio" && e.rodizioVenceu && esperou && !atual.preferida) {
     const proxima = ordenar(candidatas, e.ordemRodizio ?? "aleatoria")[0]
     return proxima ? resultado(proxima.id, "troca_rodizio") : resultado(atual.id, "rodizio_sem_livre")
   }
 
   if (ef >= e.aviso) return resultado(atual.id, "fica_aviso", { aviso: true })
   if (e.modo === "limite") return resultado(atual.id, "fica_ate_limite")
-  if (e.modo === "rodizio") return resultado(atual.id, "fica_rodizio_cedo")
+  if (e.modo === "rodizio") {
+    return resultado(atual.id, e.rodizioVenceu && atual.preferida ? "fica_preferida" : "fica_rodizio_cedo")
+  }
   return resultado(atual.id, "fica_abaixo_aviso")
 }
 

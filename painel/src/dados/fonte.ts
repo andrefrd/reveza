@@ -66,6 +66,8 @@ export interface Fonte {
   /** Grava a ordem de preferência: a primeira da lista é a preferida. */
   ordenarContas(ids: string[]): Promise<void>
   trocarAgora(computadorId: string, contaId: string): Promise<void>
+  /** A conta que este computador usa sempre que ela estiver livre (null tira). Se estiver livre agora, ele passa para ela. */
+  preferirConta(computadorId: string, contaId: string | null): Promise<void>
   comando(computadorId: string, acao: AcaoComando, corpo?: Record<string, unknown>): Promise<Comando>
   lerComando(id: number): Promise<Comando | null>
   /**

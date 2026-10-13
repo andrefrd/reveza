@@ -42,6 +42,7 @@ Quem usa o Claude Code o dia todo conhece estes três momentos:
 | Sair, entrar na outra conta e explicar o contexto de novo | As sessões abertas seguem, já na conta nova |
 | O agente que rodava de madrugada morre no limite | A sessão sem ninguém retoma sozinha na conta seguinte |
 | Senha de conta passada por mensagem | Cada login cifrado no seu computador; a nuvem guarda sem conseguir ler |
+| A conta do plano maior cai em qualquer computador | Cada computador pode ter a sua conta preferida, usada sempre que estiver livre |
 | Planilha para adivinhar qual conta ainda tem saldo | Painel com uso, custo e previsão de esgotar de cada conta |
 | Cada pessoa do time resolvendo no seu canto | Time com papéis, alertas e o histórico de cada troca |
 

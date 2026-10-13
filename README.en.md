@@ -42,6 +42,7 @@ If you use Claude Code all day, you know these three moments:
 | Sign out, sign in to the other account and explain the context again | Open sessions keep going, already on the new account |
 | The agent running overnight dies at the limit | The unattended session resumes on the next account by itself |
 | Account passwords shared over chat | Each login encrypted on your computer; the cloud stores it without being able to read it |
+| The bigger plan's account lands on any computer | Each computer can have its preferred account, used whenever it is free |
 | A spreadsheet to guess which account still has room | A dashboard with usage, cost and a forecast of when each account runs out |
 | Everyone on the team sorting it out alone | A team with roles, alerts and the history of every switch |
 

@@ -7,6 +7,26 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.5.0 · 13/10/2026
+
+Conta preferida de cada computador. Um usuário com uma conta de plano maior (20x) pediu para deixá-la como padrão no
+computador principal: até aqui, a ordem das contas valia igual para todos os computadores, e a conta maior caía em
+qualquer um. Atualize os computadores pelo painel; a nuvem se atualiza sozinha (ou pelo **Atualizar a nuvem**).
+
+- **Onde escolher:** em **Computadores**, no cartão de cada computador, o campo **Conta preferida**. Uma conta é
+  preferida de um computador só. Se ela estiver livre na hora, o computador já passa para ela.
+- **Como a troca automática usa:** para o computador dono, a preferida vem antes de todas as outras (com as mesmas
+  regras: livre, com login, dentro da agenda e abaixo do aviso). Quando ela fica livre de novo, ele volta para ela,
+  depois da espera entre trocas. Troca pedida à mão pelo painel ou pela API não é desfeita: fica até a próxima troca
+  da regra. No rodízio, o computador que está na preferida fica nela. No limite, troca como qualquer outra conta.
+- **Os outros computadores:** enquanto o dono está ligado, a preferida dele vem depois das demais (só entra se não
+  houver outra). Se outro computador estiver com ela e o dono ligado sem ela, o outro devolve e pega a melhor que
+  sobrar, nunca uma reserva nem a preferida de um terceiro. Sem outra para pegar, fica como está. Com o dono fora do
+  ar, ela volta à fila normal.
+- **Histórico e Como funciona:** os motivos novos ("conta preferida deste computador" e "devolvendo a conta preferida
+  de outro computador") aparecem traduzidos, e o simulador do Como funciona mostra a preferida na ordem.
+- **Computador revogado** solta a preferida dele.
+
 ## 0.4.6 · 13/10/2026
 
 Correção preventiva na atualização da nuvem. Três regras antigas do banco guardavam listas desatualizadas das opções de

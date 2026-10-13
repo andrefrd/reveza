@@ -171,6 +171,7 @@ const MENSAGENS: [RegExp, string][] = [
   [/revogar a si mesmo/i, "nao_pode_voce"],
   [/escopo só para administrador/i, "escopo_admin"],
   [/em uso em outro computador|conta com outro computador/i, "conta_ocupada"],
+  [/outro computador já prefere/i, "preferida_de_outro"],
   [/sem login guardado/i, "conta_precisa_login"],
   [/computador novo desconhecido|computador desconhecido/i, "computador_revogado"],
   [/conta desconhecida/i, "nao_encontrado"],
@@ -426,7 +427,8 @@ export class FonteSupabase implements Fonte {
       sel(
         sb
           .from("computadores")
-          .select("id,nome,sistema,versao,visto_em,revogado,diagnostico,criado_em")
+          // "*": a conta_preferida (0024) só existe depois de a nuvem se atualizar; nuvem antiga não derruba a tela
+          .select("*")
           .order("criado_em")
       ),
       sel(sb.from("atribuicao").select("computador_id,conta_id,motivo,decidido_em")),
@@ -508,6 +510,7 @@ export class FonteSupabase implements Fonte {
           atribuicao: a
             ? { contaId: texto(a.conta_id), motivo: String(a.motivo), decididoEm: String(a.decidido_em) }
             : null,
+          contaPreferidaId: texto(c.conta_preferida),
         }
       }),
       config: cfg,
@@ -701,6 +704,10 @@ export class FonteSupabase implements Fonte {
 
   async trocarAgora(computadorId: string, contaId: string) {
     await rpc("painel_trocar_agora", { p_computador: computadorId, p_conta: contaId })
+  }
+
+  async preferirConta(computadorId: string, contaId: string | null) {
+    await rpc("painel_computador_preferida", { p_computador: computadorId, p_conta: contaId })
   }
 
   async comando(computadorId: string, acao: AcaoComando, corpo: Record<string, unknown> = {}): Promise<Comando> {

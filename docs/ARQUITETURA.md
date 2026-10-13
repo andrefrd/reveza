@@ -87,6 +87,12 @@ aviso de limite. Para cada computador ligado:
   da semana (cota da semana dividida pelos dias restantes);
 - janela cheia = maior entre 5 h, semana e semana por família de modelo; reset que já passou conta como zero;
 - espera mínima de 90 s entre trocas do mesmo computador, menos quando a sessão bateu o limite;
+- conta preferida de cada computador (uma conta é preferida de um computador só): para ele vem antes das outras
+  candidatas; com a troca automática ligada, ele volta para ela quando ela fica livre, depois da espera, menos se a
+  conta atual foi pedida à mão (painel ou API), que fica até a próxima troca da regra; no rodízio ele fica nela; no
+  limite, troca como qualquer outra. Para os outros computadores, enquanto o dono está ligado, ela vem depois das
+  demais, e quem estiver com ela devolve e pega a melhor que sobrar (nunca uma reserva nem a preferida de um
+  terceiro);
 - grava a decisão em `atribuicao(computador_id, conta_id, motivo, versao)` e no `eventos`.
 
 ## 7. Nuvem: tabelas (todas com RLS ligado)
@@ -95,7 +101,7 @@ aviso de limite. Para cada computador ligado:
 |---|---|---|
 | `membros(user_id, papel)` papel: `admin`, `leitura`, `computador` | membro | admin (convite por Edge Function) |
 | `convites(email, papel, expira_em, criado_por)` | admin | admin |
-| `computadores(id, user_id, nome, sistema, versao, visto_em, revogado)` | membro | o próprio computador (seu registro); admin revoga |
+| `computadores(id, user_id, nome, sistema, versao, visto_em, revogado, conta_preferida)` | membro | o próprio computador (seu registro); admin revoga e escolhe a conta preferida |
 | `contas(id, email, organizacao, plano, cor, prioridade, reserva, pausada, agenda, teto_semana)` | membro | admin; computador grava plano e organização |
 | `cofre(conta_id, cifrado, nonce, versao, gravado_por, gravado_em)` | só computador | só computador com posse |
 | `posse(conta_id, computador_id, expira_em)` | membro | só por função (`pegar_posse`, `soltar_posse`) |
@@ -294,7 +300,7 @@ Menu lateral, nada empilhado numa tela só:
 1. **Visão geral**: conta em uso por computador, ritmo, previsão, faixas de alerta.
 2. **Contas**: lista, cor, prioridade, reserva, agenda, teto semanal, conectar (gera o pedido ao computador), entrar
    de novo, pausar.
-3. **Computadores**: lista, sistema, versão, visto há, conta em uso, ligar computador novo (o código aparece nele e é
+3. **Computadores**: lista, sistema, versão, visto há, conta em uso, conta preferida, ligar computador novo (o código aparece nele e é
    digitado num computador que já usa o Reveza; o painel só acompanha), revogar; atualizações (a linha Nuvem e painel
    com o Atualizar a nuvem, seção 7e; Verificar atualização, Atualizar todos, como atualizar sozinho e o andamento,
    seção 7d).

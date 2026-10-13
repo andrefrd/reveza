@@ -197,6 +197,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
             <span className="text-muted-foreground">{t("computadores.semConta")}</span>
           )}
         </div>
+        <ContaPreferida pc={pc} estado={estado} />
         {outras.length ? (
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">{t("computadores.outrasPosses")}</span>
@@ -272,6 +273,66 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
         }
       />
     </Card>
+  )
+}
+
+const SEM_PREFERIDA = "__nenhuma"
+
+function ContaPreferida({ pc, estado }: { pc: Computador; estado: Instantaneo }) {
+  const { t } = useT()
+  const { fonte } = useDados()
+  const acao = useAcao()
+  const { pode } = usePermissao()
+  const [enviando, setEnviando] = React.useState(false)
+  const id = `preferida-${pc.id}`
+  // uma conta é preferida de um computador só: a de outro aparece desligada, com o nome dele
+  const dono = (contaId: string) =>
+    estado.computadores.find((x) => x.id !== pc.id && !x.revogado && x.contaPreferidaId === contaId)
+  const escolher = async (v: string) => {
+    const contaId = v === SEM_PREFERIDA ? null : v
+    if (contaId === (pc.contaPreferidaId ?? null)) return
+    const conta = estado.contas.find((c) => c.id === contaId)
+    setEnviando(true)
+    await acao(
+      () => fonte.preferirConta(pc.id, contaId),
+      conta
+        ? t("computadores.preferida.feito", { computador: pc.nome, conta: conta.email })
+        : t("computadores.preferida.tirada", { computador: pc.nome })
+    )
+    setEnviando(false)
+  }
+  return (
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={id} className="text-xs font-normal text-muted-foreground">
+        {t("computadores.preferida.rotulo")}
+      </FieldLabel>
+      <Select
+        value={pc.contaPreferidaId ?? SEM_PREFERIDA}
+        onValueChange={(v) => void escolher(v)}
+        disabled={!pode || enviando}
+      >
+        <SelectTrigger id={id} size="sm" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={SEM_PREFERIDA}>{t("computadores.preferida.nenhuma")}</SelectItem>
+          {estado.contas.map((c) => {
+            const outro = dono(c.id)
+            return (
+              <SelectItem key={c.id} value={c.id} disabled={!!outro}>
+                <NomeConta conta={c} />
+                {outro ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t("computadores.preferida.deOutro", { computador: outro.nome })}
+                  </span>
+                ) : null}
+              </SelectItem>
+            )
+          })}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">{t("computadores.preferida.dica")}</p>
+    </Field>
   )
 }
 
