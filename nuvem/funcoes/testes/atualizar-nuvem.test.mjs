@@ -318,14 +318,14 @@ async function configDe(db, chave) {
 }
 
 /** A 0.3.1 de teste: uma migração nova (tabela, função e a liberação dela na 0099) e um painel mudado. */
-const MIGRACAO_NOVA = `-- Reveza AI · 0023 · de teste
+const MIGRACAO_NOVA = `-- Reveza AI · 0098 · de teste (depois de toda migração real, antes da 0099)
 create table if not exists public.x_nova (id int primary key);
 create or replace function public.agente_x_nova() returns integer language sql security definer set search_path = public, pg_temp as $$ select 23 $$;
 `;
 const pacote031 = (extra = {}) =>
   pacoteDe("0.3.1", (a) => ({
     ...a,
-    "nuvem/migracoes/0023_x_nova.sql": MIGRACAO_NOVA,
+    "nuvem/migracoes/0098_x_nova.sql": MIGRACAO_NOVA,
     "nuvem/migracoes/0099_permissoes.sql": `${a["nuvem/migracoes/0099_permissoes.sql"]}\ngrant execute on function public.agente_x_nova() to authenticated;\n`,
     "painel/src/App.tsx": "// mudou",
     ...extra,
@@ -380,7 +380,7 @@ test("a nuvem da 0.3.0 vai para a 0.3.1 sozinha: a migração nova e as permiss�
   assert.equal((await L.atualizarNuvem({ banco: conexao(db), fetch: g.f, por: "sozinho", agora: Date.parse("2026-10-12T15:00:00Z") })).estado, "fora_da_hora");
   const r = await L.atualizarNuvem({ banco: conexao(db), fetch: g.f, por: "sozinho", agora: Date.parse("2026-10-12T06:10:00Z") });
   assert.equal(r.estado, "atualizada", JSON.stringify(r));
-  assert.deepEqual(r.aplicadas, ["0023_x_nova.sql", "0099_permissoes.sql"]);
+  assert.deepEqual(r.aplicadas, ["0098_x_nova.sql", "0099_permissoes.sql"]);
   assert.equal(r.de, "0.3.0");
   assert.equal(await configDe(db, "nuvem_versao"), "0.3.1");
   const at = await configDe(db, "nuvem_atualizacao");
@@ -395,7 +395,7 @@ test("a nuvem da 0.3.0 vai para a 0.3.1 sozinha: a migração nova e as permiss�
   assert.equal((await db.query("select pg_get_userbyid(relowner) as d from pg_class where oid = 'public.x_nova'::regclass")).rows[0].d, DONO);
   assert.equal((await db.query("select has_function_privilege('authenticated', 'public.agente_x_nova()', 'execute') as p")).rows[0].p, true);
   assert.equal((await db.query("select has_function_privilege('authenticated', 'public.servico_nuvem_estado()', 'execute') as p")).rows[0].p, false);
-  const reg = (await db.query("select nome, hash from public.reveza_migracoes where nome in ('0023_x_nova.sql', '0099_permissoes.sql')")).rows;
+  const reg = (await db.query("select nome, hash from public.reveza_migracoes where nome in ('0098_x_nova.sql', '0099_permissoes.sql')")).rows;
   assert.equal(reg.length, 2);
   // de novo: em dia, nada muda
   assert.equal((await L.atualizarNuvem({ banco: conexao(db), fetch: g.f, por: "sozinho", agora: Date.parse("2026-10-12T06:20:00Z") })).estado, "em_dia");
@@ -404,20 +404,20 @@ test("a nuvem da 0.3.0 vai para a 0.3.1 sozinha: a migração nova e as permiss�
 
 test("uma migração que quebra não deixa nada pela metade: a anterior fica, a quebrada sai inteira, e sai o alerta", async () => {
   const db = await nuvemDe030();
-  const quebrada = pacote031({ "nuvem/migracoes/0024_quebrada.sql": "create table public.x_meio (id int);\ninsert into public.x_meio values (1);\nselect 1 / 0;\n" });
+  const quebrada = pacote031({ "nuvem/migracoes/0098_y_quebrada.sql": "create table public.x_meio (id int);\ninsert into public.x_meio values (1);\nselect 1 / 0;\n" });
   const g = github({ versoes: ["0.3.1"], pacotes: { "0.3.1": quebrada } });
   const r = await L.atualizarNuvem({ banco: conexao(db), fetch: g.f, por: "painel" });
   assert.equal(r.estado, "falhou");
-  assert.match(r.motivo, /0024_quebrada\.sql não entrou \(nada dela ficou\).*division by zero/);
+  assert.match(r.motivo, /0098_y_quebrada\.sql não entrou \(nada dela ficou\).*division by zero/);
   await db.exec("reset role");
   assert.equal((await db.query("select to_regclass('public.x_meio') as t")).rows[0].t, null, "a tabela da migração quebrada não ficou");
   const nomes = (await db.query("select nome from public.reveza_migracoes")).rows.map((x) => x.nome);
-  assert.ok(nomes.includes("0023_x_nova.sql"), "a que veio antes entrou inteira");
-  assert.ok(!nomes.includes("0024_quebrada.sql"));
+  assert.ok(nomes.includes("0098_x_nova.sql"), "a que veio antes entrou inteira");
+  assert.ok(!nomes.includes("0098_y_quebrada.sql"));
   assert.equal(await configDe(db, "nuvem_versao"), "0.3.0", "a versão da nuvem não muda");
   const at = await configDe(db, "nuvem_atualizacao");
   assert.equal(at.estado, "falhou");
-  assert.match(at.motivo, /0024_quebrada/);
+  assert.match(at.motivo, /0098_y_quebrada/);
   const alerta = (await db.query("select dados from public.eventos where tipo = 'alerta' order by id desc limit 1")).rows[0];
   assert.equal(alerta.dados.parte, "nuvem");
   assert.equal(alerta.dados.motivo, "atualizacao_falhou");
@@ -437,13 +437,13 @@ test("a conexão que não é dona do banco para antes de mexer, e diz quais pap�
   assert.equal(r.estado, "falhou");
   assert.match(r.motivo, /papel reveza_dono\) não é dona do banco do Reveza \(tabelas de postgres, funções de postgres\): atualize pelo instalador/);
   assert.deepEqual(g.pedidos, [], "nem foi ao GitHub");
-  assert.equal((await db.query("select count(*)::int as n from public.reveza_migracoes where nome like '0023%'")).rows[0].n, 0);
+  assert.equal((await db.query("select count(*)::int as n from public.reveza_migracoes where nome like '0098%'")).rows[0].n, 0);
 });
 
 test("duas rodadas: a vez da nuvem segura a segunda, e a mesma migração não entra duas vezes", async () => {
   const db = await nuvemDe030();
   const b = conexao(db);
-  const m = { nome: "0023_x_nova.sql", sql: MIGRACAO_NOVA, hash: sha(MIGRACAO_NOVA) };
+  const m = { nome: "0098_x_nova.sql", sql: MIGRACAO_NOVA, hash: sha(MIGRACAO_NOVA) };
   assert.equal(await L.aplicarUma(b, m), true);
   assert.equal(await L.aplicarUma(b, m), false, "a segunda rodada vê o registro dentro da trava e não aplica");
   assert.deepEqual((await b.consulta("select public.servico_nuvem_comecar('0.3.1', 'painel') as r"))[0].r, { ok: true, de: "0.3.0" });
