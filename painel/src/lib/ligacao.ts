@@ -3,11 +3,11 @@
 // O painel cria a identidade pendente do computador novo e mostra o código de acesso (rvzc_): o endereço da nuvem, a
 // chave pública e o e-mail e a senha dessa identidade. Esse código só deixa o computador novo PEDIR para entrar: a
 // nuvem não deixa a identidade pendente fazer mais nada antes de receber a chave do cofre. O computador novo mostra um
-// código de 8 caracteres; a pessoa digita esse código num computador que já tem a chave do cofre, que entrega a chave
+// código de 12 caracteres; a pessoa digita esse código num computador que já tem a chave do cofre, que entrega a chave
 // cifrada só para o computador novo. O painel só acompanha.
 
-/** A versão do agente que sabe liberar um computador novo pelo código que aparece nele. */
-export const VERSAO_MINIMA_PARA_LIBERAR = "0.2.0"
+/** A versão do agente que sabe liberar um computador novo pelo código que aparece nele (protocolo 3, 0.4.0: o código não vai à nuvem). */
+export const VERSAO_MINIMA_PARA_LIBERAR = "0.4.0"
 
 function b64url(bytes: Uint8Array): string {
   let s = ""

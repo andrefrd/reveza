@@ -372,8 +372,8 @@ const FASES_EM_CURSO = new Set<FaseLigacao>(["esperando_pedido", "esperando_codi
 
 /**
  * Ligar um computador novo (0.2.0): o painel cria a identidade pendente e mostra o código de acesso, que só deixa o
- * computador novo pedir para entrar. O computador novo mostra um código de 8 caracteres; a pessoa digita esse código
- * na janela que abre no computador escolhido aqui (ou `reveza ligar XXXX-XXXX` nele, sem tela). O painel só acompanha.
+ * computador novo pedir para entrar. O computador novo mostra um código de 12 caracteres; a pessoa digita esse código
+ * na janela que abre no computador escolhido aqui (ou `reveza ligar XXXX-XXXX-YYYY` nele, sem tela). O painel só acompanha.
  */
 function LigarComputadorNovo() {
   const { t, idioma } = useT()
@@ -508,7 +508,7 @@ function LigarComputadorNovo() {
         <Passo n={3} feito={fase === "entregue" || fase === "ligado"}>
           <span>{t("computadores.ligacao.passoDigitar", { computador: nomeAprovador })}</span>
           <span className="text-xs text-muted-foreground">{t("computadores.ligacao.semTela")}</span>
-          <Codigo texto="reveza ligar XXXX-XXXX" />
+          <Codigo texto="reveza ligar XXXX-XXXX-YYYY" />
           {seletor && (fase === "esperando_pedido" || fase === "esperando_codigo") ? (
             <Field>
               <FieldLabel htmlFor="ligar-pc" className="text-xs text-muted-foreground">

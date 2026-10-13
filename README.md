@@ -151,7 +151,7 @@ ligado ao projeto na Vercel até você tirar lá).
 
 1. No painel: **Computadores → Ligar computador novo → Gerar o código de acesso**. Escolha em qual computador a janela vai abrir.
 2. No computador novo, rode o comando que o painel mostra (`npx ... --ligar`) e cole o código de acesso (`rvzc_...`) quando ele pedir. Esse código só deixa o computador novo **pedir** para entrar: ele não abre o cofre.
-3. O computador novo mostra, em letras grandes, um código de 8 caracteres (`XXXX-XXXX`). No computador que já usa o Reveza, que toca um som e abre uma janela, digite esse código e clique em **Liberar**. Sem tela (servidor, VPS, SSH): rode lá `reveza ligar XXXX-XXXX`.
+3. O computador novo mostra, em letras grandes, um código de 12 caracteres (`XXXX-XXXX-YYYY`). No computador que já usa o Reveza, que toca um som e abre uma janela, digite esse código e clique em **Liberar**. Sem tela (servidor, VPS, SSH): rode lá `reveza ligar XXXX-XXXX-YYYY`. Os 4 últimos são segredo e não saem da tela do computador novo: não mande foto do código para ninguém.
 4. Pronto: a chave do cofre vai cifrada só para o computador novo, e ele entra já com as contas.
 
 Nenhum segredo passa pela tela: um print ou o código de acesso copiado não abrem o cofre. O pedido vale 10 minutos,

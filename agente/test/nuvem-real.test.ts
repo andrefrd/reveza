@@ -292,7 +292,7 @@ describe("contra o banco de verdade (PGlite)", { skip: !fs.existsSync(APOIO) || 
       dormir: async () => {
         if (liberou) return;
         liberou = true;
-        await assert.rejects(liberarComputadorNovo(gv, nv, "AAAA-AAAA"), /não confere/);
+        await assert.rejects(liberarComputadorNovo(gv, nv, "AAAA-AAAA-AAAA"), /não confere/);
         await liberarComputadorNovo(gv, nv, codigo);
       },
       intervaloMs: 0,

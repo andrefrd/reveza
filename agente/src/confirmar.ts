@@ -1,8 +1,9 @@
 // Confirmação na tela do computador que tem a chave do cofre, antes de entregá-la a um computador novo. Desde a 0.2.0
-// o código aparece NA TELA DO COMPUTADOR NOVO (8 caracteres tirados da chave pública dele) e a pessoa o digita aqui:
+// o código aparece NA TELA DO COMPUTADOR NOVO (12 caracteres desde a 0.4.0, os 4 últimos sorteados lá) e a pessoa o
+// digita aqui:
 // a janela pede o código e não o mostra. Um pedido que ninguém fez não tem código na tela de ninguém, então um clique
 // por reflexo não libera nada (no primeiro teste de verdade, a janela que só pedia um clique foi liberada em 8 s).
-// Sem tela (servidor, VPS), devolve "sem_tela" e a liberação é pelo terminal: `reveza ligar XXXX-XXXX`.
+// Sem tela (servidor, VPS), devolve "sem_tela" e a liberação é pelo terminal: `reveza ligar XXXX-XXXX-YYYY`.
 // O texto da janela é fixo: nada que vem da nuvem entra na linha de comando.
 
 import type { Sistema } from "./config.js";
@@ -18,8 +19,8 @@ export const ESPERA_CONFIRMACAO_S = 90;
 function textos(idioma: "pt-BR" | "en", errou: boolean) {
   if (idioma === "en") {
     const abre = errou
-      ? "The code did not match.\n\nCheck the 8-character code on the new computer's screen and type it again"
-      : "A new computer wants to join your Reveza AI.\n\nTo let it in, type the 8-character code shown on the NEW computer's screen";
+      ? "The code did not match.\n\nCheck the 12-character code on the new computer's screen and type it again"
+      : "A new computer wants to join your Reveza AI.\n\nTo let it in, type the 12-character code shown on the NEW computer's screen";
     return {
       titulo: "Reveza AI",
       texto: `${abre}. If you are not linking a computer right now, click Refuse.`,
@@ -30,8 +31,8 @@ function textos(idioma: "pt-BR" | "en", errou: boolean) {
     };
   }
   const abre = errou
-    ? "O código não confere.\n\nConfira o código de 8 caracteres na tela do computador novo e digite de novo"
-    : "Um computador novo quer entrar no seu Reveza AI.\n\nPara liberar, digite o código de 8 caracteres que aparece na tela do computador NOVO";
+    ? "O código não confere.\n\nConfira o código de 12 caracteres na tela do computador novo e digite de novo"
+    : "Um computador novo quer entrar no seu Reveza AI.\n\nPara liberar, digite o código de 12 caracteres que aparece na tela do computador NOVO";
   return {
     titulo: "Reveza AI",
     texto: `${abre}. Se você não está ligando um computador agora, clique em Recusar.`,
@@ -71,21 +72,22 @@ export function comandoDaJanela(sistema: Sistema, idioma: "pt-BR" | "en", env: N
 const normal = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 /**
- * Abre a janela e diz o que a pessoa fez. `codigo` é o esperado (XXXX-XXXX); `errou` muda o texto para "não confere".
+ * Abre a janela e diz o que a pessoa fez. `confere` diz se o que a pessoa digitou (sem espaço, hífen nem caixa) é o
+ * código do computador novo (desde a 0.4.0 só a primeira parte se calcula aqui; a sorteada não se confere aqui);
+ * `errou` muda o texto para "não confere".
  * Cada sistema avisa de um jeito: no macOS, Recusar sai com erro "User canceled" e o tempo esgotado com "gave up";
  * no Linux, Recusar sai 1 e o tempo 5; no Windows, Cancelar devolve vazio e não há tempo (o executor encerra).
  */
 export async function pedirConfirmacao(
   exec: Executor,
   sistema: Sistema,
-  codigo: string,
+  confere: (digitado: string) => Promise<boolean> | boolean,
   idioma: "pt-BR" | "en" = "pt-BR",
   env: NodeJS.ProcessEnv = process.env,
   errou = false,
 ): Promise<Confirmacao> {
   const argv = comandoDaJanela(sistema, idioma, env, errou);
-  const esperado = normal(codigo);
-  if (!argv || !/^[A-Z0-9]{8}$/.test(esperado)) return "sem_tela";
+  if (!argv) return "sem_tela";
   const t = textos(idioma, errou);
   // `janela`: sem esconder o programa. No Windows, esconder o PowerShell (o padrão do executor) esconde também a
   // primeira janela que ele abre, a própria InputBox: provado no Windows de verdade (a janela nunca apareceu).
@@ -106,5 +108,6 @@ export async function pedirConfirmacao(
     if (r.codigo !== 0) return "sem_resposta";
     digitado = r.saida;
   }
-  return normal(digitado) === esperado ? "liberou" : "errado";
+  const d = normal(digitado);
+  return /^[A-Z0-9]{12}$/.test(d) && (await confere(d)) ? "liberou" : "errado";
 }

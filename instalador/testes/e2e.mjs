@@ -138,7 +138,7 @@ try {
     conferir("o pedido de ligação pelo painel antigo é recusado", !Array.isArray(antigo) && /ligação pelo painel saiu/.test(JSON.stringify(antigo)), JSON.stringify(antigo).slice(0, 160));
 
     // um SEGUNDO computador entra pelo fluxo da 0.2.0: o painel cria a identidade pendente e escolhe onde a janela
-    // abre; o código de acesso (rvzc_) só deixa o computador novo pedir; o código de 8 caracteres aparece NELE; quem tem
+    // abre; o código de acesso (rvzc_) só deixa o computador novo pedir; o código de 12 caracteres aparece NELE; quem tem
     // a chave libera digitando esse código (aqui, sem tela no contêiner, por `reveza ligar CODIGO`)
     {
       const senha2 = "s".repeat(20) + Math.random().toString(36).slice(2) + "X9";
@@ -163,9 +163,9 @@ try {
       let codigoLig = null;
       for (let i = 0; i < 600 && !codigoLig && fim2 === null; i++) {
         await esperar(1000);
-        codigoLig = (/^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto2) || [])[1] || null;
+        codigoLig = (/^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto2) || [])[1] || null;
       }
-      conferir("computador novo: o código de 8 caracteres aparece nele, em letras grandes", codigoLig && texto2.includes("█"), codigoLig ? "" : texto2.slice(-300));
+      conferir("computador novo: o código de 12 caracteres aparece nele, em letras grandes", codigoLig && texto2.includes("█"), codigoLig ? "" : texto2.slice(-300));
       const [ped] = await sql("select publica, envelope from public.ligacao_pedidos where computador_id = $1", [pc2]);
       conferir("a nuvem guarda só a chave pública do pedido (nada que abra o cofre)", ped && ped.publica && ped.publica.crv === "P-256" && !ped.envelope);
       conferir("a identidade pendente não entrou antes de receber a chave",

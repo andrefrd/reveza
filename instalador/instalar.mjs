@@ -786,8 +786,8 @@ async function ligar(ctx) {
   titulo(t("Ligar este computador a uma instalação que já existe", "Join this computer to an existing installation"));
   info(t("No painel: Computadores → Ligar computador novo. Cole aqui o código de acesso (rvzc_...).",
     "In the panel: Computers → Link new computer. Paste the access code (rvzc_...) here."));
-  info(t("Ele só deixa este computador PEDIR para entrar: não abre o cofre. Depois aparece aqui um código de 8 caracteres para digitar no computador que já usa o Reveza.",
-    "It only lets this computer ASK to join: it does not open the vault. Then an 8-character code shows up here, to type on the computer that already uses Reveza."));
+  info(t("Ele só deixa este computador PEDIR para entrar: não abre o cofre. Depois aparece aqui um código de 12 caracteres para digitar no computador que já usa o Reveza.",
+    "It only lets this computer ASK to join: it does not open the vault. Then a 12-character code shows up here, to type on the computer that already uses Reveza."));
   const codigo = await ctx.p.segredo(t("Código de acesso:", "Access code:"), "REVEZA_CODIGO");
   const doCodigo = lerCodigoDeAcesso(codigo);
   if (doCodigo?.antigo) {

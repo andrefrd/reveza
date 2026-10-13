@@ -1,6 +1,7 @@
-// Computador novo pelo código que aparece NELE (0.2.0): o código de 8 caracteres, a cifra da chave do cofre para a
-// chave pública do computador novo, a liberação pelo terminal (`reveza ligar XXXX-XXXX`) e pela janela do agente,
-// com um pedido por vez e entrega uma vez só.
+// Computador novo pelo código que aparece NELE (0.2.0; protocolo 3 desde a 0.4.0): o código XXXX-XXXX-YYYY (a primeira
+// parte sai da chave pública, a segunda é sorteada e não vai à nuvem), a cifra da chave do cofre para a chave pública do
+// computador novo com a parte sorteada, a liberação pelo terminal (`reveza ligar XXXX-XXXX-YYYY`) e pela janela do
+// agente, com um pedido por vez e entrega uma vez só.
 import { test, describe, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
@@ -8,46 +9,69 @@ import { GuardaFalsa, SEGREDO_COFRE } from "../src/cofre/guarda.js";
 import { novaChave } from "../src/cofre/cifra.js";
 import {
   abrirChaveDoEnvelope,
+  ANTIGO,
   cifrarChaveParaComputadorNovo,
-  codigoConfere,
   codigoDaChave,
+  conferirCodigo,
   impressaoDaChave,
   lerChave,
   liberarComputadorNovo,
   LIGACAO_DUPLA,
   novoParDeChaves,
+  novoSegredo,
   pedirParaEntrar,
+  prepararPedido,
 } from "../src/ligar.js";
 import type { ChavePublica } from "../src/nuvem/tipos.js";
 import { ativaEm, BancoFalso, ExecutorFalso, montar, NuvemFalsa, type Montado } from "./falsos.js";
 
-const FORMATO = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
+const S = "[A-HJ-NP-Z2-9]";
+const LIGACAO = new RegExp(`^${S}{4}-${S}{4}$`);
+const FORMATO = new RegExp(`^${S}{4}-${S}{4}-${S}{4}$`);
 
-describe("o código de 8 caracteres", () => {
-  test("sai da chave pública: XXXX-XXXX, 40 bits, sem 0/O/1/I, o mesmo dos dois lados", async () => {
+/** Um pedido de computador novo qualquer (de outro computador, para testar dois pedidos ao mesmo tempo). */
+async function pedidoQualquer(n: NuvemFalsa) {
+  const p = await prepararPedido();
+  await n.ligacaoPedir(p.publica);
+  return p;
+}
+
+describe("o código XXXX-XXXX-YYYY", () => {
+  test("a primeira parte sai da chave pública (o mesmo dos dois lados); a segunda é sorteada a cada pedido", async () => {
     const { publica } = await novoParDeChaves();
     const c = await codigoDaChave(publica);
-    assert.match(c, FORMATO);
-    assert.equal(await codigoDaChave({ ...publica }), c, "a mesma chave dá o mesmo código (o computador que libera calcula igual)");
-    const outra = await novoParDeChaves();
-    assert.notEqual(await codigoDaChave(outra.publica), c, "outra chave, outro código");
+    assert.match(c, LIGACAO);
+    assert.equal(await codigoDaChave({ ...publica }), c, "a mesma chave dá a mesma primeira parte (quem libera calcula igual)");
+    assert.notEqual(await codigoDaChave((await novoParDeChaves()).publica), c, "outra chave, outra primeira parte");
+    const sorteados = new Set(Array.from({ length: 300 }, () => novoSegredo()));
+    for (const s of sorteados) assert.match(s, new RegExp(`^${S}{4}$`));
+    assert.ok(sorteados.size > 290, "sorteado a cada pedido (20 bits)");
+    const ped = await prepararPedido();
+    assert.match(ped.codigo, FORMATO);
+    assert.ok(ped.codigo.startsWith(await codigoDaChave(ped.publica)));
+    assert.ok(ped.codigo.endsWith(`-${ped.segredo}`));
   });
 
-  test("valor fixo: o cálculo não muda sem querer (SHA-256 da chave esticado por scrypt)", async () => {
+  test("valor fixo: a primeira parte não muda sem querer (SHA-256 da chave esticado por scrypt, a mesma da versão 2)", async () => {
     const publica: ChavePublica = { kty: "EC", crv: "P-256", x: "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU", y: "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0" };
-    const c = await codigoDaChave(publica);
-    assert.match(c, FORMATO);
-    assert.equal(c, await codigoDaChave(publica));
-    assert.equal(c, "CY7B-64F4");
+    assert.equal(await codigoDaChave(publica), "CY7B-64F4");
   });
 
-  test("a pessoa pode digitar com minúscula, sem hífen ou com espaço; 7 caracteres ou outro código não conferem", () => {
-    assert.equal(codigoConfere("abcd-efgh", "ABCD-EFGH"), true);
-    assert.equal(codigoConfere("ABCDEFGH", "ABCD-EFGH"), true);
-    assert.equal(codigoConfere(" ab cd ef gh ", "ABCD-EFGH"), true);
-    assert.equal(codigoConfere("ABCD-EFG", "ABCD-EFGH"), false);
-    assert.equal(codigoConfere("ABCD-EFGJ", "ABCD-EFGH"), false);
-    assert.equal(codigoConfere("", ""), false);
+  test("quem libera confere a primeira parte e fica com a segunda: minúscula, sem hífen ou com espaço valem", async () => {
+    const ped = await prepararPedido("K7QM");
+    for (const bom of [ped.codigo, ped.codigo.toLowerCase(), ped.codigo.replace(/-/g, ""), ` ${ped.codigo.replace(/-/g, " ")} `]) {
+      assert.equal(await conferirCodigo(bom, ped.publica), "K7QM", bom);
+    }
+  });
+
+  test("não confere: só os 8 (o código da versão 2), 11 ou 13, primeira parte errada, letra fora do alfabeto, outra chave", async () => {
+    const ped = await prepararPedido("K7QM");
+    const primeira = ped.codigo.slice(0, 9);
+    const errada = primeira[0] === "A" ? `B${primeira.slice(1)}` : `A${primeira.slice(1)}`;
+    for (const ruim of [primeira, `${primeira}-K7Q`, `${primeira}-K7QMM`, `${errada}-K7QM`, `${primeira}-K7Q0`, `${primeira}-K7QI`, ""]) {
+      assert.equal(await conferirCodigo(ruim, ped.publica), null, ruim);
+    }
+    assert.equal(await conferirCodigo(ped.codigo, (await novoParDeChaves()).publica), null, "a chave pública trocada não confere");
   });
 });
 
@@ -57,25 +81,38 @@ test("letras grandes: todo símbolo do código tem desenho, 5 linhas, e o texto 
   const linhas = letreiro("ABCDEFGHJKLMNPQRSTUVWXYZ23456789-");
   assert.equal(linhas.length, 5);
   for (const ch of "ABCDEFGHJKLMNPQRSTUVWXYZ23456789-") assert.ok(letreiro(ch).some((l) => l.includes("█")), ch);
-  const t = textoDoCodigo("CY7B-64F4", "pt-BR");
-  assert.match(t, /^ {4}CY7B-64F4$/m);
-  assert.match(t, /sem tela: reveza ligar CY7B-64F4/);
-  assert.ok(letreiro("CY7B-64F4").every((l) => l.length <= 61), "cabe num terminal de 80 colunas");
+  const t = textoDoCodigo("CY7B-64F4-K7QM", "pt-BR");
+  assert.match(t, /^ {4}CY7B-64F4-K7QM$/m);
+  assert.match(t, /sem tela: reveza ligar CY7B-64F4-K7QM/);
+  assert.match(t, /não mande foto/);
+  const grandes = t.split("\n").filter((l) => l.includes("█"));
+  assert.equal(grandes.length, 10, "duas linhas de letras grandes: XXXX-XXXX e YYYY");
+  assert.ok(grandes.every((l) => l.length <= 80), "cabe num terminal de 80 colunas");
 });
 
 describe("a chave do cofre cifrada para o computador novo", () => {
-  test("ida e volta: só a chave privada do computador novo abre, e só para o id do pedido dele", async () => {
+  test("ida e volta: só a chave privada do computador novo, com o segredo do código dele, abre, e só para o id do pedido", async () => {
     const k = novaChave();
-    const novo = await novoParDeChaves();
-    const env = await cifrarChaveParaComputadorNovo(novo.publica, k, "pc-novo");
+    const novo = await prepararPedido();
+    const env = await cifrarChaveParaComputadorNovo(novo.publica, k, "pc-novo", novo.segredo);
     assert.ok(!JSON.stringify(env).includes(k.toString("base64")), "a chave não vai em claro");
-    assert.deepEqual(await abrirChaveDoEnvelope(novo.privada, env, "pc-novo"), k);
+    assert.deepEqual(await abrirChaveDoEnvelope(novo.privada, env, "pc-novo", novo.segredo), k);
     const outro = await novoParDeChaves();
-    await assert.rejects(abrirChaveDoEnvelope(outro.privada, env, "pc-novo"), "outra chave privada não abre");
-    await assert.rejects(abrirChaveDoEnvelope(novo.privada, env, "pc-outro"), "o envelope é amarrado ao computador do pedido");
+    await assert.rejects(abrirChaveDoEnvelope(outro.privada, env, "pc-novo", novo.segredo), "outra chave privada não abre");
+    await assert.rejects(abrirChaveDoEnvelope(novo.privada, env, "pc-outro", novo.segredo), "o envelope é amarrado ao computador do pedido");
+    await assert.rejects(abrirChaveDoEnvelope(novo.privada, env, "pc-novo", novo.segredo === "AAAA" ? "BBBB" : "AAAA"), "outra parte sorteada não abre");
     const bytes = Buffer.from(env.cifrado, "base64");
     bytes[0]! ^= 1;
-    await assert.rejects(abrirChaveDoEnvelope(novo.privada, { ...env, cifrado: bytes.toString("base64") }, "pc-novo"), "mexido não abre");
+    await assert.rejects(abrirChaveDoEnvelope(novo.privada, { ...env, cifrado: bytes.toString("base64") }, "pc-novo", novo.segredo), "mexido não abre");
+  });
+
+  test("quem só tem a chave pública (a nuvem, quem escreve no banco) não monta envelope que o computador novo abra", async () => {
+    const novo = await prepararPedido();
+    const plantada = novaChave();
+    // a primeira parte do código é pública; a sorteada não: o melhor que se faz é chutar
+    const chute = novoSegredo() === novo.segredo ? "AAAA" : novoSegredo();
+    const env = await cifrarChaveParaComputadorNovo(novo.publica, plantada, "pc-novo", chute === novo.segredo ? "BBBB" : chute);
+    await assert.rejects(abrirChaveDoEnvelope(novo.privada, env, "pc-novo", novo.segredo));
   });
 
   test("a chave privada do computador novo não sai da memória", async () => {
@@ -138,22 +175,22 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
 
   test("código errado não libera (e não gasta o pedido); 7 caracteres nem consulta", async () => {
     const { banco, velha, nv, nn } = await cena();
-    const par = await novoParDeChaves();
-    await nn.ligacaoPedir(par.publica);
-    await assert.rejects(liberarComputadorNovo(velha, nv, "AAAA-AAAA"), /não confere/);
-    await assert.rejects(liberarComputadorNovo(velha, nv, "AAAA-AAA"), /8 letras e números/);
+    const ped = await prepararPedido();
+    await nn.ligacaoPedir(ped.publica);
+    await assert.rejects(liberarComputadorNovo(velha, nv, ped.codigo.startsWith("AAAA-AAAA") ? "BBBB-BBBB-CCCC" : "AAAA-AAAA-CCCC"), /não confere/);
+    await assert.rejects(liberarComputadorNovo(velha, nv, "AAAA-AAAA-CCC"), /12 letras e números/);
     assert.equal(banco.pedidos.get("pc-novo")!.entreguePor, null);
-    await liberarComputadorNovo(velha, nv, await codigoDaChave(par.publica));
+    await liberarComputadorNovo(velha, nv, ped.codigo);
     assert.equal(banco.pedidos.get("pc-novo")!.entreguePor, "pc-velho");
   });
 
   test("dois pedidos abertos: recusa os dois, mesmo com o código certo de um deles", async () => {
     const { banco, velha, nv, nn } = await cena();
     banco.pendentes.add("pc-forjado");
-    const par = await novoParDeChaves();
-    await nn.ligacaoPedir(par.publica);
-    await new NuvemFalsa(banco, "pc-forjado").ligacaoPedir((await novoParDeChaves()).publica);
-    await assert.rejects(liberarComputadorNovo(velha, nv, await codigoDaChave(par.publica)), (e: Error) => e.message === LIGACAO_DUPLA);
+    const ped = await prepararPedido();
+    await nn.ligacaoPedir(ped.publica);
+    await pedidoQualquer(new NuvemFalsa(banco, "pc-forjado"));
+    await assert.rejects(liberarComputadorNovo(velha, nv, ped.codigo), (e: Error) => e.message === LIGACAO_DUPLA);
     assert.equal(banco.pedidos.get("pc-novo")!.recusado, "dois_pedidos");
     assert.equal(banco.pedidos.get("pc-forjado")!.recusado, "dois_pedidos");
     assert.equal(banco.pedidos.get("pc-novo")!.envelope, null);
@@ -176,13 +213,13 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
     const nova = new GuardaFalsa();
     // o computador que libera também recusa: a chave dele não é a da instalação
     let erro: unknown = null;
+    let codigo = "";
     await assert.rejects(
       pedirParaEntrar(nova, nn, {
-        aoMostrarCodigo: () => undefined,
+        aoMostrarCodigo: (c) => void (codigo = c),
         dormir: async () => {
           if (erro) throw erro;
-          const p = banco.pedidos.get("pc-novo")!;
-          await liberarComputadorNovo(outra, nv, await codigoDaChave(p.publica!)).catch((e) => (erro = e));
+          await liberarComputadorNovo(outra, nv, codigo).catch((e) => (erro = e));
           if (erro) throw erro;
         },
         intervaloMs: 0,
@@ -195,13 +232,14 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
   test("sem a impressão da chave na nuvem, a chave entregue não é guardada (quem escreve no banco não planta chave)", async () => {
     const { banco, velha, nv, nn } = await cena();
     const nova = new GuardaFalsa();
+    let codigo = "";
     await assert.rejects(
       pedirParaEntrar(nova, nn, {
-        aoMostrarCodigo: () => undefined,
+        aoMostrarCodigo: (c) => void (codigo = c),
         dormir: async () => {
           const p = banco.pedidos.get("pc-novo")!;
           if (p.envelope) return;
-          await liberarComputadorNovo(velha, nv, await codigoDaChave(p.publica!));
+          await liberarComputadorNovo(velha, nv, codigo);
           banco.cofreImpressao = null; // alguém apagou a impressão depois da entrega
         },
         intervaloMs: 0,
@@ -209,6 +247,48 @@ describe("pelo terminal: o computador novo pede, reveza ligar XXXX-XXXX libera",
       /não tem a impressão da chave do cofre/,
     );
     assert.equal(await lerChave(nova), null);
+  });
+
+  test("quem escreve direto no banco não planta chave: envelope e impressão trocados juntos, sem o código, são recusados", async () => {
+    // o achado da auditoria de 12/10/2026 (rodada 3): o envelope com a chave do escritor, para a chave pública do
+    // computador novo (que a nuvem conhece), e a impressão da instalação trocada para a dessa chave
+    const { banco, nn } = await cena();
+    const nova = new GuardaFalsa();
+    const plantada = novaChave();
+    let codigoNaTela = "";
+    await assert.rejects(
+      pedirParaEntrar(nova, nn, {
+        aoMostrarCodigo: (c) => void (codigoNaTela = c),
+        dormir: async () => {
+          const p = banco.pedidos.get("pc-novo")!;
+          if (p.envelope || p.entreguePor) return;
+          // o escritor sabe a primeira parte (sai da chave pública, que ele lê); a sorteada ele chuta
+          const chute = codigoNaTela.endsWith("-AAAA") ? "BBBB" : "AAAA";
+          Object.assign(p, { envelope: await cifrarChaveParaComputadorNovo(p.publica!, plantada, "pc-novo", chute), entreguePor: "pc-escritor" });
+          banco.cofreImpressao = impressaoDaChave(plantada);
+        },
+        intervaloMs: 0,
+      }),
+      /não abriu com o código deste computador: confira os 4 últimos/,
+    );
+    assert.equal(await lerChave(nova), null, "nada guardado");
+  });
+
+  test("quem escreve no banco troca a chave pública do pedido (mesmo vendo o código na tela): não confere, nada é entregue", async () => {
+    const { banco, velha, nv, nn } = await cena();
+    const ped = await prepararPedido();
+    await nn.ligacaoPedir(ped.publica);
+    banco.pedidos.get("pc-novo")!.publica = (await novoParDeChaves()).publica;
+    await assert.rejects(liberarComputadorNovo(velha, nv, ped.codigo), /não confere/);
+    assert.equal(banco.pedidos.get("pc-novo")!.entreguePor, null);
+  });
+
+  test("computador novo com o Reveza antigo (código de 8): não se libera, e a mensagem diz o que fazer", async () => {
+    const { banco, velha, nv, nn } = await cena();
+    const ped = await prepararPedido();
+    await nn.ligacaoPedir(ped.publica);
+    await assert.rejects(liberarComputadorNovo(velha, nv, ped.codigo.slice(0, 9)), (e: Error) => e.message === ANTIGO);
+    assert.equal(banco.pedidos.get("pc-novo")!.entreguePor, null);
   });
 
   test("recusado ou vencido: o computador novo para com a mensagem de gerar outro código", async () => {
@@ -257,11 +337,10 @@ describe("pela janela do agente que tem a chave", () => {
     await m.agente.busca(); // registra e grava a impressão da chave da instalação
     banco.pendentes.add("pc-novo");
     const nn = new NuvemFalsa(banco, "pc-novo");
-    const par = await novoParDeChaves();
+    const par = await prepararPedido();
     if (paraMim) new NuvemFalsa(banco, "painel").escolherAprovador("pc-novo", "pc-1");
     await nn.ligacaoPedir(par.publica);
-    const codigo = await codigoDaChave(par.publica);
-    return { exec, nn, par, codigo };
+    return { exec, nn, par, codigo: par.codigo };
   }
   const janelas = (exec: ExecutorFalso) => exec.chamadas.filter((c) => c.argv[0] === "osascript");
   const digitou = (texto: string) => ({ codigo: 0, saida: `button returned:Liberar, text returned:${texto}, gave up:false`, erro: "" });
@@ -279,7 +358,7 @@ describe("pela janela do agente que tem a chave", () => {
     assert.ok(exec.chamadas.some((c) => c.argv[0] === "afplay"), "toca o som para chamar a atenção");
     const r = await nn.ligacaoReceber();
     assert.equal(r.estado, "entregue");
-    assert.deepEqual(await abrirChaveDoEnvelope(par.privada, r.envelope!, "pc-novo"), await lerChave(m.guarda));
+    assert.deepEqual(await abrirChaveDoEnvelope(par.privada, r.envelope!, "pc-novo", par.segredo), await lerChave(m.guarda));
     // a mesma janela não abre de novo para o mesmo pedido
     await m.agente.busca();
     await m.agente.emEspera;
@@ -325,7 +404,7 @@ describe("pela janela do agente que tem a chave", () => {
   test("dois pedidos abertos: os dois são recusados e nenhuma janela abre", async () => {
     const { exec, nn } = await cena(() => digitou("qualquer"));
     banco.pendentes.add("pc-forjado");
-    await new NuvemFalsa(banco, "pc-forjado").ligacaoPedir((await novoParDeChaves()).publica);
+    await pedidoQualquer(new NuvemFalsa(banco, "pc-forjado"));
     await m.agente.busca();
     await m.agente.emEspera;
     assert.equal(janelas(exec).length, 0);
@@ -347,7 +426,7 @@ describe("pela janela do agente que tem a chave", () => {
     await m.agente.busca();
     assert.ok(m.agente.emEspera, "a janela está aberta e a busca seguiu");
     banco.pendentes.add("pc-forjado");
-    await new NuvemFalsa(banco, "pc-forjado").ligacaoPedir((await novoParDeChaves()).publica);
+    await pedidoQualquer(new NuvemFalsa(banco, "pc-forjado"));
     await m.agente.busca();
     soltar();
     await m.agente.emEspera;
@@ -392,7 +471,7 @@ describe("pela janela do agente que tem a chave", () => {
     await m.agente.busca();
     banco.pendentes.add("pc-novo");
     new NuvemFalsa(banco, "painel").escolherAprovador("pc-novo", "pc-1");
-    await new NuvemFalsa(banco, "pc-novo").ligacaoPedir((await novoParDeChaves()).publica);
+    await pedidoQualquer(new NuvemFalsa(banco, "pc-novo"));
     await m.agente.busca();
     await m.agente.emEspera;
     assert.equal(janelas(exec).length, 0);

@@ -22,7 +22,7 @@ import { CredenciaisSombra } from "./credenciais/sombra.js";
 import type { Credenciais } from "./credenciais/tipos.js";
 import { agendarRodizio, candidata, decidir, gatilhoDeTroca, pctEfetivo, sorteioReal } from "./decisao.js";
 import { carregarEstado, salvarEstado, type EstadoLocal, type Modo } from "./estado.js";
-import { codigoDaChave, entregarChave, impressaoDaChave, LIGACAO_DUPLA } from "./ligar.js";
+import { conferirCodigo, entregarChave, impressaoDaChave, LIGACAO_DUPLA } from "./ligar.js";
 import { Logins, EMAIL_VALIDO, type Login } from "./logins.js";
 import { ErroNuvem, TIPOS_EVENTO_NUVEM, type Atribuicao, type ComandoNuvem, type JanelaNuvem, type Nuvem, type PedidoLigacao, type PontoNuvem } from "./nuvem/tipos.js";
 import { PosseCofre } from "./posse.js";
@@ -1312,7 +1312,7 @@ export class Agente {
   /**
    * Pedidos de computador novo abertos na instalação. Mais de um ao mesmo tempo: recusa todos (e anula a janela aberta).
    * Um só, com a janela marcada para este computador: toca o som e abre a janela pedindo o código que aparece no
-   * computador novo. Sem tela, o pedido fica aberto para `reveza ligar XXXX-XXXX`.
+   * computador novo. Sem tela, o pedido fica aberto para `reveza ligar XXXX-XXXX-YYYY`.
    */
   private async vigiarLigacoes(pedidos: PedidoLigacao[]): Promise<void> {
     if (this.d.sombra || !this.chave || this.chaveDaInstalacao === false) return;
@@ -1352,12 +1352,15 @@ export class Agente {
 
   private async confirmarLigacao(p: PedidoLigacao, janela: { anulada: boolean }): Promise<void> {
     const nuvem = this.d.nuvem!;
-    const codigo = await codigoDaChave(p.publica);
+    // o código não se calcula inteiro aqui: a primeira parte confere com a chave pública do pedido, e a parte sorteada
+    // (os 4 últimos, que só existem na tela do computador novo) vai na cifra do envelope
+    let segredo: string | null = null;
+    const confere = async (digitado: string) => (segredo = await conferirCodigo(digitado, p.publica)) !== null;
     // a língua é a do painel que escolheu este computador (só "pt-BR" ou "en"; o texto da janela é fixo)
     const idioma = p.idioma === "en" ? "en" : "pt-BR";
     void this.somDaTroca(true);
     for (let tentativa = 1; tentativa <= TENTATIVAS_CODIGO; tentativa++) {
-      const r = await pedirConfirmacao(this.d.exec!, this.d.sistema, codigo, idioma, process.env, tentativa > 1);
+      const r = await pedirConfirmacao(this.d.exec!, this.d.sistema, confere, idioma, process.env, tentativa > 1);
       // outro pedido chegou enquanto a janela estava aberta: nem o código certo libera este
       if (janela.anulada) {
         this.d.log.info(`ligação de computador novo: ${LIGACAO_DUPLA}`);
@@ -1375,8 +1378,8 @@ export class Agente {
       }
       if (r === "liberou") {
         // de novo, logo antes de entregar: um pedido que chegou durante a janela anula este
-        if (janela.anulada || !this.chave) return;
-        await entregarChave(nuvem, this.chave, p);
+        if (janela.anulada || !this.chave || !segredo) return;
+        await entregarChave(nuvem, this.chave, p, segredo);
         this.trocador.evento("info", "Computador novo liberado aqui: a chave do cofre foi entregue cifrada só para ele.");
         return;
       }

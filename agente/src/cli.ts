@@ -158,8 +158,8 @@ Uso: reveza <comando> [opções]
   uso [--dias N] [--csv|--json]   tokens e custo equivalente por dia, conta, modelo e projeto
   doctor [--so-ver] [--json]      confere serviço, mod, credenciais, chaveiro, nuvem, relógio e versões, e conserta o que
                                   tem conserto seguro (serviço, mod, conta em uso sem login); --so-ver só confere
-  ligar                           no computador novo: pede para entrar e mostra um código de 8 caracteres
-  ligar XXXX-XXXX                 no computador que já usa o Reveza: libera o computador novo que mostra este código
+  ligar                           no computador novo: pede para entrar e mostra um código de 12 caracteres
+  ligar XXXX-XXXX-YYYY            no computador que já usa o Reveza: libera o computador novo que mostra este código
   ligar --mostrar-frase           emergência: 6 palavras para um computador já ligado que perdeu a chave do cofre
   ligar --frase "..."             emergência: recebe a chave do cofre pelas 6 palavras (só computador já ligado)
   servico instalar|remover|status [--sombra]
@@ -576,13 +576,14 @@ export function textoDoCodigo(codigo: string, idioma: "pt-BR" | "en"): string {
       : "No computador que já usa o Reveza, digite este código na janela que vai abrir",
     en ? `(no screen there: reveza ligar ${codigo}):` : `(sem tela: reveza ligar ${codigo}):`,
     "",
-    ...letreiro(codigo).map((l) => `    ${l}`),
+    // em letras grandes, XXXX-XXXX numa linha e YYYY na outra: as 14 posições juntas não cabem em 80 colunas
+    ...(codigo.length > 9 ? [codigo.slice(0, 9), codigo.slice(10)] : [codigo]).flatMap((parte, i) => [...(i ? [""] : []), ...letreiro(parte).map((l) => `    ${l}`)]),
     "",
     `    ${codigo}`,
     "",
     en
-      ? "The code is not a secret: it only lets the other computer check that it is talking to this one. Valid for 10 minutes."
-      : "O código não é segredo: ele só deixa o outro computador conferir que está falando com este. Vale 10 minutos.",
+      ? "Type it only on your own computer and do not send a picture of it to anyone: the last 4 are a secret that never leaves this screen. Valid for 10 minutes."
+      : "Digite só no seu computador e não mande foto dele para ninguém: os 4 últimos são um segredo que não sai desta tela. Vale 10 minutos.",
   ].join("\n");
 }
 
@@ -590,7 +591,7 @@ async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
   if (a.flags.painel === "ligar" || a.flags.painel === "desligar") {
     // a liberação sem perguntar (0.1.x) deixava a nuvem autorizar sozinha: saiu na 0.2.0
     fs.rmSync(amb.c.ligarPeloPainel, { force: true });
-    amb.erro("A liberação pelo painel sem perguntar saiu na 0.2.0: o computador novo mostra um código de 8 caracteres; libere aqui com reveza ligar XXXX-XXXX (ou na janela que abre).");
+    amb.erro("A liberação pelo painel sem perguntar saiu na 0.2.0: o computador novo mostra um código de 12 caracteres; libere aqui com reveza ligar XXXX-XXXX-YYYY (ou na janela que abre).");
     return a.flags.painel === "desligar" ? 0 : 2;
   }
   const idioma: "pt-BR" | "en" = a.flags.idioma === "en" ? "en" : "pt-BR";
@@ -624,7 +625,7 @@ async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
   // Quem tem a chave libera o computador novo pelo código que aparece nele.
   if (temChave) {
     await nuvem.registrar(os.hostname().slice(0, 60), amb.sistema, VERSAO);
-    const digitado = a.pos[1] ?? (await amb.perguntar("O código de 8 caracteres que aparece no computador novo: "));
+    const digitado = a.pos[1] ?? (await amb.perguntar("O código de 12 caracteres que aparece no computador novo: "));
     await liberarComputadorNovo(p.guarda, nuvem, digitado);
     amb.saida("Pronto: a chave do cofre foi entregue cifrada só para o computador novo. Ele termina sozinho.");
     return 0;

@@ -153,7 +153,7 @@ Vercel project until you remove it there).
 
 1. In the dashboard: **Computers → Link new computer → Generate the access code**. Choose which computer the window opens on.
 2. On the new computer, run the command the dashboard shows (`npx ... --ligar`) and paste the access code (`rvzc_...`) when it asks. That code only lets the new computer **ask** to join: it does not open the vault.
-3. The new computer shows an 8-character code in large letters (`XXXX-XXXX`). On the computer that already uses Reveza, which plays a sound and opens a window, type that code and click **Release**. No screen (server, VPS, SSH): run `reveza ligar XXXX-XXXX` there.
+3. The new computer shows a 12-character code in large letters (`XXXX-XXXX-YYYY`). On the computer that already uses Reveza, which plays a sound and opens a window, type that code and click **Release**. No screen (server, VPS, SSH): run `reveza ligar XXXX-XXXX-YYYY` there. The last 4 are a secret that never leaves the new computer's screen: do not send a picture of the code to anyone.
 4. Done: the vault key travels encrypted for the new computer only, and it joins with the accounts.
 
 No secret goes through the screen: a screenshot or a copied access code does not open the vault. The request is valid

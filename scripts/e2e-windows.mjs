@@ -272,7 +272,8 @@ const instalar = (...extra) => rodar(NODE, ["instalador/instalar.mjs", "--sim", 
   for (const [teclas, esperado, nome, foto] of [[`${CODIGO}{ENTER}`, "liberou", "o código certo libera", "6-janela-de-confirmacao.png"], [`${PARCIAL}{ENTER}`, "errado", "o código sem os 2 últimos não libera", ""], ["{ESC}", "recusou", "Esc recusa", ""]]) {
     const d = digitador(teclas, foto);
     const t1 = Date.now();
-    const r = await conf.pedirConfirmacao(executorReal, "windows", CODIGO, "pt-BR");
+    // desde a 0.4.0 quem confere é o verificador do pedido: aqui, a comparação direta com o código digitado
+    const r = await conf.pedirConfirmacao(executorReal, "windows", (d) => d === CODIGO, "pt-BR");
     const cod = await d;
     conferir(`janela de confirmação de verdade: ${nome}`, r === esperado && cod === 0, `${r} em ${Date.now() - t1} ms; a janela ${cod === 0 ? "apareceu" : "não apareceu"}`);
     if (cod !== 0) break;

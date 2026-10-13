@@ -64,10 +64,10 @@ describe("cabeçalhos do vercel.json", () => {
   it("conferir: recusa CSP de outro Supabase e arquivo sem CSP", () => {
     const texto = JSON.stringify(configuracao({ supabase: "https://abc.supabase.co" }))
     expect(conferir(texto, "https://abc.supabase.co")).toBeNull()
-    expect(conferir(texto, undefined)).toBeNull()
+    expect(conferir(texto, "")).toBeNull()
     expect(conferir(texto, "https://outro.supabase.co")).toMatch(/não libera/)
-    expect(conferir("{}", undefined)).toMatch(/sem Content-Security-Policy/)
-    expect(conferir("não é json", undefined)).toMatch(/JSON/)
+    expect(conferir("{}", "")).toMatch(/sem Content-Security-Policy/)
+    expect(conferir("não é json", "")).toMatch(/JSON/)
     expect(JSON.parse(texto)).not.toHaveProperty("buildCommand")
   })
 

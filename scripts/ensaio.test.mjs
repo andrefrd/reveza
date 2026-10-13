@@ -99,6 +99,8 @@ test("o patch do ensaio leva arquivo binário e ignora a configuração de git d
     const a = path.join(dir, "a");
     mkdirSync(a);
     g(a, "init", "-q");
+    // o Git do Windows (core.autocrlf) trocaria o fim de linha no clone e no apply: não é o que se testa aqui
+    g(a, "config", "core.autocrlf", "false");
     g(a, "config", "user.email", "t@exemplo.invalid");
     g(a, "config", "user.name", "t");
     writeFileSync(path.join(a, "t.txt"), "um\n");
@@ -106,7 +108,7 @@ test("o patch do ensaio leva arquivo binário e ignora a configuração de git d
     g(a, "add", "-A");
     g(a, "commit", "-q", "-m", "base");
     const base = g(a, "rev-parse", "HEAD").trim();
-    g(dir, "clone", "-q", a, "b");
+    g(dir, "clone", "-q", "-c", "core.autocrlf=false", a, "b");
     writeFileSync(path.join(a, "t.txt"), "dois\n");
     writeFileSync(path.join(a, "i.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 9, 9, 9, 9]));
     g(a, "commit", "-qam", "muda");

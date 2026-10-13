@@ -7,6 +7,26 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.4.0 · 13/10/2026
+
+Ligar um computador novo com um código que tem uma parte secreta. Sem mudança no banco: atualize os computadores pelo
+botão do painel (Computadores → Atualizar) antes de ligar um computador novo.
+
+- **Por quê:** a auditoria de segurança de 12/10/2026 (rodada 3) deixou um ponto em aberto. O código que aparece no
+  computador novo saía inteiro da chave pública dele, que fica na nuvem. Quem escreve direto no banco (o dono do banco,
+  ou quem tivesse a chave de serviço do Supabase) podia montar a entrega com uma chave do cofre DELE e trocar junto a
+  impressão da instalação: o computador novo adotava essa chave e passava a mandar os logins cifrados com ela.
+- **Agora o código tem 12 caracteres, `XXXX-XXXX-YYYY`.** Os 8 primeiros continuam saindo da chave pública: quem
+  libera confere que vai entregar para o computador certo. Os 4 últimos são sorteados no computador novo, não vão à
+  nuvem e entram na cifra da entrega: sem eles, ninguém monta uma entrega que o computador novo aceite, nem o banco.
+- **No computador novo:** o código aparece em duas linhas de letras grandes. Não mande foto dele para ninguém: os 4
+  últimos são o segredo.
+- **No computador que libera:** a janela pede os 12 caracteres (`reveza ligar XXXX-XXXX-YYYY` sem tela). Ele precisa
+  estar na 0.4.0; o painel só oferece esses e avisa quais atualizar. Um computador novo com o Reveza antigo (código de
+  8) recebe a mensagem para instalar de novo.
+- Dois testes que só quebravam no Windows ou com a variável do Supabase no ambiente (o do patch do ensaio e o da CSP
+  do painel) passam em qualquer lugar.
+
 ## 0.3.4 · 12/10/2026
 
 Conectar conta sem cair na conta errada e sem código para colar. A 0.3.3 explicava o atalho da janela anônima; esta

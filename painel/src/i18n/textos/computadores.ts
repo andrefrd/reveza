@@ -166,7 +166,7 @@ export default secao({
       ligacao: {
         titulo: "Ligar um computador novo",
         descricao:
-          "O computador novo mostra um código de 8 caracteres e você digita esse código num computador que já usa o Reveza AI. Nenhum segredo passa por esta tela: a chave do cofre vai cifrada só para o computador novo.",
+          "O computador novo mostra um código de 12 caracteres e você digita esse código num computador que já usa o Reveza AI. Nenhum segredo passa por esta tela: a chave do cofre vai cifrada só para o computador novo.",
         ondeDigitar: "Onde você vai digitar o código",
         inicio: "A janela que pede o código vai abrir em {computador}.",
         foraDoAr: "{computador} (fora do ar)",
@@ -178,7 +178,7 @@ export default secao({
         passoColar: "Quando ele pedir, cole este código de acesso:",
         acessoAviso:
           "Este código só deixa o computador novo pedir para entrar: ele não abre o cofre. Vale uma vez, por até 24 horas; para cancelar, revogue o computador novo aqui.",
-        passoDigitar: "Ele vai mostrar um código de 8 caracteres. Digite esse código na janela do Reveza AI que abre em {computador}.",
+        passoDigitar: "Ele vai mostrar um código de 12 caracteres. Digite esse código na janela do Reveza AI que abre em {computador}.",
         semTela: "Sem tela (servidor, VPS): rode lá o comando abaixo, com o código que aparece no computador novo.",
         outroComputador: "Abrir a janela em outro computador",
         janelaDeNovo: "Abrir a janela de novo",
@@ -373,7 +373,7 @@ export default secao({
       ligacao: {
         titulo: "Link a new computer",
         descricao:
-          "The new computer shows an 8-character code and you type that code on a computer that already uses Reveza AI. No secret goes through this screen: the vault key travels encrypted for the new computer only.",
+          "The new computer shows a 12-character code and you type that code on a computer that already uses Reveza AI. No secret goes through this screen: the vault key travels encrypted for the new computer only.",
         ondeDigitar: "Where you'll type the code",
         inicio: "The window asking for the code will open on {computador}.",
         foraDoAr: "{computador} (offline)",
@@ -385,7 +385,7 @@ export default secao({
         passoColar: "When it asks, paste this access code:",
         acessoAviso:
           "This code only lets the new computer ask to join: it does not open the vault. It works once, for up to 24 hours; to cancel, revoke the new computer here.",
-        passoDigitar: "It will show an 8-character code. Type that code in the Reveza AI window that opens on {computador}.",
+        passoDigitar: "It will show a 12-character code. Type that code in the Reveza AI window that opens on {computador}.",
         semTela: "No screen (server, VPS): run the command below there, with the code shown on the new computer.",
         outroComputador: "Open the window on another computer",
         janelaDeNovo: "Open the window again",

@@ -194,7 +194,7 @@ describe("linha de comando", () => {
     assert.equal(await executarCli(["nuvem", "entrar", "--url", "https://x.supabase.co", "--chave-publica", "k", "--email", "e@x.com"], curta), 1);
   });
 
-  test("ligar: o computador novo mostra o código em letras grandes; reveza ligar XXXX-XXXX no que tem a chave entrega", async () => {
+  test("ligar: o computador novo mostra o código em letras grandes; reveza ligar XXXX-XXXX-YYYY no que tem a chave entrega", async () => {
     tmp = pastaTemporaria();
     const banco = new BancoFalso();
     const velha = new GuardaFalsa();
@@ -211,7 +211,7 @@ describe("linha de comando", () => {
     const pedindo = executarCli(["ligar"], b);
     await podeLiberar;
     const texto = b.saidas.join("\n");
-    const codigo = /^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto)?.[1];
+    const codigo = /^ {4}([A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/m.exec(texto)?.[1];
     assert.ok(codigo, texto);
     assert.match(texto, /█/, "letras grandes");
     assert.match(texto, new RegExp(`sem tela: reveza ligar ${codigo}`));
@@ -219,7 +219,9 @@ describe("linha de comando", () => {
     const a = ambiente();
     a.fabricas!.guarda = async () => velha;
     a.fabricas!.nuvem = async () => new NuvemFalsa(banco, "pc-velho");
-    assert.equal(await executarCli(["ligar", "AAAA-AAAA"], a), 1, "código errado não entrega");
+    assert.equal(await executarCli(["ligar", "AAAA-AAAA"], a), 1, "o código de 8 (versão 2) não entrega");
+    assert.match(a.erros.join("\n"), /versão antiga do Reveza/);
+    assert.equal(await executarCli(["ligar", codigo!.startsWith("AAAA") ? "BBBB-BBBB-CCCC" : "AAAA-AAAA-CCCC"], a), 1, "código errado não entrega");
     assert.match(a.erros.join("\n"), /não confere/);
     assert.equal(await executarCli(["ligar", codigo!.toLowerCase()], a), 0, a.erros.join("\n"));
     assert.equal(await pedindo, 0, b.erros.join("\n"));

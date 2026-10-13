@@ -55,10 +55,12 @@ Regras herdadas do roteador (provadas em 10 e 11/10, com teste):
 - Computador novo recebe `K` cifrada só para ele (0.2.0; achado 2 da revisão de segurança de 11/10/2026, em que o
   código `rvzl_` levava a frase do cofre em texto reversível). Ele cria um par ECDH P-256 só em memória (chave privada
   não exportável) e registra a chave pública no pedido dele (`ligacao_pedidos`). O computador que tem `K` confere o
-  código de 8 caracteres que a pessoa digita, cifra `K` para essa chave pública (ECDH efêmero + HKDF-SHA256 +
-  AES-256-GCM, rótulos `reveza-ligacao-computador-v2`, dado associado com o id do computador novo) e entrega pela
-  nuvem, que só vê texto cifrado e apaga o envelope na primeira leitura. O novo confere a impressão de `K` contra a da
-  instalação antes de guardar. Detalhes na seção 8.
+  código de 12 caracteres que a pessoa digita (`XXXX-XXXX-YYYY`: a primeira parte sai da chave pública, a segunda é
+  sorteada e não vai à nuvem), cifra `K` para essa chave pública com a parte sorteada (ECDH efêmero + HKDF-SHA256 com a
+  parte sorteada no sal + AES-256-GCM, rótulos `reveza-ligacao-computador-v3`, dado associado com o id do computador
+  novo) e entrega pela nuvem, que só vê texto cifrado e apaga o envelope na primeira leitura. O novo só abre envelope
+  feito com a parte sorteada dele e ainda confere a impressão de `K` contra a da instalação antes de guardar. Detalhes
+  na seção 8.
 - Emergência (computador já ligado que perdeu `K`): a **frase de 6 palavras**. O computador que tem `K` gera as
   palavras (`reveza ligar --mostrar-frase`), deriva uma chave com scrypt e publica `K` embrulhado por 10 minutos; o
   outro digita as palavras (`reveza ligar --frase`) e desembrulha. A frase não vai à nuvem e não liga computador
@@ -241,8 +243,8 @@ esperando a publicação, falhou com o motivo, nuvem de antes da 0.3.0).
 - Supabase Auth com senha + verificação em duas etapas (TOTP) para `admin`: quem ativou precisa do código em toda
   sessão; quem não ativou age só com a senha, a não ser que a instalação exija (`exigir_duas_etapas`). Quem confere é o
   banco (`rvz_exigir_admin` = admin e `rvz_aal2`) e as Edge Functions (`servico_aal_ok`); não há servidor do painel.
-- Computador novo (0.2.0): o código aparece NELE e é digitado num computador que já tem a chave do cofre; nenhum
-  segredo passa pela tela.
+- Computador novo (0.2.0; protocolo 3 desde a 0.4.0): o código aparece NELE e é digitado num computador que já tem a
+  chave do cofre; nenhum segredo passa pela tela do painel.
   1. O painel cria a identidade pendente (Edge Function `computador-novo`, linha `pendente` em `computadores`, visível e
      revogável) e escolhe o aprovador, o computador onde a janela abre (`painel_ligacao_aprovador`, com a língua do
      painel). Mostra o comando do instalador e o código de acesso `rvzc_` (endereço, chave anon, e-mail e senha da
@@ -251,24 +253,34 @@ esperando a publicação, falhou com o motivo, nuvem de antes da 0.3.0).
      da instalação, antes de existir `cofre_impressao`, que cria a chave). Os códigos `rvzl_` e `rvzpc_` são recusados.
   2. O computador novo (`reveza ligar`, chamado pelo instalador `--ligar`) cria o par ECDH P-256 em memória e registra
      a chave pública: um pedido por computador, que não se troca (a mesma chave de novo devolve o mesmo pedido) e vence
-     em 10 minutos. Mostra em letras grandes o código `XXXX-XXXX`: 8 símbolos de 32 (sem 0/O/1/I), 40 bits, tirados do
-     SHA-256 da chave pública esticado por scrypt (N=2^15, r=8, ~40 ms). Espera a entrega consultando a nuvem.
+     em 10 minutos. Mostra em letras grandes o código `XXXX-XXXX-YYYY` (símbolos de 32, sem 0/O/1/I): `XXXX-XXXX` são
+     40 bits tirados do SHA-256 da chave pública esticado por scrypt (N=2^15, r=8, ~40 ms); `YYYY` são 20 bits sorteados
+     (0.4.0), que não vão à nuvem nem ganham verificador lá. Espera a entrega consultando a nuvem.
   3. O agente do aprovador vê o pedido em `agente_ola.ligacoes`, toca o som e abre a janela (macOS `osascript`, Windows
      `InputBox`, Linux `zenity --entry`) que PEDE o código, sem mostrá-lo; o texto é fixo, só a língua vem da nuvem.
      Código errado pergunta de novo, e na terceira o pedido é recusado; Recusar recusa; sem resposta em 90 s o pedido
-     segue aberto. `reveza ligar XXXX-XXXX` faz o mesmo sem janela (servidor, VPS, SSH), em qualquer computador com a
-     chave. Com o código certo, cifra `K` para a chave pública do pedido e entrega (`agente_ligacao_entregar`, que
-     confere a mesma chave pública e deixa entregar uma vez).
+     segue aberto. `reveza ligar XXXX-XXXX-YYYY` faz o mesmo sem janela (servidor, VPS, SSH), em qualquer computador com a
+     chave. Com a primeira parte certa, cifra `K` para a chave pública do pedido com a parte sorteada e entrega
+     (`agente_ligacao_entregar`, que confere a mesma chave pública e deixa entregar uma vez). Um erro de digitação na
+     parte sorteada só aparece no computador novo, que não abre o envelope e pede outro código.
   4. Um pedido por vez: dois abertos ao mesmo tempo são recusados pelo agente (e pela própria entrega, no banco), e
      um pedido que chega com a janela aberta anula o que se digitar nela (revisão de segurança de 11/10/2026).
-  5. O computador novo lê o envelope uma vez (o banco o apaga), decifra, confere a impressão contra `cofre_impressao`
-     e guarda `K` no chaveiro; só então se registra como computador. O painel acompanha por `ligacao_pedidos` (sem a
-     chave pública e sem o envelope).
+  5. O computador novo lê o envelope uma vez (o banco o apaga), decifra com a chave privada e a parte sorteada,
+     confere a impressão contra `cofre_impressao` e guarda `K` no chaveiro; só então se registra como computador. O
+     painel acompanha por `ligacao_pedidos` (sem a chave pública e sem o envelope).
   O que um código vazado consegue: o `rvzc_` antes do uso deixa registrar uma chave pública no pedido (o computador
   verdadeiro então recebe erro, e quem libera não tem o código do intruso na tela); depois do uso, o pedido não aceita
-  outra chave. Não abre o cofre nem vira computador ativo. O código de 8 caracteres não é segredo. Quem escreve direto
-  no banco e troca a chave pública por uma com o mesmo código precisa de 2^40 tentativas, cada uma com um scrypt, em
-  10 minutos. A liberação sem perguntar (`reveza ligar --painel ligar`, 0.1.x) saiu: deixava a nuvem autorizar sozinha.
+  outra chave. Não abre o cofre nem vira computador ativo. Quem escreve direto no banco (dono do banco, chave de
+  serviço):
+  - não leva `K`: trocar a chave pública por uma dele com a mesma primeira parte pede 2^40 tentativas, cada uma com um
+    scrypt, em 10 minutos. Vale mesmo para quem também vê a tela do computador novo;
+  - não planta chave no computador novo: o envelope pede a parte sorteada, e o computador novo para no primeiro que não
+    abre (1 chance em 2^20). Até a 0.3.x o código inteiro saía da chave pública, e esse escritor montava o envelope com
+    uma chave dele e trocava junto a impressão (auditoria de segurança de 12/10/2026, rodada 3). Quem escreve no banco
+    E vê a tela do computador novo ainda planta: por isso a tela pede para não mandar foto do código.
+  - Um código todo sorteado, conferido por um verificador na nuvem, foi considerado e descartado: quem visse a tela e
+    escrevesse no banco trocaria a chave pública e levaria `K`.
+  A liberação sem perguntar (`reveza ligar --painel ligar`, 0.1.x) saiu: deixava a nuvem autorizar sozinha.
 - Cadastro público desligado; entra só por convite (link de uso único, expira em 72 h).
 - Troca de senha com reautenticação; "esqueci a senha" com redirecionamento só para o domínio do painel.
 - Sessão: JWT de 1 h com renovação; lista de sessões e "sair de todas" (revoga os refresh tokens do usuário).
