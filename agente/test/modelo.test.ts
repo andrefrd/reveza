@@ -91,7 +91,7 @@ describe("o model do settings.json", () => {
     const f = arquivoTemp({});
     fs.chmodSync(f, 0o600);
     aplicarModelo(f, "opus", null, null, false);
-    assert.equal(fs.statSync(f).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(f).mode & 0o777, 0o600);
     assert.deepEqual(fs.readdirSync(path.dirname(f)), ["settings.json"], "sem sobra de arquivo temporário");
   });
 });
