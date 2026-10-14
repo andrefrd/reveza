@@ -32,7 +32,7 @@ import { executorReal, type Executor } from "./util/executor.js";
 import { gravarJson, lerJson } from "./util/arquivos.js";
 import { logEmArquivo } from "./util/log.js";
 import { relogioReal, type Relogio } from "./util/tempo.js";
-import type { Idioma } from "./cofre/frase.js";
+import { idiomaAtual, resolverIdioma, t, usarIdioma } from "./i18n.js";
 
 export interface Ambiente {
   c: Caminhos;
@@ -635,7 +635,7 @@ async function cmdLigar(amb: Ambiente, a: Args): Promise<number> {
     amb.erro("A liberação pelo painel sem perguntar saiu na 0.2.0: o computador novo mostra um código de 12 caracteres; libere aqui com reveza ligar XXXX-XXXX-YYYY (ou na janela que abre).");
     return a.flags.painel === "desligar" ? 0 : 2;
   }
-  const idioma: "pt-BR" | "en" = a.flags.idioma === "en" ? "en" : "pt-BR";
+  const idioma = idiomaAtual();
   const p = await pecas(amb);
   const nuvem = await nuvemDe(amb, p.guarda, false);
   if (!nuvem) {
@@ -987,6 +987,7 @@ function processoVivo(pid: number): boolean {
 
 export async function executarCli(argv: string[], amb: Ambiente = ambienteReal()): Promise<number> {
   const a = lerArgs(argv);
+  usarIdioma(resolverIdioma(a.flags.idioma, amb.env, amb.c));
   const cmd = a.pos[0];
   try {
     switch (cmd) {

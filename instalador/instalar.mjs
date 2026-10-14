@@ -17,9 +17,31 @@
 //   ... --desinstalar                             tira o serviço e o mod (logins, chave do cofre e nuvem ficam)
 //   ... --dominio contas.meudominio.com           o painel no seu subdomínio (na instalação ou no --atualizar)
 //   ... --dominio vercel                          o painel volta ao endereço gratuito da Vercel (<projeto>.vercel.app)
-//   ... --idioma en                               perguntas em inglês
+//   ... --idioma pt|en                            idioma das perguntas e de tudo o que a instalação gera (sem ele, pergunta)
 //   ... --sim                                     sem perguntas (lê SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN e REVEZA_* do ambiente)
 //   ... --pasta <dir> | --sem-servico | --sem-react-bits | --versao | --ajuda
+//
+// A mesma ajuda em inglês (`uso()` mostra o bloco do idioma escolhido):
+//en  Steps (numbered with only the ones that run on the chosen path): computer check, agent and mod, the cloud
+//en  on Supabase with the panel on Vercel, service, panel online (and the domain), accounts, alerts and final check.
+//en  Automatic switching comes on, before the limit (warns at 90%, switches at 95%): change it in the panel.
+//en
+//en  npx github:dantaspaulo/reveza                 interactive
+//en  ... --atualizar                               updates agent, mod, database and panel; accounts, usage and settings stay
+//en  ... --sem-nuvem                               this computer only: agent, mod and accounts, no online panel
+//en  ... --com-nuvem                               adds the cloud and the panel to an installation that was computer-only
+//en  ... --ligar                                   joins this computer to an existing installation (panel code)
+//en  ... --sombra                                  next to another account manager, switching nothing (port 7789)
+//en  ... --sair-da-sombra                          the other manager stopped: Reveza starts switching (with --atualizar)
+//en  ... --importar <folder>                       copies accounts and usage from another manager (the source does not change)
+//en  ... --demo                                    opens the panel with sample data, no cloud and no account touched
+//en  ... --doctor                                  checks the installation
+//en  ... --desinstalar                             removes the service and the mod (logins, vault key and cloud stay)
+//en  ... --dominio accounts.mydomain.com           the panel on your subdomain (on install or with --atualizar)
+//en  ... --dominio vercel                          the panel goes back to Vercel's free address (<project>.vercel.app)
+//en  ... --idioma pt|en                            language of the questions and of everything the installation makes (without it, it asks)
+//en  ... --sim                                     no questions (reads SUPABASE_ACCESS_TOKEN, VERCEL_TOKEN and REVEZA_* from the environment)
+//en  ... --pasta <dir> | --sem-servico | --sem-react-bits | --versao | --ajuda
 //
 // Requisitos: Node 20+ e o Claude Code instalado (o Reveza funciona com o Claude Code). Instalar não apaga nada.
 //
@@ -43,7 +65,10 @@ import {
   copiarEstado, travarPublicacao, voltarAtualizacao,
 } from "./lib/programa.mjs";
 import { conferirToken, criarProjeto, organizacoes, projetos, REGIOES, regiaoSugerida } from "./lib/supabase.mjs";
-import { emailValido, fraco, info, mascara, nao, negrito, numerarProximoTitulo, ok, perguntador, senhaForte, t, titulo, usarIdioma, verde } from "./lib/texto.mjs";
+import {
+  emailValido, fraco, idiomaDoArgv, idiomaDoTerminal, idiomaGravado, info, mascara, nao, negrito, numerarProximoTitulo, ok, perguntador, senhaForte, t, titulo,
+  usarIdioma, verde,
+} from "./lib/texto.mjs";
 import { Vercel } from "./lib/vercel.mjs";
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -58,15 +83,20 @@ export function lerArgs(argv) {
   const a = { flags: new Set(), valores: {} };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];
-    if (!FLAGS.includes(x)) return { erro: `opção desconhecida: ${x}` };
+    if (!FLAGS.includes(x)) return { erro: t(`opção desconhecida: ${x}`, `unknown option: ${x}`) };
     if (COM_VALOR.includes(x)) {
-      if (!argv[i + 1] || argv[i + 1].startsWith("--")) return { erro: `${x} pede um valor` };
+      if (!argv[i + 1] || argv[i + 1].startsWith("--")) return { erro: t(`${x} pede um valor`, `${x} needs a value`) };
       a.valores[x] = argv[++i];
     } else a.flags.add(x);
   }
   return a;
 }
-const uso = () => readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").filter((l) => l.startsWith("//   ")).map((l) => l.slice(5)).join("\n");
+// a ajuda sai das linhas do topo deste arquivo: "//   " em português, "//en  " em inglês
+const uso = () => {
+  const marca = t("//   ", "//en  ");
+  return readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").filter((l) => l.startsWith(marca))
+    .map((l) => l.slice(marca.length)).join("\n");
+};
 
 // ── caminhos ──────────────────────────────────────────────────────────────────
 const HOME = os.homedir();
@@ -133,8 +163,9 @@ async function programa(ctx) {
   }
 }
 
+// o agente fala no idioma desta instalação (REVEZA_IDIOMA vence o instalacao.json, que só é gravado no fim)
 function reveza(ctx, args, mostrar = false, env) {
-  return rodar(process.execPath, [ctx.cli, ...args], { mostrar, env: ambienteLimpo(env) });
+  return rodar(process.execPath, [ctx.cli, ...args], { mostrar, env: ambienteLimpo({ REVEZA_IDIOMA: idiomaGravado(), ...env }) });
 }
 
 /**
@@ -822,19 +853,32 @@ export function soEsteComputador(inst, atualizar) {
 
 // ── principal ─────────────────────────────────────────────────────────────────
 async function main() {
-  const a = lerArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const inst = lerInstalacao(ARQ_INST);
+  // o idioma vem antes de tudo: --idioma, senão o que a instalação já escolheu, senão português (o padrão)
+  const idiomaPedido = idiomaDoArgv(argv);
+  usarIdioma(idiomaPedido ?? inst?.idioma ?? "pt");
+  const a = lerArgs(argv);
   if (a.erro) {
     console.error(`${a.erro}\n\n${uso()}`);
     process.exit(2);
   }
   const tem = (f) => a.flags.has(f);
-  usarIdioma(a.valores["--idioma"] || "pt");
   if (tem("--versao")) return console.log(VERSAO);
   if (tem("--ajuda") || tem("--help") || tem("-h")) return console.log(`Reveza AI ${VERSAO}\n\n${uso()}`);
-  console.log(`\n${verde("◆ Reveza AI")} ${fraco(`v${VERSAO}`)}  ${fraco(t("gestor de contas do assistente de código", "account manager for your coding assistant"))}`);
 
-  const inst = lerInstalacao(ARQ_INST);
   const semPerguntas = tem("--sim") || !process.stdin.isTTY;
+  const p = perguntador({ semPerguntas });
+  // o primeiro passo de uma instalação nova: a língua de tudo o que vem depois (perguntas, agente, mod, painel, alertas)
+  if (!idiomaPedido && !inst?.idioma && !semPerguntas) {
+    console.log(`\n${verde("◆ Reveza AI")} ${fraco(`v${VERSAO}`)}\n`);
+    const i = await p.escolha("Idioma / Language", ["Português (Brasil)", "English (United States)"], idiomaDoTerminal() === "en" ? 2 : 1);
+    usarIdioma(i === 1 ? "en" : "pt");
+    console.log(`  ${fraco(t("gestor de contas do assistente de código", "account manager for your coding assistant"))}`);
+  } else {
+    console.log(`\n${verde("◆ Reveza AI")} ${fraco(`v${VERSAO}`)}  ${fraco(t("gestor de contas do assistente de código", "account manager for your coding assistant"))}`);
+  }
+
   let pedidoDeDominio;
   try {
     pedidoDeDominio = dominioPedido(a.valores["--dominio"], process.env);
@@ -843,7 +887,7 @@ async function main() {
     process.exit(2);
   }
   const ctx = {
-    inst, semPerguntas, p: perguntador({ semPerguntas }),
+    inst, semPerguntas, p,
     app: a.valores["--pasta"] ? path.resolve(a.valores["--pasta"]) : inst?.app || path.join(BASE, "app"),
     atualizar: tem("--atualizar"), sombra: tem("--sombra") || !!inst?.sombra, forcarSombra: tem("--sombra"), sairDaSombra: tem("--sair-da-sombra"),
     importar: a.valores["--importar"],
@@ -941,7 +985,7 @@ async function main() {
       await oferecerAtualizacaoCompleta({
         p: ctx.p,
         tokens: { supabase: ctx.gerencia.token, vercel: ctx.vercel.token },
-        rodarCli: (args, entrada) => rodar(process.execPath, [ctx.cli, ...args], { env: ambienteLimpo(), entrada }),
+        rodarCli: (args, entrada) => rodar(process.execPath, [ctx.cli, ...args], { env: ambienteLimpo({ REVEZA_IDIOMA: idiomaGravado() }), entrada }),
       });
     }
     ctx.p.fechar();
@@ -949,7 +993,7 @@ async function main() {
     await prova(ctx);
 
     gravarInstalacao(ARQ_INST, {
-      versao: VERSAO, app: ctx.app, sombra: !!ctx.sombra, semServico: !!ctx.semServico, atualizadoEm: new Date().toISOString(),
+      versao: VERSAO, app: ctx.app, idioma: idiomaGravado(), sombra: !!ctx.sombra, semServico: !!ctx.semServico, atualizadoEm: new Date().toISOString(),
       instaladoEm: inst?.instaladoEm || new Date().toISOString(),
       nuvem: ctx.url ? { ref: ctx.ref, url: ctx.url, anon: ctx.anon, adminId: ctx.adminId, vapidPublica: ctx.vapidPublica } : ctx.ligado || inst?.nuvem || null,
       painel: ctx.site ? { url: ctx.site, urlVercel: ctx.urlVercel, projeto: ctx.projetoVercel, equipe: ctx.equipe, dominio: ctx.dominio || null } : inst?.painel || null,
