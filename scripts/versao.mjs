@@ -17,7 +17,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PACOTES = ["package.json", "agente/package.json", "painel/package.json"];
+// o manifesto do mod anda com a versão: o Claude Code que copia o plugin para o cache pela versão só pega a nova
+// quando ela muda (`claude plugin update` com a mesma versão diz "já está na mais nova")
+const PACOTES = ["package.json", "agente/package.json", "painel/package.json", "mod/.claude-plugin/plugin.json"];
 const TRAVAS = ["package-lock.json", "agente/package-lock.json", "painel/package-lock.json"];
 const CONFIG = "agente/src/config.ts";
 const BADGES = [

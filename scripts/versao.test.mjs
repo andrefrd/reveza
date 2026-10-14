@@ -21,6 +21,12 @@ test("todas as versões do repositório batem (package.json, travas, agente, bad
   assert.doesNotThrow(() => conferir(versoes()));
 });
 
+test("o manifesto do mod entra na conferência e no commit de versão", () => {
+  const v = versoes();
+  assert.equal(v["mod/.claude-plugin/plugin.json"], v["package.json"]);
+  assert.equal(soArquivosDaVersao(["mod/.claude-plugin/plugin.json", "package.json"]), true);
+});
+
 test("conferir recusa pacote fora da versão e aceita a CHANGELOG uma versão à frente", () => {
   const base = { "package.json": "0.1.1", "agente/src/config.ts": "0.1.1", "README.md (badge)": "0.1.1" };
   assert.equal(conferir({ ...base, "CHANGELOG.md": "0.1.1" }), "0.1.1");
