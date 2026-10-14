@@ -43,6 +43,8 @@ If you use Claude Code all day, you know these three moments:
 | The agent running overnight dies at the limit | The unattended session resumes on the next account by itself |
 | Account passwords shared over chat | Each login encrypted on your computer; the cloud stores it without being able to read it |
 | The bigger plan's account lands on any computer | Each computer can have its preferred account, used whenever it is free |
+| Changing the model by hand after every account switch | Each account with its own model, written to the computer at the switch |
+| Long `git status` and `grep` output filling the conversation | Lean output, optional: read commands arrive shorter and the account goes further |
 | A spreadsheet to guess which account still has room | A dashboard with usage, cost and a forecast of when each account runs out |
 | Everyone on the team sorting it out alone | A team with roles, alerts and the history of every switch |
 
@@ -194,6 +196,25 @@ Inside sessions, **`/reveza`** shows the accounts, and the status line shows the
 own default for Opus 5.5 is 1 million). Conversations kept for days went past 600k, got stuck with "Prompt is too
 long", and not even `/compact` helped; and every message sends the whole conversation, so a smaller one makes the
 account last longer. On 20x accounts, Claude Code's default stays. Your own `/autocompact` takes precedence.
+
+**Model per account:** in the dashboard, under **Accounts**, when editing an account, the **Assistant model** field:
+`opus`, `sonnet`, `haiku`, `opusplan` or another name, as in `/model` (`[1m]` at the end asks for the 1M window). When a
+computer switches to that account, the agent writes the model to the `model` key of `~/.claude/settings.json`, and
+sessions opened afterwards start on it. Whoever changes it with `/model` keeps theirs until the next account switch.
+With **Don't change**, the agent puts back the previous value if it was the one that changed it, and otherwise leaves
+the key alone. Nothing else in the file changes.
+
+**Lean output:** off by default. Under **Computers**, on each computer's card, the **Lean output** switch makes that
+computer's mod trim the output of `git status`, `git diff` and `git show`, `ls`, `find`, `grep` and `rg` and `tree`
+before it enters the conversation (open sessions pick it up too, in under a minute). Out go the `git status` hints, the
+diff's `index` line, the `total` and the `.` and `..` of `ls -l`, and the file name repeated on every `grep` and `find`
+line: lines from the same file come together, under it. A listing longer than 300 lines, and a diff file longer than
+200, is cut with a note saying how many lines were left out. Only a simple command is trimmed (a leading `cd folder &&`
+is fine); with a pipe, `;`, another `&&` or a redirect, the output passes whole, so the same command with `| cat` at the
+end shows everything. Machine formats (`--porcelain`, `-z`, `-print0`) and stderr stay as they came. Measured on
+13/10/2026, on 13 read commands in three real repositories: 34% less text overall (from 119,800 to 79,333 characters);
+`git status` 51% to 59%, `find` with subfolders 48%, `grep -rn` 17% to 20%, `ls -la` 6% to 14% and `git diff` 1% to 3%
+(a diff has little to drop before the cut).
 
 **Connecting an account:** the computer opens the official sign-in in a **private window** of its browser (Chrome,
 Edge, Brave, Chromium or Firefox), without the account already open in it (people with several Chrome profiles ended up

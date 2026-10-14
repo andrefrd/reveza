@@ -43,6 +43,8 @@ Quem usa o Claude Code o dia todo conhece estes três momentos:
 | O agente que rodava de madrugada morre no limite | A sessão sem ninguém retoma sozinha na conta seguinte |
 | Senha de conta passada por mensagem | Cada login cifrado no seu computador; a nuvem guarda sem conseguir ler |
 | A conta do plano maior cai em qualquer computador | Cada computador pode ter a sua conta preferida, usada sempre que estiver livre |
+| Trocar o modelo à mão depois de cada troca de conta | Cada conta com o seu modelo, gravado no computador na hora da troca |
+| `git status` e `grep` longos enchendo a conversa | Saída enxuta, opcional: os comandos de leitura chegam mais curtos e a conta rende mais |
 | Planilha para adivinhar qual conta ainda tem saldo | Painel com uso, custo e previsão de esgotar de cada conta |
 | Cada pessoa do time resolvendo no seu canto | Time com papéis, alertas e o histórico de cada troca |
 
@@ -191,6 +193,24 @@ Dentro das sessões, **`/reveza`** mostra as contas, e a linha de status mostra 
 automático dele, no Opus 5.5, é 1 milhão). Conversa de dias passava de 600 mil, travava com "Prompt is too long" e nem o
 `/compact` resolvia; e cada mensagem manda a conversa inteira, então conversa menor faz a conta durar mais. Nas contas de
 20x fica o automático. Um `/autocompact` seu vale por cima disso.
+
+**Modelo de cada conta:** no painel, em **Contas**, ao editar uma conta, o campo **Modelo do assistente**: `opus`,
+`sonnet`, `haiku`, `opusplan` ou outro nome, como no `/model` (`[1m]` no fim pede a janela de 1M). Quando um computador
+passa para essa conta, o agente grava o modelo na chave `model` do `~/.claude/settings.json`, e as sessões abertas
+depois começam nele. Quem trocar pelo `/model` fica com o seu até a próxima troca de conta. Com **Não mexer**, o agente
+devolve o valor que estava antes, se foi ele que mudou, e senão não toca na chave. O resto do arquivo não muda.
+
+**Saída enxuta:** desligada de fábrica. Em **Computadores**, no cartão de cada computador, a chave **Saída enxuta** faz
+o mod daquele computador encurtar a saída de `git status`, `git diff` e `git show`, `ls`, `find`, `grep` e `rg` e `tree`
+antes de ela entrar na conversa (vale também para as sessões já abertas, em menos de um minuto). Saem as dicas do
+`git status`, a linha `index` do diff, o `total` e o `.` e `..` do `ls -l`, e o nome do arquivo repetido em cada linha
+do `grep` e do `find`: as linhas do mesmo arquivo vêm juntas, embaixo dele. Listagem com mais de 300 linhas, e arquivo
+de diff com mais de 200, é cortada com um aviso de quantas linhas saíram. Só entra um comando simples (um `cd pasta &&`
+na frente vale); com pipe, `;`, outro `&&` ou redirecionamento, a saída passa inteira, por isso o mesmo comando com
+`| cat` no fim mostra tudo. Formato de máquina (`--porcelain`, `-z`, `-print0`) e o stderr ficam como vieram. Medido em
+13/10/2026, em 13 comandos de leitura em três repositórios de verdade: 34% menos texto no total (de 119.800 para 79.333
+caracteres); `git status` de 51% a 59%, `find` com subpastas 48%, `grep -rn` de 17% a 20%, `ls -la` de 6% a 14% e
+`git diff` de 1% a 3% (o diff quase não tem o que tirar antes do corte).
 
 **Conectar conta:** o computador abre o login oficial numa **janela anônima** do navegador (Chrome, Edge, Brave,
 Chromium ou Firefox), sem a conta que já estiver aberta nele (quem tem vários perfis do Chrome caía na conta errada).

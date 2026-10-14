@@ -7,6 +7,32 @@ Git (`vX.Y.Z`) e na página de versões do GitHub, sempre iguais.
 - **X.Y.0**: melhoria ou recurso novo que não quebra nada.
 - **X.Y.Z**: correção.
 
+## 0.6.0 · 13/10/2026
+
+Modelo de cada conta e saída enxuta. Um usuário pediu para escolher no painel o modelo que cada conta usa e para ligar
+ou desligar, por computador, a saída mais curta dos comandos de leitura. Atualize os computadores pelo painel; a nuvem
+se atualiza sozinha (ou pelo **Atualizar a nuvem**). Os campos novos só valem nos computadores com o agente 0.6.0.
+
+- **Modelo de cada conta:** em **Contas**, ao editar uma conta, o campo **Modelo do assistente** (`opus`, `sonnet`,
+  `haiku`, `opusplan` ou outro nome, como no `/model`; `[1m]` no fim pede a janela de 1M). Quando um computador passa
+  para a conta, o agente grava o modelo na chave `model` do `~/.claude/settings.json`; as sessões abertas depois
+  começam nele. Mudar o modelo de uma conta no painel vale na hora para os computadores que estão nela. Quem trocar
+  pelo `/model` fica com o seu até a próxima troca de conta. **Não mexer** (o padrão): o agente devolve o valor de
+  antes, se foi ele que mudou, e senão não toca na chave. A gravação é atômica e só mexe nessa chave.
+- **Saída enxuta:** em **Computadores**, a chave **Saída enxuta** de cada computador, desligada de fábrica. Ligada, o
+  mod encurta o stdout de `git status`, `git diff` e `git show`, `ls`, `find`, `grep`, `rg` e `tree`: tira as dicas do
+  `git status`, a linha `index` do diff, o `total` e o `.` e `..` do `ls -l`, junta embaixo do nome as linhas do mesmo
+  arquivo no `grep` e no `find`, e corta listagem acima de 300 linhas (e arquivo de diff acima de 200) com aviso de
+  quantas saíram. Comando com pipe, `;`, outro `&&` ou redirecionamento passa inteiro, por isso `| cat` no fim mostra
+  tudo; formato de máquina e stderr ficam como vieram; erro no enxugar devolve a saída original. Medido em 13/10/2026,
+  em 13 comandos de leitura em três repositórios de verdade: 34% menos texto no total (119.800 para 79.333
+  caracteres), com `git status` de 51% a 59%, `find` com subpastas 48%, `grep -rn` de 17% a 20%, `ls -la` de 6% a 14%
+  e `git diff` de 1% a 3%.
+- **Nuvem:** migração 0025 (`contas.modelo`, com o formato conferido no banco; `computadores.enxugar`; a função
+  `painel_computador_enxugar`; o `agente_ola` passa a levar o modelo da conta e a chave do computador). O painel só
+  manda o modelo quando ele mudou, então editar conta numa nuvem ainda sem a 0025 continua funcionando.
+- **Versão do mod:** o `plugin.json` do mod passa a andar com a versão do Reveza.
+
 ## 0.5.0 · 13/10/2026
 
 Conta preferida de cada computador. Um usuário com uma conta de plano maior (20x) pediu para deixá-la como padrão no
