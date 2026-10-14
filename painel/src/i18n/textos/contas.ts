@@ -22,6 +22,7 @@ export default secao({
       agendaResumo: "{faixas} faixa(s) de horário",
       teto: "teto de {pct} na semana",
       reservaRegra: "só sem outra livre",
+      modeloRegra: "modelo {modelo}",
       menu: {
         editar: "Editar regras",
         entrarDeNovo: "Entrar de novo",
@@ -55,6 +56,15 @@ export default secao({
         pausadaDica: "Fica fora do revezamento até você retomar.",
         teto: "Teto da semana",
         tetoDica: "Com a semana neste ponto, a conta deixa de ser escolhida.",
+        modelo: "Modelo do assistente",
+        modeloDica:
+          "Quando um computador passa para esta conta, o Reveza grava este modelo no assistente de código dele, para as sessões abertas depois. Quem trocar pelo /model fica com o seu até a próxima troca de conta. Precisa do agente 0.6.0.",
+        modeloOpcoes: {
+          nenhum: "Não mexer",
+          outro: "Outro (digitar o nome)",
+        },
+        modeloPlaceholder: "o nome do modelo, como no /model",
+        modeloInvalido: "Só letras minúsculas, números, ponto e hífen, com [1m] no fim se quiser a janela de 1M.",
         agenda: "Agenda",
         agendaDica: "Fora destes horários a conta não é escolhida. Sem faixa = qualquer hora.",
         salvo: "Regras de {conta} salvas",
@@ -133,6 +143,7 @@ export default secao({
       agendaResumo: "{faixas} time range(s)",
       teto: "weekly cap of {pct}",
       reservaRegra: "only when no other is free",
+      modeloRegra: "model {modelo}",
       menu: {
         editar: "Edit rules",
         entrarDeNovo: "Sign in again",
@@ -167,6 +178,15 @@ export default secao({
         pausadaDica: "Stays out of rotation until you resume it.",
         teto: "Weekly cap",
         tetoDica: "Once the week reaches this point, the account stops being chosen.",
+        modelo: "Assistant model",
+        modeloDica:
+          "When a computer switches to this account, Reveza writes this model into its coding assistant, for sessions opened afterwards. Anyone who changes it with /model keeps theirs until the next account switch. Needs agent 0.6.0.",
+        modeloOpcoes: {
+          nenhum: "Don't change",
+          outro: "Other (type the name)",
+        },
+        modeloPlaceholder: "the model name, as in /model",
+        modeloInvalido: "Only lowercase letters, digits, dots and hyphens, with [1m] at the end for the 1M window.",
         agenda: "Schedule",
         agendaDica: "Outside these hours the account isn't chosen. No range = any time.",
         salvo: "Rules for {conta} saved",

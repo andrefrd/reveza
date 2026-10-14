@@ -38,6 +38,7 @@ const pc = (versao: string, extra: Partial<Computador> = {}): Computador => ({
   diagnostico: { em: min(-5), versao, atrasoBuscaMs: 100, itens: [], versaoNova: "0.1.7" },
   atribuicao: null,
   contaPreferidaId: null,
+  enxugar: false,
   ...extra,
 })
 

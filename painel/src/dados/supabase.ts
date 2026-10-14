@@ -150,6 +150,7 @@ const CAMPOS_CONTA: Record<keyof CamposConta, string> = {
   pausada: "pausada",
   agenda: "agenda",
   tetoSemana: "teto_semana",
+  modelo: "modelo",
 }
 
 // "posse" fica de fora: ela é renovada a cada busca dos computadores e vem junto na releitura.
@@ -173,6 +174,7 @@ const MENSAGENS: [RegExp, string][] = [
   [/em uso em outro computador|conta com outro computador/i, "conta_ocupada"],
   [/outro computador já prefere/i, "preferida_de_outro"],
   [/sem login guardado/i, "conta_precisa_login"],
+  [/modelo inválido/i, "modelo_invalido"],
   [/computador novo desconhecido|computador desconhecido/i, "computador_revogado"],
   [/conta desconhecida/i, "nao_encontrado"],
   [/duplicate key|already exists|unique/i, "ja_existe"],
@@ -316,6 +318,7 @@ function paraConta(l: Linha, janelas: Linha[], posse: Linha | undefined, validad
     pausada: Boolean(l.pausada),
     agenda: Array.isArray(l.agenda) ? (l.agenda as Conta["agenda"]) : [],
     tetoSemana: numero(l.teto_semana),
+    modelo: texto(l.modelo),
     precisaLogin: Boolean(l.precisa_login),
     criadaEm: String(l.criado_em),
     janelas: janelas.map((j): Janela => ({
@@ -511,6 +514,7 @@ export class FonteSupabase implements Fonte {
             ? { contaId: texto(a.conta_id), motivo: String(a.motivo), decididoEm: String(a.decidido_em) }
             : null,
           contaPreferidaId: texto(c.conta_preferida),
+          enxugar: c.enxugar === true,
         }
       }),
       config: cfg,
@@ -708,6 +712,10 @@ export class FonteSupabase implements Fonte {
 
   async preferirConta(computadorId: string, contaId: string | null) {
     await rpc("painel_computador_preferida", { p_computador: computadorId, p_conta: contaId })
+  }
+
+  async enxugarComputador(computadorId: string, ligado: boolean) {
+    await rpc("painel_computador_enxugar", { p_computador: computadorId, p_ligado: ligado })
   }
 
   async comando(computadorId: string, acao: AcaoComando, corpo: Record<string, unknown> = {}): Promise<Comando> {

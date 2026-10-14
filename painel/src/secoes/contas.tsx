@@ -3,6 +3,7 @@
 
 import * as React from "react"
 import {
+  BrainCircuitIcon,
   CalendarClockIcon,
   KeyRoundIcon,
   LifeBuoyIcon,
@@ -29,15 +30,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
-import { estadoConta, nomePlano, p5, p7, resetDe } from "@/dados/derivados"
+import {
+  estadoConta,
+  FORMATO_MODELO,
+  MODELOS_PRONTOS,
+  nomePlano,
+  normalizarModelo,
+  p5,
+  p7,
+  resetDe,
+} from "@/dados/derivados"
 import type { CamposConta } from "@/dados/fonte"
 import type { Conta, Instantaneo } from "@/dados/tipos"
 import { useT } from "@/i18n"
@@ -216,6 +235,7 @@ function Regras({ conta }: { conta: Conta }) {
   if (conta.pausada) itens.push({ icone: PauseIcon, texto: t("estadoConta.pausada") })
   if (conta.tetoSemana != null)
     itens.push({ icone: Settings2Icon, texto: t("contas.teto", { pct: fmtPct(conta.tetoSemana, idioma) }) })
+  if (conta.modelo) itens.push({ icone: BrainCircuitIcon, texto: t("contas.modeloRegra", { modelo: conta.modelo }) })
   itens.push({
     icone: CalendarClockIcon,
     texto: conta.agenda.length
@@ -345,6 +365,73 @@ function useWorkspaceDaConta(conta: Conta | null) {
 }
 
 /** O campo da cor na gaveta: diz de qual workspace é a cor e mostra o tom de cada conta dele nos gráficos. */
+const SEM_MODELO = "nenhum"
+const OUTRO_MODELO = "outro"
+
+// O modelo que o agente grava no Claude Code quando o computador passa para a conta: um dos apelidos de sempre ou um
+// nome digitado. A escolha fica local: digitar "opus" a caminho de "opusplan" não fecha o campo de texto.
+function CampoModelo({
+  valor,
+  invalido,
+  aoMudar,
+  desligado,
+}: {
+  valor: string | null
+  invalido: boolean
+  aoMudar: (modelo: string | null) => void
+  desligado: boolean
+}) {
+  const { t } = useT()
+  const pronto = (v: string | null) => (MODELOS_PRONTOS as readonly string[]).includes(v ?? "")
+  const [escolha, setEscolha] = React.useState(() =>
+    valor === null ? SEM_MODELO : pronto(valor) ? valor : OUTRO_MODELO
+  )
+  const escolher = (v: string) => {
+    setEscolha(v)
+    if (v === SEM_MODELO) aoMudar(null)
+    else if (v === OUTRO_MODELO) aoMudar(valor !== null && !pronto(valor) ? valor : "")
+    else aoMudar(v)
+  }
+  return (
+    <Field>
+      <FieldLabel htmlFor="modelo">{t("contas.editar.modelo")}</FieldLabel>
+      <FieldDescription>{t("contas.editar.modeloDica")}</FieldDescription>
+      <Select value={escolha} onValueChange={escolher} disabled={desligado}>
+        <SelectTrigger id="modelo" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={SEM_MODELO}>{t("contas.editar.modeloOpcoes.nenhum")}</SelectItem>
+          {MODELOS_PRONTOS.map((m) => (
+            <SelectItem key={m} value={m} className="font-mono">
+              {m}
+            </SelectItem>
+          ))}
+          <SelectItem value={OUTRO_MODELO}>{t("contas.editar.modeloOpcoes.outro")}</SelectItem>
+        </SelectContent>
+      </Select>
+      {escolha === OUTRO_MODELO ? (
+        <>
+          <Input
+            aria-label={t("contas.editar.modelo")}
+            className="font-mono"
+            placeholder={t("contas.editar.modeloPlaceholder")}
+            value={valor ?? ""}
+            maxLength={70}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={desligado}
+            aria-invalid={invalido && (valor ?? "") !== ""}
+            onChange={(e) => aoMudar(e.target.value)}
+          />
+          {invalido && (valor ?? "") !== "" ? <FieldError>{t("contas.editar.modeloInvalido")}</FieldError> : null}
+        </>
+      ) : null}
+    </Field>
+  )
+}
+
 function CampoCor({
   conta,
   contas,
@@ -413,12 +500,15 @@ export function EditarConta({
           pausada: conta.pausada,
           agenda: conta.agenda,
           tetoSemana: conta.tetoSemana,
+          modelo: conta.modelo,
         }
       : null
   )
   const [salvando, setSalvando] = React.useState(false)
 
   const r = rascunho
+  // null = não mexer; texto que não passa no formato (inclusive "Outro" vazio) segura o Salvar
+  const modeloInvalido = !!r && r.modelo !== null && !FORMATO_MODELO.test(r.modelo.trim().toLowerCase())
   const mudar = (campos: Partial<Required<CamposConta>>) => setRascunho((x) => (x ? { ...x, ...campos } : x))
   return (
     <Sheet open={aberto && !!conta} onOpenChange={(v) => !v && aoFechar()}>
@@ -505,6 +595,13 @@ export function EditarConta({
                   </div>
                 ) : null}
                 <FieldSeparator />
+                <CampoModelo
+                  valor={r.modelo}
+                  invalido={modeloInvalido}
+                  aoMudar={(modelo) => mudar({ modelo })}
+                  desligado={!pode}
+                />
+                <FieldSeparator />
                 <Field>
                   <FieldLabel>{t("contas.editar.agenda")}</FieldLabel>
                   <FieldDescription>
@@ -519,18 +616,22 @@ export function EditarConta({
                 {t("comum.cancelar")}
               </Button>
               <Button
-                disabled={!pode || salvando}
+                disabled={!pode || salvando || modeloInvalido}
                 onClick={async () => {
                   setSalvando(true)
                   // a cor só vai quando mudou, e aí para todas as contas do workspace (pelo mesmo caminho de gravação)
-                  const { cor, ...resto } = r
+                  const { cor, modelo, ...resto } = r
                   const mudouCor = indiceCor(cor) !== indiceCor(conta.cor)
+                  // o modelo também só vai quando mudou: uma nuvem de antes da 0.6.0 recusa o campo
+                  const novoModelo = normalizarModelo(modelo)
+                  const mudouModelo = novoModelo !== conta.modelo
                   const [ok] = await acao(
                     async () => {
                       await fonte.salvarConta(conta.id, {
                         ...resto,
                         agenda: resto.agenda.filter((f) => f.dias.length > 0),
                         ...(mudouCor ? { cor } : {}),
+                        ...(mudouModelo ? { modelo: novoModelo } : {}),
                       })
                       if (mudouCor)
                         for (const outra of workspace.contas)

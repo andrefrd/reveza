@@ -35,10 +35,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldLabel } from "@/components/ui/field"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { useAcao, useAgora, useDados, useEstado, usePermissao } from "@/dados/contexto"
 import { compararVersao, estadoComputador, estadoConta, p5, p7, versaoMaisNova } from "@/dados/derivados"
 import type { Computador, EstadoLigacao, FaseLigacao, Instantaneo } from "@/dados/tipos"
@@ -198,6 +199,7 @@ function CartaoComputador({ pc, estado, agora }: { pc: Computador; estado: Insta
           )}
         </div>
         <ContaPreferida pc={pc} estado={estado} />
+        <SaidaEnxuta pc={pc} />
         {outras.length ? (
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">{t("computadores.outrasPosses")}</span>
@@ -332,6 +334,40 @@ function ContaPreferida({ pc, estado }: { pc: Computador; estado: Instantaneo })
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">{t("computadores.preferida.dica")}</p>
+    </Field>
+  )
+}
+
+function SaidaEnxuta({ pc }: { pc: Computador }) {
+  const { t } = useT()
+  const { fonte } = useDados()
+  const acao = useAcao()
+  const { pode } = usePermissao()
+  const [enviando, setEnviando] = React.useState(false)
+  const id = `enxugar-${pc.id}`
+  const mudar = async (ligado: boolean) => {
+    setEnviando(true)
+    await acao(
+      () => fonte.enxugarComputador(pc.id, ligado),
+      t(ligado ? "computadores.enxugar.ligado" : "computadores.enxugar.desligado", { computador: pc.nome })
+    )
+    setEnviando(false)
+  }
+  return (
+    <Field orientation="horizontal" className="items-start gap-3">
+      <FieldContent className="gap-0.5">
+        <FieldLabel htmlFor={id} className="text-xs font-normal text-muted-foreground">
+          {t("computadores.enxugar.rotulo")}
+        </FieldLabel>
+        <p className="text-xs text-muted-foreground">{t("computadores.enxugar.dica")}</p>
+      </FieldContent>
+      <Switch
+        id={id}
+        size="sm"
+        checked={pc.enxugar}
+        disabled={!pode || enviando || pc.revogado}
+        onCheckedChange={(v) => void mudar(v)}
+      />
     </Field>
   )
 }

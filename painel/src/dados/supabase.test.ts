@@ -126,6 +126,8 @@ describe("andamento da ligação de computador novo (ligacao_pedidos, 0019)", ()
     expect(codigoDoErro("dois pedidos de ligação ao mesmo tempo: recusei os dois; gere de novo no painel")).toBe("ligacao_dupla")
     expect(codigoDoErro("computador novo desconhecido ou revogado")).toBe("computador_revogado")
     expect(codigoDoErro("outro computador já prefere esta conta")).toBe("preferida_de_outro")
+    expect(codigoDoErro("modelo inválido")).toBe("modelo_invalido")
+    expect(codigoDoErro("computador desconhecido")).toBe("computador_revogado")
   })
 
   it("a nuvem e o painel (0021): só o que a tela usa, conferido; nuvem de antes da 0.3.0 vem sem versão", () => {

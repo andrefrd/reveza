@@ -55,6 +55,11 @@ export interface Conta {
   pausada: boolean
   agenda: FaixaAgenda[]
   tetoSemana: number | null
+  /**
+   * O modelo que o Claude Code usa nesta conta (opus, sonnet, claude-opus-5-5, claude-fable-5[1m]...). Quando um
+   * computador passa para ela, o agente grava esse modelo nas configurações do Claude Code. null: não mexe.
+   */
+  modelo: string | null
   precisaLogin: boolean
   criadaEm: string
   janelas: Janela[]
@@ -112,6 +117,8 @@ export interface Computador {
   atribuicao: Atribuicao | null
   /** A conta que este computador usa sempre que ela estiver livre. Uma conta é preferida de um computador só. */
   contaPreferidaId: string | null
+  /** Saída enxuta: o mod do Reveza encurta a saída de comandos de leitura (git status, grep, find, ls) neste computador. */
+  enxugar: boolean
 }
 
 export interface ConfigTroca {

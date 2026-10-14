@@ -7,7 +7,7 @@ import { codigoDeAcesso } from "@/lib/ligacao"
 import { proximaCorLivre } from "@/lib/cores"
 import { versao as versaoDoInstalador } from "@/lib/instalador"
 import { localizarDemo } from "./demo-idioma"
-import { compararVersao } from "./derivados"
+import { compararVersao, FORMATO_MODELO, normalizarModelo } from "./derivados"
 import { rotuloDestino } from "./rotulos"
 import { ErroPainel, type CamposConta, type Fonte, type Recursos, type ResultadoNuvem } from "./fonte"
 import type {
@@ -80,6 +80,7 @@ interface ModeloConta {
   conectadaDias: number
   agenda?: Conta["agenda"]
   tetoSemana?: number | null
+  modelo?: string | null
 }
 
 const MODELO_CONTAS: ModeloConta[] = [
@@ -91,6 +92,7 @@ const MODELO_CONTAS: ModeloConta[] = [
     nivel: "20x",
     cor: 0,
     prioridade: 10,
+    modelo: "opus",
     p5: 64,
     p7: 41,
     p7Grande: 63,
@@ -363,6 +365,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       pausada: false,
       agenda: m.agenda ?? [],
       tetoSemana: m.tetoSemana ?? null,
+      modelo: m.modelo ?? null,
       precisaLogin: !!m.precisaLogin,
       criadaEm: iso(t0 - m.conectadaDias * DIA),
       janelas,
@@ -488,6 +491,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       diagnostico: diagnostico(versao, 180, false),
       atribuicao: { contaId: "conta-trabalho", motivo: "limite", decididoEm: iso(t0 - 2 * H - 4 * MIN) },
       contaPreferidaId: "conta-trabalho",
+      enxugar: true,
     },
     {
       id: "pc-desktop",
@@ -500,6 +504,7 @@ export function gerarDemo(agora: Date, semente = 7, versao = versaoDemo()): Dado
       diagnostico: diagnostico(anterior ?? versao, 420, anterior !== null),
       atribuicao: { contaId: "conta-pessoal", motivo: "rodizio", decididoEm: iso(t0 - 6 * H - 11 * MIN) },
       contaPreferidaId: null,
+      enxugar: false,
     },
   ]
 
@@ -939,6 +944,12 @@ export class FonteDemo implements Fonte {
       const c = this.conta(id)
       if (campos.tetoSemana != null && (campos.tetoSemana < 1 || campos.tetoSemana > 100))
         throw new ErroPainel("teto_invalido")
+      // como na nuvem (0025): minúsculo e sem espaço; vazio tira; fora do formato recusa sem mudar nada
+      if (campos.modelo !== undefined) {
+        const modelo = normalizarModelo(campos.modelo)
+        if (modelo !== null && !FORMATO_MODELO.test(modelo)) throw new ErroPainel("modelo_invalido")
+        campos = { ...campos, modelo }
+      }
       Object.assign(c, campos)
       this.auditar("conta", `${c.email} · ${Object.keys(campos).join(", ")}`)
     })
@@ -1001,6 +1012,15 @@ export class FonteDemo implements Fonte {
         pc.atribuicao = { contaId: conta.id, motivo, decididoEm: agora.toISOString() }
         this.evento("troca", "troca", { computador: computadorId, de, para: conta.id, motivo })
       }
+    })
+  }
+
+  enxugarComputador(computadorId: string, ligado: boolean) {
+    return this.escrever(() => {
+      const pc = this.computador(computadorId)
+      if (pc.revogado) throw new ErroPainel("computador_revogado")
+      pc.enxugar = ligado
+      this.auditar("enxugar", `${pc.nome} · ${ligado ? "ligada" : "desligada"}`)
     })
   }
 
@@ -1123,6 +1143,7 @@ export class FonteDemo implements Fonte {
             pausada: false,
             agenda: [],
             tetoSemana: null,
+            modelo: null,
             precisaLogin: false,
             criadaEm: this.agora().toISOString(),
             janelas: [],
@@ -1171,6 +1192,7 @@ export class FonteDemo implements Fonte {
       diagnostico: null,
       atribuicao: null,
       contaPreferidaId: null,
+      enxugar: false,
     })
     this.ligacoesDemo.set(id, { criadoEm: this.agora().getTime(), aprovador: null })
     this.auditar("computador_novo", "acesso criado")

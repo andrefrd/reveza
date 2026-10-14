@@ -121,6 +121,32 @@ describe("FonteDemo", () => {
     expect((await f.carregar()).computadores.find((c) => c.id === "pc-notebook")?.contaPreferidaId).toBe("conta-cliente")
   })
 
+  it("modelo da conta: grava em minúsculas, vazio limpa e formato inválido não muda nada", async () => {
+    const f = nova()
+    await f.salvarConta("conta-pessoal", { modelo: "  Claude-Opus-5-5[1m] " })
+    expect((await f.carregar()).contas.find((c) => c.id === "conta-pessoal")?.modelo).toBe("claude-opus-5-5[1m]")
+    await expect(f.salvarConta("conta-pessoal", { modelo: "opus 5", prioridade: 9 })).rejects.toMatchObject({ codigo: "modelo_invalido" })
+    const c = (await f.carregar()).contas.find((x) => x.id === "conta-pessoal")
+    expect(c?.modelo).toBe("claude-opus-5-5[1m]")
+    expect(c?.prioridade).not.toBe(9)
+    await f.salvarConta("conta-pessoal", { modelo: "" })
+    expect((await f.carregar()).contas.find((x) => x.id === "conta-pessoal")?.modelo).toBeNull()
+    // sem a chave, o modelo fica como está
+    await f.salvarConta("conta-trabalho", { pausada: false })
+    expect((await f.carregar()).contas.find((x) => x.id === "conta-trabalho")?.modelo).toBe("opus")
+  })
+
+  it("saída enxuta: liga e desliga por computador, com registro; computador revogado recusa", async () => {
+    const f = nova()
+    await f.enxugarComputador("pc-desktop", true)
+    expect((await f.carregar()).computadores.find((c) => c.id === "pc-desktop")?.enxugar).toBe(true)
+    expect((await f.auditoria(1))[0].acao).toBe("enxugar")
+    await f.enxugarComputador("pc-desktop", false)
+    expect((await f.carregar()).computadores.find((c) => c.id === "pc-desktop")?.enxugar).toBe(false)
+    await f.revogarComputador("pc-desktop")
+    await expect(f.enxugarComputador("pc-desktop", true)).rejects.toMatchObject({ codigo: "computador_revogado" })
+  })
+
   it("revogar computador solta as contas dele", async () => {
     const f = nova()
     await f.revogarComputador("pc-desktop")

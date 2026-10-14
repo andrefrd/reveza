@@ -2,6 +2,18 @@
 
 import type { Computador, ConfigTroca, Conta, Instantaneo, Janela, TipoJanela } from "./tipos"
 
+/** O formato que a nuvem aceita para o modelo de uma conta (migração 0025): apelido ou ID, minúsculo, com [1m] opcional. */
+export const FORMATO_MODELO = /^[a-z0-9][a-z0-9.-]{0,62}(\[1m\])?$/
+
+/** Os apelidos do Claude Code que o painel oferece prontos; outro modelo entra digitado. */
+export const MODELOS_PRONTOS = ["opus", "sonnet", "haiku", "opusplan"] as const
+
+/** O modelo como a nuvem grava: sem espaço nas pontas e minúsculo; vazio vira null (o agente não mexe). */
+export function normalizarModelo(v: string | null | undefined): string | null {
+  const m = (v ?? "").trim().toLowerCase()
+  return m === "" ? null : m
+}
+
 export function janela(c: Conta, tipo: TipoJanela): Janela | undefined {
   return c.janelas.find((j) => j.tipo === tipo)
 }
