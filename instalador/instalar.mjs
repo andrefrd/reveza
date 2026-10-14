@@ -54,7 +54,7 @@ import { fileURLToPath } from "node:url";
 import { Gerencia, provisionar, trocarSite } from "../nuvem/provisionar.mjs";
 import { acharChatTelegram, segredoWebhook, testar } from "./lib/alertas.mjs";
 import { dnsPronto, dominioPedido, dominioValido, passosDns } from "./lib/dominio.mjs";
-import { computadorDoEmail, esperarComando, lerPublicacao, maisNova, pedirComando, registrarPublicacao, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
+import { computadorDoEmail, esperarComando, gravarIdioma, lerPublicacao, maisNova, pedirComando, registrarPublicacao, salvarAlerta, salvarTroca } from "./lib/nuvem.mjs";
 import { etapasDoCaminho, manterNuvemPrevisto, numeroDaEtapa } from "./lib/etapas.mjs";
 import { mostrarPaginaDoToken, PAGINA_TOKEN_SUPABASE, PAGINA_TOKEN_VERCEL } from "./lib/navegador.mjs";
 import { construir, prepararPasta } from "./lib/painel.mjs";
@@ -213,7 +213,7 @@ async function nuvem(ctx) {
   for (let i = 0; i < 3 && !token; i++) {
     token = await ctx.p.segredo(t("Token do Supabase:", "Supabase token:"), "SUPABASE_ACCESS_TOKEN");
     if (!token) break;
-    const g = new Gerencia(token);
+    const g = new Gerencia(token, { t });
     const c = await conferirToken(g);
     if (!c.ok) { nao(c.erro); token = ""; }
   }
@@ -229,7 +229,7 @@ async function nuvem(ctx) {
   }
   if (!token) throw new Error(t("sem token do Supabase não dá para criar a nuvem (ou use --sem-nuvem)", "without a Supabase token the cloud cannot be created (or use --sem-nuvem)"));
   ok(t(`token aceito (${mascara(token)})`, `token accepted (${mascara(token)})`));
-  ctx.gerencia = new Gerencia(token);
+  ctx.gerencia = new Gerencia(token, { t });
 
   if (ctx.atualizar && ctx.inst?.nuvem?.ref) {
     ctx.ref = ctx.inst.nuvem.ref;
@@ -349,7 +349,7 @@ async function aplicarNuvem(ctx) {
   // existe), e uma instalação que parasse no meio deixava o link de login apontando para lá (auditoria, 11/10/2026).
   ctx.siteProvisorio = ctx.inst?.painel?.url || "http://localhost:5173";
   const r = await provisionar({
-    gerencia: ctx.gerencia, ref: ctx.ref, site: ctx.siteProvisorio, admin: ctx.admin || null, smtp: ctx.smtp, computador: ctx.nuvemNova, log: info,
+    gerencia: ctx.gerencia, ref: ctx.ref, site: ctx.siteProvisorio, admin: ctx.admin || null, smtp: ctx.smtp, computador: ctx.nuvemNova, log: info, t,
   });
   ctx.url = r.url;
   ctx.anon = r.anon;
@@ -371,6 +371,7 @@ async function aplicarNuvem(ctx) {
     await salvarTroca(consultar(ctx), ctx.adminId, { ...ctx.troca, fuso: Intl.DateTimeFormat().resolvedOptions().timeZone });
     ok(`${descreverTroca(ctx.troca)}${t(": muda no painel, em Troca automática", ": change it in the panel, under Auto switch")}`);
   }
+  await gravarIdioma(consultar(ctx)).catch((e) => nao(t(`não gravei o idioma na nuvem (${e.message}): os alertas saem em português`, `could not store the language in the cloud (${e.message}): alerts go out in Portuguese`)));
 }
 
 const consultar = (ctx) => (sql, parametros) => ctx.gerencia.sql(ctx.ref, sql, parametros);
@@ -497,7 +498,7 @@ async function painel(ctx) {
     } else nao(t(`o DNS de ${ctx.dominio} ainda não responde: o painel segue em ${pub.url}. Depois rode --atualizar para trocar.`,
       `${ctx.dominio} DNS does not answer yet: the panel stays at ${pub.url}. Later run --atualizar to switch.`));
   }
-  if (site !== ctx.siteProvisorio) await trocarSite(ctx.gerencia, ctx.ref, site);
+  if (site !== ctx.siteProvisorio) await trocarSite(ctx.gerencia, ctx.ref, site, t);
   ctx.site = site;
   // voltou para o endereço da Vercel: o domínio segue ligado ao projeto lá até a pessoa tirar
   const antes = ctx.inst?.painel?.dominio;
@@ -562,7 +563,7 @@ function lerEntrada() {
   return new Promise((resolve, reject) => {
     let d = "";
     process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (x) => { d += x; if (d.length > 64 * 1024) reject(new Error("entrada grande demais")); });
+    process.stdin.on("data", (x) => { d += x; if (d.length > 64 * 1024) reject(new Error(t("entrada grande demais", "input too large"))); });
     process.stdin.on("end", () => resolve(d));
     process.stdin.on("error", reject);
   });
@@ -571,7 +572,7 @@ function lerEntrada() {
 /** As partes de --partes (funcoes, painel): só essas duas, e pelo menos uma. */
 export function lerPartes(v) {
   const lista = String(v ?? "funcoes,painel").split(",").map((x) => x.trim()).filter(Boolean);
-  if (!lista.length || lista.some((x) => x !== "funcoes" && x !== "painel")) throw new Error("--partes: funcoes, painel ou os dois");
+  if (!lista.length || lista.some((x) => x !== "funcoes" && x !== "painel")) throw new Error(t("--partes: funcoes, painel ou os dois", "--partes: funcoes, painel or both"));
   return { funcoes: lista.includes("funcoes"), painel: lista.includes("painel") };
 }
 
@@ -607,7 +608,7 @@ async function publicarNuvem(ctx, a) {
 }
 
 async function publicarComTokens(ctx, ref, partes, tokens) {
-  ctx.gerencia = new Gerencia(tokens.supabase);
+  ctx.gerencia = new Gerencia(tokens.supabase, { t });
   ctx.ref = ref;
   const c = await lerPublicacao(consultar(ctx));
   if (c.versao !== VERSAO) {
@@ -622,7 +623,7 @@ async function publicarComTokens(ctx, ref, partes, tokens) {
   ctx.siteProvisorio = c.painel.url;
   ctx.vapidPublica = c.painel.vapid;
   if (partes.funcoes) {
-    const r = await provisionar({ gerencia: ctx.gerencia, ref, site: c.painel.url, admin: null, computador: false, log: info });
+    const r = await provisionar({ gerencia: ctx.gerencia, ref, site: c.painel.url, admin: null, computador: false, log: info, t });
     ctx.anon = r.anon;
     ok(t("funções da nuvem publicadas", "cloud functions published"));
   } else {
@@ -747,7 +748,7 @@ async function demo(ctx) {
   titulo(t("Painel em modo demonstração (dados de exemplo, nada é instalado)", "Panel in demo mode (sample data, nothing is installed)"));
   prepararPasta(RAIZ, BUILD);
   let r = rodar(npm, ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=error", "--legacy-peer-deps"], { cwd: BUILD, mostrar: true });
-  if (!r.ok) throw new Error("npm ci");
+  if (!r.ok) throw new Error(t("npm ci", "npm ci failed"));
   if (!ctx.semReactBits) rodar(process.execPath, ["scripts/baixar-react-bits.mjs"], { cwd: BUILD, mostrar: true });
   info(t("Abrindo http://localhost:5173/?demo=1 (Ctrl+C para sair)", "Opening http://localhost:5173/?demo=1 (Ctrl+C to quit)"));
   rodar(npm, ["run", "dev", "--", "--open", "/?demo=1"], { cwd: BUILD, mostrar: true });
