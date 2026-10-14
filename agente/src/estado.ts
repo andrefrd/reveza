@@ -93,6 +93,14 @@ export interface EstadoLocal {
   nuvem: { computadorId: string | null; atribuicaoVersao: number; atribuicaoConta: string | null };
   /** O autoCompactWindow que o agente deixou no settings.json do Claude Code (null: nada dele lá). */
   resumoEscrito?: number | null;
+  /** O "model" que o agente deixou no settings.json (null: nada dele lá). */
+  modeloEscrito?: string | null;
+  /** O "model" que a pessoa tinha antes do agente mexer (null: não tinha a chave). Volta quando a conta fica sem modelo. */
+  modeloOriginal?: string | null;
+  /** O modelo de cada conta da nuvem, pelo id dela (null: sem modelo). Conta fora daqui: a nuvem ainda não disse. */
+  modelos?: Record<string, string | null>;
+  /** Saída enxuta ligada neste computador (o painel liga; o mod lê pela ponte). */
+  enxugar?: boolean;
 }
 
 export const CONFIG_INICIAL: ConfigLocal = {

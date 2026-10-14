@@ -35,6 +35,10 @@ function obj(v: unknown, funcao: string): Record<string, unknown> {
 }
 
 const texto = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+/** O formato que a nuvem aceita (0025): o que vier fora dele vira "sem modelo". */
+export function modeloValido(v: unknown): string | null {
+  return typeof v === "string" && /^[a-z0-9][a-z0-9.-]{0,62}(\[1m\])?$/.test(v) ? v : null;
+}
 const numero = (v: unknown): number | null => (v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 
 function cofreDe(v: unknown): CofreNuvem | null {
@@ -47,7 +51,9 @@ function cofreDe(v: unknown): CofreNuvem | null {
 function atribuicaoDe(v: unknown): Atribuicao | null {
   if (!v || typeof v !== "object") return null;
   const a = v as Record<string, unknown>;
-  return { conta_id: texto(a.conta_id), email: texto(a.email), motivo: String(a.motivo ?? ""), versao: Number(a.versao ?? 0) };
+  const r: Atribuicao = { conta_id: texto(a.conta_id), email: texto(a.email), motivo: String(a.motivo ?? ""), versao: Number(a.versao ?? 0) };
+  if ("modelo" in a) r.modelo = modeloValido(a.modelo);
+  return r;
 }
 
 function comandoDe(v: unknown): ComandoNuvem | null {
@@ -115,6 +121,7 @@ export class NuvemRpc implements Nuvem {
       comandos: (Array.isArray(r.comandos) ? r.comandos : []).map(comandoDe).filter((c): c is ComandoNuvem => !!c),
       ligacao_pendente: r.ligacao_pendente === true,
       ligacoes: pedidosDe(r.ligacoes),
+      enxugar: r.enxugar === true,
     };
   }
 

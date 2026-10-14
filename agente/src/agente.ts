@@ -62,6 +62,7 @@ import { compararVersao } from "./doctor.js";
 import { abrirTokens, completaLigada, PUBLICA_DESDE, pendenteDaPublicacao, semSegredos } from "./completa.js";
 import { gravarAtomico, gravarJson, lerJson } from "./util/arquivos.js";
 import { aplicarResumo, contaGrande, janelaDaConta, RESUMO_MAXIMO, RESUMO_MINIMO } from "./resumo.js";
+import { aplicarModelo } from "./modelo.js";
 
 export interface Dependencias {
   c: Caminhos;
@@ -250,6 +251,7 @@ export class Agente {
         if (tipo === "troca") {
           this.somDaTroca(); // em sombra o trocador não troca, então não chega aqui
           this.aplicarResumo();
+          this.aplicarModelo(true);
         }
       },
       aoRenovarPrincipal: () => {
@@ -303,6 +305,52 @@ export class Agente {
     }
   }
 
+  /**
+   * O modelo do Claude Code acompanha a conta em uso: o que o painel escolheu para ela (modelo.ts). `forcar` na troca de
+   * conta e quando o painel muda o modelo da conta em uso; fora disso, um modelo que a pessoa escolheu fica. Conta de que
+   * a nuvem ainda não disse o modelo: não mexe. Em modo sombra não mexe em nada.
+   */
+  aplicarModelo(forcar: boolean): void {
+    if (this.d.sombra) return;
+    const conta = this.estado.ativa ? this.estado.contas[this.estado.ativa] : null;
+    const modelos = this.estado.modelos ?? {};
+    if (!conta?.contaId || !(conta.contaId in modelos)) return;
+    const desejado = modelos[conta.contaId] ?? null;
+    const escrito = this.estado.modeloEscrito ?? null;
+    const original = this.estado.modeloOriginal ?? null;
+    try {
+      const r = aplicarModelo(path.join(this.d.c.principalDir, "settings.json"), desejado, escrito, original, forcar);
+      if (r.daPessoa && escrito !== null) this.d.log.info("modelo: o model do assistente de código foi mudado à mão; o agente só volta a mexer na próxima troca de conta");
+      if (r.mudou) this.d.log.info(`modelo: ${desejado ?? (original === null ? "o padrão do assistente de código" : `de volta a ${original}`)} (${conta.email})`);
+      if (r.escrito !== escrito || r.original !== original) {
+        this.estado.modeloEscrito = r.escrito;
+        this.estado.modeloOriginal = r.original;
+        this.salvar();
+      }
+    } catch (e) {
+      this.d.log.erro(`modelo: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * O que a nuvem disse da conta atribuída e deste computador: o modelo da conta (anotado antes da troca, que o lê) e a
+   * saída enxuta. Modelo que mudou na conta em uso vale na hora.
+   */
+  private anotarDaNuvem(a: Atribuicao | null, enxugar: boolean): void {
+    if (this.estado.enxugar !== enxugar) {
+      this.estado.enxugar = enxugar;
+      this.d.log.info(`saída enxuta ${enxugar ? "ligada" : "desligada"} neste computador`);
+      this.salvar();
+    }
+    if (!a?.conta_id || a.modelo === undefined) return;
+    const modelos = (this.estado.modelos ??= {});
+    if (a.conta_id in modelos && modelos[a.conta_id] === a.modelo) return;
+    modelos[a.conta_id] = a.modelo;
+    this.salvar();
+    const ativa = this.estado.ativa ? this.estado.contas[this.estado.ativa] : null;
+    if (ativa?.contaId === a.conta_id) this.aplicarModelo(true);
+  }
+
   /** Toca o som de troca, se estiver ligado. Solto: a troca não espera o som. */
   somDaTroca(forcar = false): Promise<boolean> {
     if (!this.d.exec || (!forcar && this.estado.config.som === false)) return Promise.resolve(false);
@@ -334,6 +382,7 @@ export class Agente {
     this.d.log.info(`agente ${VERSAO} ${this.d.sombra ? "em modo sombra " : ""}${this.comNuvem ? "com nuvem" : "sem nuvem"}`);
     if (opcoes.ponte !== false) await this.abrirPonte();
     this.aplicarResumo();
+    this.aplicarModelo(false);
     if (opcoes.laços === false) return;
     this.laco(() => this.ciclo(), CICLO_S * 1000);
     if (this.comNuvem) this.laco(() => this.busca(), () => Math.max(2, Math.min(60, this.estado.config.intervaloS || 5)) * 1000);
@@ -623,6 +672,7 @@ export class Agente {
         await this.posse.processarSaidas();
         await this.posse.subirAtivaSePreciso();
       }
+      if (!this.d.sombra) this.anotarDaNuvem(r.atribuicao, r.enxugar === true);
       if (r.atribuicao) await this.aplicarAtribuicao(r.atribuicao);
       for (const cmd of r.comandos) await this.comando(cmd.id);
       await this.vigiarLigacoes(r.ligacoes ?? []);
@@ -1689,6 +1739,8 @@ export class Agente {
       cofre: !!this.chave,
       conexoes: this.logins.publico(),
       credencial: { esperandoConta: this.esperandoConta() },
+      modelo: this.estado.modeloEscrito ?? null,
+      enxugar: this.estado.enxugar === true,
     });
   }
 
@@ -1697,7 +1749,7 @@ export class Agente {
       ativa: () => {
         const e = this.estado;
         const c = e.ativa ? e.contas[e.ativa] : undefined;
-        return { slug: e.ativa, email: c?.email ?? null, versao: e.versao, trocadaEm: e.trocadaEm };
+        return { slug: e.ativa, email: c?.email ?? null, versao: e.versao, trocadaEm: e.trocadaEm, enxugar: e.enxugar === true };
       },
       estado: () => this.publico(),
       medida: (corpo: Record<string, unknown>): Resposta => {

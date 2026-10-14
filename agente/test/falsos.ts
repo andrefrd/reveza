@@ -205,6 +205,8 @@ interface ContaNuvemF {
   email: string;
   cofre: { cifrado: Buffer; nonce: Buffer; versao: number; expira_em: string | null } | null;
   precisaLogin?: boolean;
+  /** O modelo da conta (0025); undefined imita a nuvem de antes, que não manda a chave. */
+  modelo?: string | null;
 }
 
 /** As migrações que os pacotes de teste trazem (nuvem/migracoes) e que o banco falso já tem aplicadas. */
@@ -215,7 +217,7 @@ export class BancoFalso {
   contas = new Map<string, ContaNuvemF>();
   posse = new Map<string, { pc: string; motivo: MotivoPosse; expira: number }>();
   atribuicao = new Map<string, { conta: string | null; versao: number; motivo: string }>();
-  computadores = new Map<string, { nome: string }>();
+  computadores = new Map<string, { nome: string; enxugar?: boolean }>();
   comandos: (ComandoNuvem & { pc: string; estado: string; http?: number; resposta?: unknown })[] = [];
   eventos: { tipo: string; texto: string; dados: unknown; pc: string }[] = [];
   janelas: (JanelaNuvem & { pc: string })[] = [];
@@ -299,7 +301,7 @@ export class NuvemFalsa implements Nuvem {
       throw new ErroNuvem("agente_registrar: este computador ainda não recebeu a chave do cofre", false, "42501");
     }
     this.banco.pendentes.delete(this.pc);
-    this.banco.computadores.set(this.pc, { nome });
+    this.banco.computadores.set(this.pc, { ...this.banco.computadores.get(this.pc), nome });
     return { computador_id: this.pc };
   }
 
@@ -315,12 +317,21 @@ export class NuvemFalsa implements Nuvem {
     const a = b.atribuicao.get(this.pc);
     return {
       computador_id: this.pc,
-      atribuicao: a && a.conta ? { conta_id: a.conta, email: b.contas.get(a.conta)?.email ?? null, versao: a.versao, motivo: a.motivo } : null,
+      atribuicao: a && a.conta ? this.atribuicaoDe(a.conta, a.versao, a.motivo) : null,
       config: { ...b.config },
       comandos: b.comandos.filter((c) => c.pc === this.pc && c.estado === "pendente").map(({ id, acao, corpo }) => ({ id, acao, corpo })),
       ligacao_pendente: b.ligacoes.some((l) => !l.usada && l.expira > b.agora()),
       ligacoes: this.abertos(),
+      enxugar: b.computadores.get(this.pc)?.enxugar === true,
     };
+  }
+
+  private atribuicaoDe(conta: string, versao: number, motivo: string) {
+    const c = this.banco.contas.get(conta);
+    const r: { conta_id: string; email: string | null; versao: number; motivo: string; modelo?: string | null } =
+      { conta_id: conta, email: c?.email ?? null, versao, motivo };
+    if (c && c.modelo !== undefined) r.modelo = c.modelo;
+    return r;
   }
 
   private abertos(): PedidoLigacao[] {

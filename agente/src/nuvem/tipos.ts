@@ -15,6 +15,8 @@ export interface Atribuicao {
   email: string | null;
   motivo: string;
   versao: number;
+  /** O modelo do Claude Code nesta conta (0025). Null: o agente não mexe; undefined: nuvem de antes da 0025. */
+  modelo?: string | null;
 }
 
 export interface ComandoNuvem {
@@ -33,6 +35,8 @@ export interface RespostaOla {
   ligacao_pendente: boolean;
   /** Pedidos de computador novo abertos (0019): mais de um ao mesmo tempo, todos são recusados. */
   ligacoes: PedidoLigacao[];
+  /** Saída enxuta ligada neste computador (0025). */
+  enxugar: boolean;
 }
 
 /** Chave pública ECDH P-256 em JWK, só o que importa. */

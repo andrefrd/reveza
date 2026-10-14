@@ -57,8 +57,9 @@ describe("ponte local", () => {
   test("/api/ativa no formato que o mod lê", async () => {
     const r = await pedir("GET", "/api/ativa");
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.corpo).sort(), ["email", "slug", "trocadaEm", "versao"]);
+    assert.deepEqual(Object.keys(r.corpo).sort(), ["email", "enxugar", "slug", "trocadaEm", "versao"]);
     assert.equal(r.corpo.email, "a@exemplo.com");
+    assert.equal(r.corpo.enxugar, false, "saída enxuta desligada por padrão");
   });
 
   test("/api/estado não vaza token nem refresh, nem no arquivo de estado", async () => {
