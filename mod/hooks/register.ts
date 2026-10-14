@@ -1,10 +1,12 @@
 import type { HttpInit, Register, SessionRateLimit } from 'claude-code'
+import { enxugarSaida } from './enxugar'
 
 // O lado de cada sessão do Reveza AI (o agente roda no computador e escuta em 127.0.0.1, porta configurável).
 // 1. Mostra na linha de status a conta em uso e o % da janela de 5 h.
 // 2. Manda ao agente o uso que cada resposta trouxe (de graça e ao vivo): é com ele que a troca acontece na hora certa.
 // 3. Quando a sessão bate o limite, avisa o agente (que troca na hora) e, assim que a conta muda, manda a sessão
 //    continuar de onde parou. Sessão de terminal (`-p`) quem retoma é o agente, pelo --resume.
+// 4. Com a saída enxuta ligada no painel para este computador, encurta a saída dos comandos de leitura (enxugar.ts).
 
 export const PORTA_PADRAO = 7788
 
@@ -30,7 +32,7 @@ export function tipoDoLimite(detalhe: string | undefined, mensagem: string | und
 const ESPERA_MAXIMA_MS = 2 * 60 * 60 * 1000
 const LEITURA_MS = 30_000
 
-export type Ativa = { slug: string | null; email: string | null; versao: number; trocadaEm: number }
+export type Ativa = { slug: string | null; email: string | null; versao: number; trocadaEm: number; enxugar?: boolean }
 type Janela = { tipo: string; rotulo?: string; pct: number | null; resetEm: number | null }
 type Conta = { email: string; org: string | null; estado: string; janelas: Janela[] }
 export type Estado = {
@@ -170,9 +172,10 @@ export const register: Register = (on, options) => {
   let email: string | null = null
   let cinco = ''
   let foraDoAr = false
-  let ultimaLeitura = 0
+  let ultimaLeitura = -Infinity
   let espera: { referencia: number; desde: number } | null = null
   let retomando = false
+  let enxugar = false
 
   function textoStatus(): string | undefined {
     if (foraDoAr) return 'Reveza: agente fora do ar'
@@ -182,6 +185,7 @@ export const register: Register = (on, options) => {
 
   // Devolve o aviso a mostrar quando a conta mudou desde a última leitura.
   function aplicarAtiva(a: Ativa): string | null {
+    enxugar = a.enxugar === true
     const mudou = versao !== null && a.versao !== versao && !!a.email && a.email !== email
     versao = a.versao
     email = a.email
@@ -206,8 +210,10 @@ export const register: Register = (on, options) => {
       void (async () => {
         // o agente pode ter subido depois da sessão (a chave nasce com ele)
         if (!chavePonte) chavePonte = String(await $.fs.read(`${raiz}/ponte.chave`).catch(() => '')).trim()
-        if (!espera && Date.now() - ultimaLeitura < LEITURA_MS) return
-        ultimaLeitura = Date.now()
+        // o relógio do host (e não o Date): é ele que marca os 5 s, e o teste o move
+        const agora = await $.clock.now()
+        if (!espera && agora - ultimaLeitura < LEITURA_MS) return
+        ultimaLeitura = agora
         let ativa: Ativa | null = null
         try {
           const p = await pedido('GET', '/api/ativa')
@@ -302,6 +308,22 @@ export const register: Register = (on, options) => {
     if (!retomando) espera = null
     retomando = false
     return next(e)
+  })
+
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (e.tool !== 'Bash' || !enxugar) return next(e)
+    const r = await next(e)
+    if (r.deny !== undefined || r.isError) return r
+    const s = r.result
+    // saída que foi para arquivo, em segundo plano ou cortada no meio fica como veio
+    if (s.interrupted || s.isImage || s.persistedOutputPath || s.rawOutputPath || s.backgroundTaskId || s.structuredContent) return r
+    let curto: string | null = null
+    try {
+      curto = enxugarSaida(e.command, s.stdout)
+    } catch {
+      // defeito no enxugar não pode custar a saída: vai como o Claude Code mandou
+    }
+    return curto === null ? r : { result: { ...s, stdout: curto }, context: r.context }
   })
 
   on('command.run', { command: 'reveza' }, async $ => {

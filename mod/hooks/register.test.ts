@@ -1,5 +1,5 @@
 import type { On } from 'claude-code'
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock, test, type TestBody } from 'claude-code/testing'
 
 import { hmacHex, tipoDoLimite } from './register'
 
@@ -17,7 +17,7 @@ function agente(on: On) {
   on('classic.StopFailure', () => ({}) as never)
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   const recebidos: { url: string; corpo: Record<string, unknown> | null; metodo: string; cabecalhos: Record<string, string> }[] = []
-  const estado = { versao: 3, email: 'a@exemplo.com', foraDoAr: false, impostor: false }
+  const estado = { versao: 3, email: 'a@exemplo.com', foraDoAr: false, impostor: false, enxugar: false }
   on('http.fetch', async ($, e) => {
     if (estado.foraDoAr) throw new Error('ECONNREFUSED')
     const corpo = e.init?.body ? (JSON.parse(e.init.body) as Record<string, unknown>) : null
@@ -28,7 +28,7 @@ function agente(on: On) {
       cabecalhos: (e.init?.headers ?? {}) as Record<string, string>,
     })
     let resposta: unknown = { ok: true }
-    if (e.url.endsWith('/api/ativa')) resposta = { slug: 'a', email: estado.email, versao: estado.versao, trocadaEm: 0 }
+    if (e.url.endsWith('/api/ativa')) resposta = { slug: 'a', email: estado.email, versao: estado.versao, trocadaEm: 0, enxugar: estado.enxugar }
     if (e.url.endsWith('/api/limite')) resposta = { ok: true, versao: estado.versao }
     if (e.url.endsWith('/api/estado'))
       resposta = {
@@ -215,7 +215,12 @@ test('outro programa na porta (sem a prova do agente) não controla o /reveza ne
   const { estado } = agente(on)
   estado.impostor = true
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
-  const r = await $.command.run({ command: 'reveza', args: '' })
+  const r = await $.command.run({
+    command: 'reveza',
+    args: '',
+    origin: { kind: 'composer' } as never,
+    presentation: { isFullscreen: false, columns: 100 },
+  })
   expect(String(r.text)).not.toContain('Org A')
 })
 
@@ -232,3 +237,91 @@ test('o tipo do limite pelas mensagens reais do Claude Code', async () => {
   expect(tipoDoLimite(undefined, 'API Error: This model requires usage credits · /model to switch models.')).toBe('outro')
   expect(tipoDoLimite(undefined, undefined)).toBe('uso')
 })
+
+// git status de verdade, com as dicas que a saída enxuta tira
+const STATUS = [
+  'On branch main',
+  'Changes not staged for commit:',
+  '  (use "git add <file>..." to update what will be committed)',
+  '  (use "git restore <file>..." to discard changes in working directory)',
+  '\tmodified:   agente/src/agente.ts',
+  '',
+  'no changes added to commit (use "git add" and/or "git commit -a")',
+  '',
+].join('\n')
+
+// O fim da cadeia faz o papel do Claude Code: roda o "comando" e devolve a saída.
+function bash(on: On, saida: { stdout: string; stderr?: string; interrupted?: boolean; erro?: boolean }) {
+  on('tool.call', () => {
+    if (saida.erro) return { isError: true, result: 'Exit code 1', text: 'Exit code 1' } as never
+    const r = { stdout: saida.stdout, stderr: saida.stderr ?? '', interrupted: saida.interrupted ?? false }
+    return { result: r, text: r.stdout, ref: 1 } as never
+  })
+}
+
+async function rodar($: Parameters<TestBody>[0], comando: string) {
+  return (await $.tool.call({ tool: 'Bash', command: comando } as never)) as { result?: { stdout: string; stderr: string }; ref?: number }
+}
+
+test('saída enxuta ligada no painel: tira as dicas do git status e deixa o stderr como veio', async ($, on) => {
+  const relogio = mock.clock(on)
+  const { estado } = agente(on)
+  estado.enxugar = true
+  bash(on, { stdout: STATUS, stderr: 'aviso: algo' })
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await relogio.advance(5000)
+  await relogio.settle()
+  const r = await rodar($, 'git status')
+  expect(r.result?.stdout).toBe('On branch main\nChanges not staged for commit:\n\tmodified:   agente/src/agente.ts\nno changes added to commit\n')
+  expect(r.result?.stderr).toBe('aviso: algo')
+  expect(r.ref).toBe(undefined)
+})
+
+test('saída enxuta desligada (o padrão): a saída passa inteira, como o Claude Code mandou', async ($, on) => {
+  const relogio = mock.clock(on)
+  agente(on)
+  bash(on, { stdout: STATUS })
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await relogio.advance(5000)
+  await relogio.settle()
+  const r = await rodar($, 'git status')
+  expect(r.result?.stdout).toBe(STATUS)
+  expect(r.ref).toBe(1)
+})
+
+test('saída enxuta: o painel desliga e a próxima leitura já vale', async ($, on) => {
+  const relogio = mock.clock(on)
+  const { estado } = agente(on)
+  estado.enxugar = true
+  bash(on, { stdout: STATUS })
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await relogio.advance(5000)
+  await relogio.settle()
+  expect((await rodar($, 'git status')).result?.stdout).not.toBe(STATUS)
+  estado.enxugar = false
+  for (let i = 0; i < 7; i++) {
+    await relogio.advance(5000)
+    await relogio.settle()
+  }
+  expect((await rodar($, 'git status')).result?.stdout).toBe(STATUS)
+})
+
+test('saída enxuta: com pipe, interrompida ou com erro, nada muda', async ($, on) => {
+  const relogio = mock.clock(on)
+  const { estado } = agente(on)
+  estado.enxugar = true
+  const saida: { stdout: string; interrupted?: boolean; erro?: boolean } = { stdout: STATUS }
+  bash(on, saida)
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await relogio.advance(5000)
+  await relogio.settle()
+  expect((await rodar($, 'git status | cat')).ref).toBe(1)
+  saida.interrupted = true
+  expect((await rodar($, 'git status')).ref).toBe(1)
+  saida.interrupted = false
+  saida.erro = true
+  const r = (await $.tool.call({ tool: 'Bash', command: 'git status' } as never)) as { isError?: boolean; result?: unknown }
+  expect(r.isError).toBe(true)
+  expect(r.result).toBe('Exit code 1')
+})
+
